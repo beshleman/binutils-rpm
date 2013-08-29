@@ -1,0 +1,50 @@
+diff -Nrup a/gas/testsuite/gas/s390/zarch-zEC12.d b/gas/testsuite/gas/s390/zarch-zEC12.d
+--- a/gas/testsuite/gas/s390/zarch-zEC12.d	2013-02-27 13:28:03.000000000 -0700
++++ b/gas/testsuite/gas/s390/zarch-zEC12.d	2013-07-05 11:42:42.600745338 -0600
+@@ -47,10 +47,10 @@ Disassembly of section .text:
+ .*:	eb 6c 7a 4d fe 2b [	 ]*clgtnh	%r6,-5555\(%r7\)
+ .*:	eb 6c 7a 4d fe 2b [	 ]*clgtnh	%r6,-5555\(%r7\)
+ .*:	ec 67 0c 0d 0e 59 [	 ]*risbgn	%r6,%r7,12,13,14
+-.*:	ed 90 8f a0 6d aa [	 ]*cdzt	%f6,4000\(10,%r8\),13
+-.*:	ed 90 8f a0 4d ab [	 ]*cxzt	%f4,4000\(10,%r8\),13
+-.*:	ed 90 8f a0 6d a8 [	 ]*czdt	%f6,4000\(10,%r8\),13
+-.*:	ed 90 8f a0 4d a9 [	 ]*czxt	%f4,4000\(10,%r8\),13
++.*:	ed 0f 8f a0 6d aa [	 ]*cdzt	%f6,4000\(16,%r8\),13
++.*:	ed 21 8f a0 4d ab [	 ]*cxzt	%f4,4000\(34,%r8\),13
++.*:	ed 0f 8f a0 6d a8 [	 ]*czdt	%f6,4000\(16,%r8\),13
++.*:	ed 21 8f a0 4d a9 [	 ]*czxt	%f4,4000\(34,%r8\),13
+ .*:	b2 e8 c0 56 [	 ]*ppa	%r5,%r6,12
+ .*:	b9 8f 60 59 [	 ]*crdte	%r5,%r6,%r9,0
+ .*:	b9 8f 61 59 [	 ]*crdte	%r5,%r6,%r9,1
+diff -Nrup a/gas/testsuite/gas/s390/zarch-zEC12.s b/gas/testsuite/gas/s390/zarch-zEC12.s
+--- a/gas/testsuite/gas/s390/zarch-zEC12.s	2013-02-27 13:28:03.000000000 -0700
++++ b/gas/testsuite/gas/s390/zarch-zEC12.s	2013-07-05 11:42:42.600745338 -0600
+@@ -44,10 +44,10 @@ foo:
+ 	clgtnh	%r6,-5555(%r7)
+ 
+ 	risbgn	%r6,%r7,12,13,14
+-	cdzt	%f6,4000(10,%r8),13
+-	cxzt	%f4,4000(10,%r8),13
+-	czdt	%f6,4000(10,%r8),13
+-	czxt	%f4,4000(10,%r8),13
++	cdzt	%f6,4000(16,%r8),13
++	cxzt	%f4,4000(34,%r8),13
++	czdt	%f6,4000(16,%r8),13
++	czxt	%f4,4000(34,%r8),13
+ 
+ 	ppa	%r5,%r6,12
+ 	crdte	%r5,%r6,%r9
+diff -Nrup a/opcodes/s390-opc.c b/opcodes/s390-opc.c
+--- a/opcodes/s390-opc.c	2013-02-27 13:28:03.000000000 -0700
++++ b/opcodes/s390-opc.c	2013-07-05 11:42:42.600745338 -0600
+@@ -388,8 +388,8 @@ const struct s390_operand s390_operands[
+ #define INSTR_RSE_CCRD   6, { C_8,C_12,D_20,B_16,0,0 }         /* e.g. lmh   */
+ #define INSTR_RSE_RURD   6, { R_8,U4_12,D_20,B_16,0,0 }        /* e.g. icmh  */
+ #define INSTR_RSL_R0RD   6, { D_20,L4_8,B_16,0,0,0 }           /* e.g. tp    */
+-#define INSTR_RSL_LRDFU  6, { F_32,D_20,L4_8,B_16,U4_36,0 }    /* e.g. cdzt  */
+-#define INSTR_RSL_LRDFEU 6, { FE_32,D_20,L4_8,B_16,U4_36,0 }   /* e.g. cxzt  */
++#define INSTR_RSL_LRDFU  6, { F_32,D_20,L8_8,B_16,U4_36,0 }    /* e.g. cdzt  */
++#define INSTR_RSL_LRDFEU 6, { FE_32,D_20,L8_8,B_16,U4_36,0 }   /* e.g. cxzt  */
+ #define INSTR_RSI_RRP    4, { R_8,R_12,J16_16,0,0,0 }          /* e.g. brxh  */
+ #define INSTR_RSY_RRRD   6, { R_8,R_12,D20_20,B_16,0,0 }       /* e.g. stmy  */
+ #define INSTR_RSY_RERERD 6, { RE_8,RE_12,D20_20,B_16,0,0 }     /* e.g. cdsy  */
