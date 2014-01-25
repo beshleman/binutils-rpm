@@ -4,6 +4,8 @@
 # --without testsuite: Do not run the testsuite.  Default is to run it.
 # --with testsuite: Run the testsuite.  Default --with debug is not to run it.
 
+%global _performance_build 1
+
 %if 0%{!?binutils_target:1}
 %define binutils_target %{_target_platform}
 %define isnative 1
@@ -17,7 +19,7 @@
 Summary: A GNU collection of binary utilities
 Name: %{?cross}binutils%{?_with_debug:-debug}
 Version: 2.23.52.0.1
-Release: 12%{?dist}
+Release: 16%{?dist}
 License: GPLv3+
 Group: Development/Tools
 URL: http://sources.redhat.com/binutils
@@ -62,6 +64,8 @@ Patch19: binutils-rh805115-2.patch
 Patch20: binutils-2.23.52.0.1-avx512-mpx-sha.patch
 # Add support for x86-64 -mcmodel=large -fpic TLS transitions.  BZ #994244
 Patch21: binutils-2.23.52.0.1-x86-64-mcmodel=large-tls.patch
+# Avoid bogus -Wuninitialized problem when building with -O3
+Patch22: binutils-rh1048848.patch
 
 Provides: bundled(libiberty)
 
@@ -181,6 +185,7 @@ using libelf instead of BFD.
 %patch19 -p1 -b .s390~
 %patch20 -p0 -b .avx512-mpx-sha~
 %patch21 -p0 -b .x86-64-mcmodel=large-tls~
+%patch22 -p1 -b .uninit~
 
 # We cannot run autotools as there is an exact requirement of autoconf-2.59.
 
@@ -480,6 +485,19 @@ exit 0
 %endif # %{isnative}
 
 %changelog
+* Fri Jan 24 2014 Daniel Mach <dmach@redhat.com> - 2.23.52.0.1-16
+- Mass rebuild 2014-01-24
+
+* Mon Jan 13 2014 Jeff Law <law@redhat.com> - 2.23.52.0.1-15
+- Set _performance_build to get -O3 builds (#1051060).
+
+* Mon Jan 6 2014 Jeff Law <law@redhat.com> - 2.23.52.0.1-14
+- Fix two may-be-uninitialized issues exposed by changes in
+  compiler flags used to build binutils (#1048848).
+
+* Fri Dec 27 2013 Daniel Mach <dmach@redhat.com> - 2.23.52.0.1-13
+- Mass rebuild 2013-12-27
+
 * Thu Aug 29 2013 Jakub Jelinek <jakub@redhat.com> - 2.23.52.0.1-12
 - Add Intel AVX3, MPX and SHA support.
 - Add support for x86-64 -mcmodel=large -fpic TLS transitions.  (#994244)

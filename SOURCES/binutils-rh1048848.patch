@@ -1,0 +1,35 @@
+diff -Nrup a/binutils/strings.c b/binutils/strings.c
+--- a/binutils/strings.c	2013-02-27 13:28:03.000000000 -0700
++++ b/binutils/strings.c	2014-01-06 11:26:21.939427032 -0700
+@@ -456,7 +456,18 @@ get_char (FILE *stream, file_ptr *addres
+ {
+   int c, i;
+   long r = EOF;
+-  unsigned char buf[4];
++  /* Aggressive optimizations might expose elements of BUF as individual
++     objects and then uninitialized analysis may be performed on those
++     elements.
++
++     If that happens, the compiler can/will warn in the switch statement
++     below because it does not know the relationship between ENCODING_BYTES
++     and ENCODING which prevents uninitialized uses.
++
++     Just initialize the object to zeros, which seems to be the best of
++     several bad solutions (#pragma GCC diagnostic, exposing the
++     relationship between ENCODING_BYTES and ENCODING here, etc). */
++  unsigned char buf[4] = { 0 };
+ 
+   for (i = 0; i < encoding_bytes; i++)
+     {
+diff -Nrup a/ld/ldfile.c b/ld/ldfile.c
+--- a/ld/ldfile.c	2013-02-27 13:28:03.000000000 -0700
++++ b/ld/ldfile.c	2014-01-06 12:53:39.559070145 -0700
+@@ -596,7 +596,7 @@ static void
+ ldfile_open_command_file_1 (const char *name, bfd_boolean default_only)
+ {
+   FILE *ldlex_input_stack;
+-  bfd_boolean sysrooted;
++  bfd_boolean sysrooted = FALSE;
+ 
+   ldlex_input_stack = ldfile_find_command_file (name, default_only, &sysrooted);
+ 
