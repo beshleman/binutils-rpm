@@ -1,0 +1,80 @@
+Support fusion for ELFv2 stubs.
+
+Upstream git commit 397998fc
+
+diff -urpN binutils-alan3/bfd/elf64-ppc.c binutils-alan4/bfd/elf64-ppc.c
+--- binutils-alan3/bfd/elf64-ppc.c	2014-07-31 14:31:16.298120492 +0930
++++ binutils-alan4/bfd/elf64-ppc.c	2014-08-01 00:42:44.462828800 +0930
+@@ -175,6 +175,7 @@ static bfd_vma opd_entry_value
+ 
+ #define LD_R2_0R1	0xe8410000	/* ld    %r2,0(%r1)      */
+ 
++#define ADDIS_R12_R2	0x3d820000	/* addis %r12,%r2,xxx@ha     */
+ #define ADDIS_R12_R12	0x3d8c0000	/* addis %r12,%r12,xxx@ha */
+ #define LD_R12_0R12	0xe98c0000	/* ld    %r12,xxx@l(%r12) */
+ 
+@@ -10211,8 +10212,16 @@ build_plt_stub (struct ppc_link_hash_tab
+       if (ALWAYS_EMIT_R2SAVE
+ 	  || stub_entry->stub_type == ppc_stub_plt_call_r2save)
+ 	bfd_put_32 (obfd, STD_R2_0R1 + STK_TOC (htab), p),	p += 4;
+-      bfd_put_32 (obfd, ADDIS_R11_R2 | PPC_HA (offset), p),	p += 4;
+-      bfd_put_32 (obfd, LD_R12_0R11 | PPC_LO (offset), p),	p += 4;
++      if (plt_load_toc)
++	{
++	  bfd_put_32 (obfd, ADDIS_R11_R2 | PPC_HA (offset), p),	p += 4;
++	  bfd_put_32 (obfd, LD_R12_0R11 | PPC_LO (offset), p),	p += 4;
++	}
++      else
++	{
++	  bfd_put_32 (obfd, ADDIS_R12_R2 | PPC_HA (offset), p),	p += 4;
++	  bfd_put_32 (obfd, LD_R12_0R12 | PPC_LO (offset), p),	p += 4;
++	}
+       if (plt_load_toc
+ 	  && PPC_HA (offset + 8 + 8 * plt_static_chain) != PPC_HA (offset))
+ 	{
+@@ -10631,9 +10640,9 @@ ppc_build_one_stub (struct bfd_hash_entr
+ 	  if (PPC_HA (off) != 0)
+ 	    {
+ 	      size = 16;
+-	      bfd_put_32 (htab->stub_bfd, ADDIS_R11_R2 | PPC_HA (off), loc);
++	      bfd_put_32 (htab->stub_bfd, ADDIS_R12_R2 | PPC_HA (off), loc);
+ 	      loc += 4;
+-	      bfd_put_32 (htab->stub_bfd, LD_R12_0R11 | PPC_LO (off), loc);
++	      bfd_put_32 (htab->stub_bfd, LD_R12_0R12 | PPC_LO (off), loc);
+ 	    }
+ 	  else
+ 	    {
+@@ -10657,9 +10666,9 @@ ppc_build_one_stub (struct bfd_hash_entr
+ 	  if (PPC_HA (off) != 0)
+ 	    {
+ 	      size += 4;
+-	      bfd_put_32 (htab->stub_bfd, ADDIS_R11_R2 | PPC_HA (off), loc);
++	      bfd_put_32 (htab->stub_bfd, ADDIS_R12_R2 | PPC_HA (off), loc);
+ 	      loc += 4;
+-	      bfd_put_32 (htab->stub_bfd, LD_R12_0R11 | PPC_LO (off), loc);
++	      bfd_put_32 (htab->stub_bfd, LD_R12_0R12 | PPC_LO (off), loc);
+ 	    }
+ 	  else
+ 	    bfd_put_32 (htab->stub_bfd, LD_R12_0R2 | PPC_LO (off), loc);
+diff -urpN binutils-alan3/ld/testsuite/ld-powerpc/elfv2exe.d binutils-alan4/ld/testsuite/ld-powerpc/elfv2exe.d
+--- binutils-alan3/ld/testsuite/ld-powerpc/elfv2exe.d	2014-07-31 10:57:11.586857410 +0930
++++ binutils-alan4/ld/testsuite/ld-powerpc/elfv2exe.d	2014-08-01 00:38:48.848419663 +0930
+@@ -8,14 +8,14 @@
+ Disassembly of section \.text:
+ 
+ 0+100000c0 <.*\.plt_branch\.f2>:
+-.*:	(ff ff 62 3d|3d 62 ff ff) 	addis   r11,r2,-1
+-.*:	(f0 7f 8b e9|e9 8b 7f f0) 	ld      r12,32752\(r11\)
++.*:	(ff ff 82 3d|3d 82 ff ff) 	addis   r12,r2,-1
++.*:	(f0 7f 8c e9|e9 8c 7f f0) 	ld      r12,32752\(r12\)
+ .*:	(a6 03 89 7d|7d 89 03 a6) 	mtctr   r12
+ .*:	(20 04 80 4e|4e 80 04 20) 	bctr
+ 
+ 0+100000d0 <.*\.plt_branch\.f4>:
+-.*:	(ff ff 62 3d|3d 62 ff ff) 	addis   r11,r2,-1
+-.*:	(f8 7f 8b e9|e9 8b 7f f8) 	ld      r12,32760\(r11\)
++.*:	(ff ff 82 3d|3d 82 ff ff) 	addis   r12,r2,-1
++.*:	(f8 7f 8c e9|e9 8c 7f f8) 	ld      r12,32760\(r12\)
+ .*:	(a6 03 89 7d|7d 89 03 a6) 	mtctr   r12
+ .*:	(20 04 80 4e|4e 80 04 20) 	bctr
+ 

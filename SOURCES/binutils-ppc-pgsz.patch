@@ -1,0 +1,24 @@
+diff -ruP b-orig/bfd/elf32-ppc.c b-new/bfd/elf32-ppc.c
+--- b-orig/bfd/elf32-ppc.c	2014-12-16 18:17:24.810673964 -0600
++++ b-new/bfd/elf32-ppc.c	2014-12-16 17:53:26.003832689 -0600
+@@ -9822,7 +9822,7 @@
+ #define ELF_MAXPAGESIZE		0x10000
+ #endif
+ #define ELF_MINPAGESIZE		0x1000
+-#define ELF_COMMONPAGESIZE	0x1000
++#define ELF_COMMONPAGESIZE	0x10000
+ #define elf_info_to_howto	ppc_elf_info_to_howto
+ 
+ #ifdef  EM_CYGNUS_POWERPC
+diff -ruP b-orig/bfd/elf64-ppc.c b-new/bfd/elf64-ppc.c
+--- b-orig/bfd/elf64-ppc.c	2014-12-16 18:17:24.849673715 -0600
++++ b-new/bfd/elf64-ppc.c	2014-12-16 17:53:26.040832465 -0600
+@@ -65,7 +65,7 @@
+ #define ELF_TARGET_ID		PPC64_ELF_DATA
+ #define ELF_MACHINE_CODE	EM_PPC64
+ #define ELF_MAXPAGESIZE		0x10000
+-#define ELF_COMMONPAGESIZE	0x1000
++#define ELF_COMMONPAGESIZE	0x10000
+ #define elf_info_to_howto	ppc64_elf_info_to_howto
+ 
+ #define elf_backend_want_got_sym 0

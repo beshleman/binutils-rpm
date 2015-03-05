@@ -1,0 +1,12 @@
+--- binutils-2.23.52.0.1.orig/bfd/elf64-aarch64.c	2014-05-12 13:07:36.029172289 -0400
++++ binutils-2.23.52.0.1/bfd/elf64-aarch64.c	2014-05-12 13:09:01.054623579 -0400
+@@ -5316,6 +5316,9 @@
+ 
+ 	    got_type = aarch64_reloc_got_type (r_type);
+ 
++	    if (!info->executable && (got_type & GOT_TLS_IE))
++	      info->flags |= DF_STATIC_TLS;
++
+ 	    if (h)
+ 	      {
+ 		h->got.refcount += 1;

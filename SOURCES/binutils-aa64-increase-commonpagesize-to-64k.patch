@@ -1,0 +1,11 @@
+--- binutils-2.23.52.0.1.orig/bfd/elf64-aarch64.c	2014-05-12 13:09:48.056872936 -0400
++++ binutils-2.23.52.0.1/bfd/elf64-aarch64.c	2014-05-12 13:26:50.987915484 -0400
+@@ -7073,7 +7073,7 @@
+ #define ELF_MACHINE_CODE		EM_AARCH64
+ #define ELF_MAXPAGESIZE			0x10000
+ #define ELF_MINPAGESIZE			0x1000
+-#define ELF_COMMONPAGESIZE		0x1000
++#define ELF_COMMONPAGESIZE		0x10000
+ 
+ #define bfd_elf64_close_and_cleanup             \
+   elf64_aarch64_close_and_cleanup

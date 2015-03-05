@@ -1,0 +1,51 @@
+commit 8db339a6674ad8e8446bac821cb2dea396e43d6e
+Author: Marcus Shawcroft <mshawcroft@sourceware.org>
+Date:   Thu Jun 27 15:47:55 2013 +0000
+
+    [AArch64] Fix the placement of &_DYNAMIC in the GOT.
+
+--- binutils-2.23.52.0.1.orig/bfd/elf64-aarch64.c	2014-05-16 15:33:24.388924601 -0400
++++ binutils-2.23.52.0.1/bfd/elf64-aarch64.c	2014-05-16 15:37:49.059361420 -0400
+@@ -5376,6 +5376,7 @@
+ 		  htab->root.dynobj = abfd;
+ 		if (!_bfd_elf_create_got_section (htab->root.dynobj, info))
+ 		  return FALSE;
++		htab->root.sgot->size += GOT_ENTRY_SIZE;
+ 	      }
+ 	    break;
+ 	  }
+@@ -6995,15 +6996,8 @@
+       /* Fill in the first three entries in the global offset table.  */
+       if (htab->root.sgotplt->size > 0)
+ 	{
+-	  /* Set the first entry in the global offset table to the address of
+-	     the dynamic section.  */
+-	  if (sdyn == NULL)
+-	    bfd_put_64 (output_bfd, (bfd_vma) 0,
+-			htab->root.sgotplt->contents);
+-	  else
+-	    bfd_put_64 (output_bfd,
+-			sdyn->output_section->vma + sdyn->output_offset,
+-			htab->root.sgotplt->contents);
++	  bfd_put_64 (output_bfd, (bfd_vma) 0, htab->root.sgotplt->contents);
++
+ 	  /* Write GOT[1] and GOT[2], needed for the dynamic linker.  */
+ 	  bfd_put_64 (output_bfd,
+ 		      (bfd_vma) 0,
+@@ -7013,6 +7007,16 @@
+ 		      htab->root.sgotplt->contents + GOT_ENTRY_SIZE * 2);
+ 	}
+ 
++      if (htab->root.sgot)
++	{
++	  if (htab->root.sgot->size > 0)
++	    {
++	      bfd_vma addr =
++		sdyn ? sdyn->output_section->vma + sdyn->output_offset : 0;
++	      bfd_put_64 (output_bfd, addr, htab->root.sgot->contents);
++	    }
++	}
++
+       elf_section_data (htab->root.sgotplt->output_section)->
+ 	this_hdr.sh_entsize = GOT_ENTRY_SIZE;
+     }

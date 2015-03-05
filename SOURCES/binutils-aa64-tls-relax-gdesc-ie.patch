@@ -1,0 +1,36 @@
+Backport of 44f814ce5066f10a3bed29c45d10e0d38f4fa433
+
++2014-04-15  Marcus Shawcroft  <marcus.shawcroft@arm.com>
++
++	* (elfNN_aarch64_tls_relax): Fix instruction mask.
++
++2014-04-15  Marcus Shawcroft  <marcus.shawcroft@arm.com>
++
++	* ld-aarch64/tls-relax-gdesc-ie.s (var): Adjust test case
++	to include all 5 bits of LDR destination register.
+
+
+diff --git a/ld/testsuite/ld-aarch64/tls-relax-gdesc-ie.s b/ld/testsuite/ld-aarch64/tls-relax-gdesc-ie.s
+index c20690c..38b3721 100644
+--- a/ld/testsuite/ld-aarch64/tls-relax-gdesc-ie.s
++++ b/ld/testsuite/ld-aarch64/tls-relax-gdesc-ie.s
+@@ -4,7 +4,7 @@ var:
+ 	.word	2
+ 	.text
+ 	adrp	x0, :tlsdesc:var
+-	ldr	x1, [x0, #:tlsdesc_lo12:var]
++	ldr	x17, [x0, #:tlsdesc_lo12:var]
+ 	add	x0, x0, :tlsdesc_lo12:var
+ 	.tlsdesccall	var
+ 	blr	x1
+--- a/bfd/elf64-aarch64.c.orig	2014-04-16 15:27:40.768747791 -0400
++++ b/bfd/elf64-aarch64.c	2014-04-16 15:31:14.216712249 -0400
+@@ -4171,7 +4171,7 @@ elf64_aarch64_tls_relax (struct elf64_aa
+ 	     ldr xd, [x0, #:tlsdesc_lo12:var] => ldr x0, [x0, #:gottprel_lo12:var]
+ 	   */
+ 	  insn = bfd_getl32 (contents + rel->r_offset);
+-	  insn &= 0xfffffff0;
++	  insn &= 0xffffffe0;
+ 	  bfd_putl32 (insn, contents + rel->r_offset);
+ 	  return bfd_reloc_continue;
+ 	}

@@ -1,0 +1,36 @@
+Apply part of upstream git 7341d5e2 and 810d4e75.  We may want to take
+all of the latter git changeset to cure srec testsuite failures for
+ppc64le... but we don't really care about srec.
+
+diff -urp binutils-alan1/bfd/elf64-ppc.c binutils-alan2/bfd/elf64-ppc.c
+--- binutils-alan1/bfd/elf64-ppc.c	2014-07-31 13:59:20.083643016 +0930
++++ binutils-alan2/bfd/elf64-ppc.c	2014-07-31 14:18:08.549977196 +0930
+@@ -13482,6 +13482,7 @@ ppc64_elf_relocate_section (bfd *output_
+ 	     .		addi 2,2,.TOC.@l
+ 	     if .TOC. is in range.  */
+ 	  if (!info->shared
++	      && !info->traditional_format
+ 	      && h != NULL && &h->elf == htab->elf.hgot
+ 	      && rel + 1 < relend
+ 	      && rel[1].r_info == ELF64_R_INFO (r_symndx, R_PPC64_REL16_LO)
+diff -urp binutils-alan1/ld/emultempl/ppc64elf.em binutils-alan2/ld/emultempl/ppc64elf.em
+--- binutils-alan1/ld/emultempl/ppc64elf.em	2014-07-31 10:57:23.830363894 +0930
++++ binutils-alan2/ld/emultempl/ppc64elf.em	2014-07-31 14:16:32.593859091 +0930
+@@ -30,6 +30,7 @@ fragment <<EOF
+ #include "elf-bfd.h"
+ #include "elf64-ppc.h"
+ #include "ldlex.h"
++#include "elf/ppc64.h"
+ 
+ /* Fake input file for stubs.  */
+ static lang_input_statement_type *stub_file;
+@@ -538,7 +539,8 @@ ppc_finish (void)
+   /* e_entry on PowerPC64 points to the function descriptor for
+      _start.  If _start is missing, default to the first function
+      descriptor in the .opd section.  */
+-  entry_section = ".opd";
++  if ((elf_elfheader (link_info.output_bfd)->e_flags & EF_PPC64_ABI) == 1)
++    entry_section = ".opd";
+ 
+   if (stub_added)
+     {

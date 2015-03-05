@@ -19,7 +19,7 @@
 Summary: A GNU collection of binary utilities
 Name: %{?cross}binutils%{?_with_debug:-debug}
 Version: 2.23.52.0.1
-Release: 16%{?dist}
+Release: 30%{?dist}
 License: GPLv3+
 Group: Development/Tools
 URL: http://sources.redhat.com/binutils
@@ -66,6 +66,45 @@ Patch20: binutils-2.23.52.0.1-avx512-mpx-sha.patch
 Patch21: binutils-2.23.52.0.1-x86-64-mcmodel=large-tls.patch
 # Avoid bogus -Wuninitialized problem when building with -O3
 Patch22: binutils-rh1048848.patch
+# Avoids bogus DT_NEEDED entries
+Patch23: binutils-rh1128280.patch
+# Missing PPC opcodes
+Patch24: binutils-rh1090618.patch
+# Fixes PPC kernel failure
+Patch25: binutils-rh1130479.patch
+# Add support for Intel AVX-512VL, AVX-512BW, AVX-512DQ and SGX
+Patch26: binutils-2.23.52.0.1-avx512vlbwdq-sgx.patch
+# Change PPC commonpagesize to 64k
+Patch27: binutils-ppc-pgsz.patch
+
+Patch100: binutils-rh1066712.patch
+Patch101: binutils-rh1075827.patch
+Patch102: binutils-aa64-tls-relax-gdesc-ie.patch
+
+Patch110: binutils-aa64-elf_backend_can_gc_sections.patch
+Patch111: binutils-aa64-elf_backend_default_execstack.patch
+Patch112: binutils-aa64-emit-DF_STATIC_TLS-when-relaxing-to-ie.patch
+Patch113: binutils-aa64-increase-commonpagesize-to-64k.patch
+Patch114: binutils-aa64-fix-placement-of-DYNAMIC.patch
+Patch115: binutils-aa64-fix-creation-of-_got.patch
+Patch116: binutils-aa64-full-sysreg-range.patch
+Patch117: binutils-aa64-ifunc.patch
+Patch118: binutils-aa64-gas-movi.patch
+Patch119: binutils-aa64-dwarf2.patch
+Patch120: binutils-rh1179810.patch
+
+# ppc64 little endian support
+Patch201: binutils-ppc64le-1.patch
+Patch202: binutils-ppc64le-2.patch
+Patch203: binutils-ppc64le-3.patch
+Patch204: binutils-ppc64le-4.patch
+Patch205: binutils-ppc64le-5.patch
+Patch206: binutils-ppc64le-6.patch
+Patch207: binutils-ppc64le-7.patch
+Patch208: binutils-ppc64le-8.patch
+Patch209: binutils-ppc64le-9.patch
+Patch210: binutils-ppc64le-10.patch
+Patch211: binutils-ppc64le-11.patch
 
 Provides: bundled(libiberty)
 
@@ -186,11 +225,28 @@ using libelf instead of BFD.
 %patch20 -p0 -b .avx512-mpx-sha~
 %patch21 -p0 -b .x86-64-mcmodel=large-tls~
 %patch22 -p1 -b .uninit~
+%patch23 -p1 -b .soname~
+%patch24 -p1 -b .ppcopcodes~
+%patch25 -p1 -b .symmerge~
+%patch26 -p0 -b .avx512-isa~
+%patch27 -p1 -b .ppc-pgsz~
+%patch100 -p0 -b .aarch64-fpintfix~
+%patch101 -p1 -b .aarch64-101~
+%patch102 -p1 -b .aarch64-102~
+%patch110 -p1 -b .aarch64-110~
+%patch111 -p1 -b .aarch64-111~
+%patch112 -p1 -b .aarch64-112~
+%patch113 -p1 -b .aarch64-113~
+%patch114 -p1 -b .aarch64-114~
+%patch115 -p1 -b .aarch64-115~
+%patch116 -p1 -b .aarch64-116~
+%patch117 -p1 -b .aarch64-117~
+%patch118 -p1 -b .aarch64-118~
+%patch119 -p1 -b .aarch64-119~
+%patch120 -p1 -b .aarch64-120~
 
 # We cannot run autotools as there is an exact requirement of autoconf-2.59.
 
-# On ppc64 we might use 64KiB pages
-sed -i -e '/#define.*ELF_COMMONPAGESIZE/s/0x1000$/0x10000/' bfd/elf*ppc.c
 # LTP sucks
 perl -pi -e 's/i\[3-7\]86/i[34567]86/g' */conf*
 sed -i -e 's/%''{release}/%{release}/g' bfd/Makefile{.am,.in}
@@ -210,7 +266,23 @@ do
 done
 touch */configure
 
-%ifarch %{power64}
+%ifarch ppc64le
+# ppc64le support has some wholesale replacement of ppc/ppc64 infrastructure
+# not suitable for vanilla ppc.
+%patch201 -p1
+%patch202 -p1
+%patch203 -p1
+%patch204 -p1
+%patch205 -p1
+%patch206 -p1
+%patch207 -p1
+%patch208 -p1
+%patch209 -p1
+%patch210 -p1
+%patch211 -p1
+%endif
+
+%ifarch %{power64} ppc64le
 %define _target_platform %{_arch}-%{_vendor}-%{_host_os}
 %endif
 
@@ -232,6 +304,11 @@ esac
 case %{binutils_target} in ppc*|ppc64*)
   CARGS="$CARGS --enable-targets=spu"
   ;;
+esac
+
+case %{binutils_target} in  ppc64le*)
+    CARGS="$CARGS --enable-targets=spu,powerpc-linux"
+    ;;
 esac
 
 %if 0%{?_with_debug:1}
@@ -485,6 +562,91 @@ exit 0
 %endif # %{isnative}
 
 %changelog
+* Thu Jan 15 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-30
+- Fix syntax for multiple --enable-targets configure option.
+  (#1133147)
+
+* Thu Jan 8 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-29
+- Add support for crc instructions on aarch64 (#1179810)
+
+* Mon Jan 5 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-28
+- Bring back spu target for ppc64le which was accidentally lost
+  (#1133147)
+
+* Tue Dec 16 2014 Richard Henderson <rth@redhat.com> - 2.23.52.0.1-27
+- (Re-)Set ELF_COMMONPAGESIZE to 64k for ppc64le.
+  (#1174826)
+
+* Thu Sep 11 2014 Patsy Franklin <pfrankli@redhat.com> - 2.23.52.0.1-26
+- Enable Intel AVX-512VL, AVX-512BW, AVX-512DQ and SGX support.
+  (#1140375)
+
+* Wed Aug 27 2014 Jeff Law <law@redhat.com> - 2.23.52.0.1-25.9
+Revert this change (handled elsewhere): 
+- Additional patch from Alan to fix problems with ld --defsym.
+  (#1132732)
+
+* Mon Aug 25 2014 Jeff Law <law@redhat.com> - 2.23.52.0.1-23.9
+- Include powerpc-linux as a BFD target when building for ppc64le.
+  (#1133147).
+
+* Fri Aug 22 2014 Patsy Franklin <pfrankli@redhat.com> - 2.23.52.0.1-22.9
+- Reduce the size of aarch64 .debug_line; fix cfi encoding of fp registers;
+  add register names to dumping of aarch64 cfi data. Patch provided by rth.
+  Resolves: #1132641
+
+* Fri Aug 22 2014 Patsy Franklin <pfrankli@redhat.com> - 2.23.52.0.1-21.9
+- This fixes a problem seen on powerpc64le ELFv2 when creating a
+  function symbol alias with ld --defsym.  st_other needs to be copied
+  from the source symbol to the alias in order to set up the local entry
+  offset for the alias.
+
+* Mon Aug 18 2014 Patsy Franklin <pfrankli@redhat.com> - 2.23.52.0.1-20.9
+- Correct handling of strong followed by weak def merging of st_other
+  Resolves: #1130479
+
+* Wed Aug 13 2014 Jeff Law <law@redhat.com> - 2.23.52.0.1-19.9
+- Add missing PPC opcodes
+  Resolves: #1090618
+
+* Mon Aug 11 2014 Jeff Law <law@redhat.com> - 2.23.52.0.1-18.9
+- Do not overwrite valid SONAME with empty string.  (#1128279)
+  Resolves: #1128280
+
+* Mon Aug 4 2014 Aldy Hernandez <aldyh@redhat.com> - 2.23.52.0.1-17.9
+- Initial support for ppc64le.
+  Fix for bz#1125478
+
+* Thu Jun 26 2014 Richard Henderson <rth@redhat.com> - 2.23.52.0.1-16.9
+- Backport fix for movi.
+
+* Tue Jun 24 2014 Richard Henderson <rth@redhat.com> - 2.23.52.0.1-16.8
+- Backport support for IFUNCs.
+
+* Sat Jun 14 2014 Mark Salter <msalter@redhat.com> - 2.23.52.0.1-16.7
+- Backport support for full range of CRn in AArch64 system registers.
+  Fix for bz#1109497
+
+* Fri May 16 2014 Kyle McMartin <kyle@redhat.com> - 2.23.52.0.1-16.6
+- AArch64: Backport two patches from upstream fixing GOT handling.
+
+* Thu May 15 2014 Brendan Conoboy <blc@redhat.com> - 2.23.52.0.1-16.5
+- Rebuild for BZ#1098169
+
+* Fri May 09 2014 Kyle McMartin <kyle@redhat.com> - 2.23.52.0.1-16.4
+- AArch64: Backport two fixes from upstream and add a draft patch to
+  set DF_STATIC_TLS when emitting IE relocs. Also increase
+  ELF_COMMONPAGESIZE to 64K to match the kernel.
+
+* Wed Apr 16 2014 Richard Henderson <rth@redhat.com> - 2.23.52.0.1-16.3
+- Backport tls-relax-gdesc-ie fix
+
+* Thu Mar 13 2014 Richard Henderson <rth@redhat.com> - 2.23.52.0.1-16.2
+- Fix for rh1075827
+
+* Wed Feb 19 2014 Nick Clifton <nickc@redhat.com> - 2.23.52.0.1-16.1
+- Fix for rh1066712
+
 * Fri Jan 24 2014 Daniel Mach <dmach@redhat.com> - 2.23.52.0.1-16
 - Mass rebuild 2014-01-24
 

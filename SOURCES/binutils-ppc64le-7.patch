@@ -1,0 +1,292 @@
+git f6c7c3e8b from upstream:
+
+    Referencing a function's address on PowerPC64 ELFv2
+    
+    ELFv2 needs to create plt entries in a non-PIC executable for an
+    address reference to a function defined in a shared object.  It's
+    possible that an object file has no features that distinguish it as
+    ELFv1 or ELFv2, eg. an object only containing data.  Such files need
+    to be handled like those that are known to be ELFv2.
+    However, this unnecessarily creates plt entries for the analogous
+    ELFv1 case, so arrange to set output abi version earlier, and use the
+    output abi version to further distinguish ambiguous input files.
+
+diff -urpN binutils-alan2/bfd/elf64-ppc.c binutils-alan3/bfd/elf64-ppc.c
+--- binutils-alan2/bfd/elf64-ppc.c	2014-07-31 14:18:08.549977196 +0930
++++ binutils-alan3/bfd/elf64-ppc.c	2014-07-31 14:31:16.298120492 +0930
+@@ -96,7 +96,7 @@ static bfd_vma opd_entry_value
+ #define elf_backend_create_dynamic_sections   ppc64_elf_create_dynamic_sections
+ #define elf_backend_copy_indirect_symbol      ppc64_elf_copy_indirect_symbol
+ #define elf_backend_add_symbol_hook	      ppc64_elf_add_symbol_hook
+-#define elf_backend_check_directives	      ppc64_elf_process_dot_syms
++#define elf_backend_check_directives	      ppc64_elf_before_check_relocs
+ #define elf_backend_as_needed_cleanup	      ppc64_elf_as_needed_cleanup
+ #define elf_backend_archive_symbol_lookup     ppc64_elf_archive_symbol_lookup
+ #define elf_backend_check_relocs	      ppc64_elf_check_relocs
+@@ -3958,7 +3958,7 @@ struct ppc_link_hash_table
+   /* Set on error.  */
+   unsigned int stub_error:1;
+ 
+-  /* Temp used by ppc64_elf_process_dot_syms.  */
++  /* Temp used by ppc64_elf_before_check_relocs.  */
+   unsigned int twiddled_syms:1;
+ 
+   /* Incremented every time we size stubs.  */
+@@ -4922,10 +4922,11 @@ add_symbol_adjust (struct ppc_link_hash_
+   return TRUE;
+ }
+ 
+-/* Process list of dot-symbols we made in link_hash_newfunc.  */
++/* Set up opd section info and abiversion for IBFD, and process list
++   of dot-symbols we made in link_hash_newfunc.  */
+ 
+ static bfd_boolean
+-ppc64_elf_process_dot_syms (bfd *ibfd, struct bfd_link_info *info)
++ppc64_elf_before_check_relocs (bfd *ibfd, struct bfd_link_info *info)
+ {
+   struct ppc_link_hash_table *htab;
+   struct ppc_link_hash_entry **p, *eh;
+@@ -4938,6 +4939,57 @@ ppc64_elf_process_dot_syms (bfd *ibfd, s
+ 
+   if (is_ppc64_elf (ibfd))
+     {
++      asection *opd = bfd_get_section_by_name (ibfd, ".opd");
++
++      if (opd != NULL && opd->size != 0)
++	{
++	  if (abiversion (ibfd) == 0)
++	    set_abiversion (ibfd, 1);
++	  else if (abiversion (ibfd) == 2)
++	    {
++	      info->callbacks->einfo (_("%P: %B .opd not allowed in ABI"
++					" version %d\n"),
++				      ibfd, abiversion (ibfd));
++	      bfd_set_error (bfd_error_bad_value);
++	      return FALSE;
++	    }
++
++	  if ((ibfd->flags & DYNAMIC) == 0
++	      && (opd->flags & SEC_RELOC) != 0
++	      && opd->reloc_count != 0
++	      && !bfd_is_abs_section (opd->output_section))
++	    {
++	      /* Garbage collection needs some extra help with .opd sections.
++		 We don't want to necessarily keep everything referenced by
++		 relocs in .opd, as that would keep all functions.  Instead,
++		 if we reference an .opd symbol (a function descriptor), we
++		 want to keep the function code symbol's section.  This is
++		 easy for global symbols, but for local syms we need to keep
++		 information about the associated function section.  */
++	      bfd_size_type amt;
++	      asection **opd_sym_map;
++
++	      amt = opd->size * sizeof (*opd_sym_map) / 8;
++	      opd_sym_map = bfd_zalloc (ibfd, amt);
++	      if (opd_sym_map == NULL)
++		return FALSE;
++	      ppc64_elf_section_data (opd)->u.opd.func_sec = opd_sym_map;
++	      BFD_ASSERT (ppc64_elf_section_data (opd)->sec_type == sec_normal);
++	      ppc64_elf_section_data (opd)->sec_type = sec_opd;
++	    }
++	}
++
++      /* For input files without an explicit abiversion in e_flags
++	 we should have flagged any with symbol st_other bits set
++	 as ELFv1 and above flagged those with .opd as ELFv2.
++	 Set the output abiversion if not yet set, and for any input
++	 still ambiguous, take its abiversion from the output.
++	 Differences in ABI are reported later.  */
++      if (abiversion (info->output_bfd) == 0)
++	set_abiversion (info->output_bfd, abiversion (ibfd));
++      else if (abiversion (ibfd) == 0)
++	set_abiversion (ibfd, abiversion (info->output_bfd));
++
+       p = &htab->dot_syms;
+       while ((eh = *p) != NULL)
+ 	{
+@@ -5137,34 +5189,9 @@ ppc64_elf_check_relocs (bfd *abfd, struc
+   sym_hashes = elf_sym_hashes (abfd);
+   sreloc = NULL;
+   opd_sym_map = NULL;
+-  if (strcmp (sec->name, ".opd") == 0)
+-    {
+-      /* Garbage collection needs some extra help with .opd sections.
+-	 We don't want to necessarily keep everything referenced by
+-	 relocs in .opd, as that would keep all functions.  Instead,
+-	 if we reference an .opd symbol (a function descriptor), we
+-	 want to keep the function code symbol's section.  This is
+-	 easy for global symbols, but for local syms we need to keep
+-	 information about the associated function section.  */
+-      bfd_size_type amt;
+-
+-      if (abiversion (abfd) == 0)
+-	set_abiversion (abfd, 1);
+-      else if (abiversion (abfd) == 2)
+-	{
+-	  info->callbacks->einfo (_("%P: .opd not allowed in ABI version %d\n"),
+-				  abiversion (abfd));
+-	  bfd_set_error (bfd_error_bad_value);
+-	  return FALSE;
+-	}
+-      amt = sec->size * sizeof (*opd_sym_map) / 8;
+-      opd_sym_map = bfd_zalloc (abfd, amt);
+-      if (opd_sym_map == NULL)
+-	return FALSE;
+-      ppc64_elf_section_data (sec)->u.opd.func_sec = opd_sym_map;
+-      BFD_ASSERT (ppc64_elf_section_data (sec)->sec_type == sec_normal);
+-      ppc64_elf_section_data (sec)->sec_type = sec_opd;
+-    }
++  if (ppc64_elf_section_data (sec) != NULL
++      && ppc64_elf_section_data (sec)->sec_type == sec_opd)
++    opd_sym_map = ppc64_elf_section_data (sec)->u.opd.func_sec;
+ 
+   rel_end = relocs + sec->reloc_count;
+   for (rel = relocs; rel < rel_end; rel++)
+@@ -5338,7 +5365,7 @@ ppc64_elf_check_relocs (bfd *abfd, struc
+ 
+ 	  /* We may also need a plt entry if the symbol turns out to be
+ 	     an ifunc.  */
+-	  if (h != NULL && !info->shared && abiversion (abfd) == 2)
++	  if (h != NULL && !info->shared && abiversion (abfd) != 1)
+ 	    {
+ 	      if (!update_plt_info (abfd, &h->plt.plist, rel->r_addend))
+ 		return FALSE;
+@@ -5607,7 +5634,7 @@ ppc64_elf_check_relocs (bfd *abfd, struc
+ 	case R_PPC64_ADDR16_HIGHESTA:
+ 	case R_PPC64_ADDR16_LO:
+ 	case R_PPC64_ADDR16_LO_DS:
+-	  if (h != NULL && !info->shared && abiversion (abfd) == 2
++	  if (h != NULL && !info->shared && abiversion (abfd) != 1
+ 	      && rel->r_addend == 0)
+ 	    {
+ 	      /* We may need a .plt entry if this reloc refers to a
+@@ -5781,21 +5808,14 @@ ppc64_elf_merge_private_bfd_data (bfd *i
+   iflags = elf_elfheader (ibfd)->e_flags;
+   oflags = elf_elfheader (obfd)->e_flags;
+ 
+-  if (!elf_flags_init (obfd) || oflags == 0)
+-    {
+-      elf_flags_init (obfd) = TRUE;
+-      elf_elfheader (obfd)->e_flags = iflags;
+-    }
+-  else if (iflags == oflags || iflags == 0)
+-    ;
+-  else if (iflags & ~EF_PPC64_ABI)
++  if (iflags & ~EF_PPC64_ABI)
+     {
+       (*_bfd_error_handler)
+ 	(_("%B uses unknown e_flags 0x%lx"), ibfd, iflags);
+       bfd_set_error (bfd_error_bad_value);
+       return FALSE;
+     }
+-  else
++  else if (iflags != oflags && iflags != 0)
+     {
+       (*_bfd_error_handler)
+ 	(_("%B: ABI version %ld is not compatible with ABI version %ld output"),
+diff -urpN binutils-alan2/ld/testsuite/ld-powerpc/ambiguousv1.d binutils-alan3/ld/testsuite/ld-powerpc/ambiguousv1.d
+--- binutils-alan2/ld/testsuite/ld-powerpc/ambiguousv1.d	1970-01-01 09:30:00.000000000 +0930
++++ binutils-alan3/ld/testsuite/ld-powerpc/ambiguousv1.d	2014-07-31 14:30:15.816565692 +0930
+@@ -0,0 +1,12 @@
++#source: startv1.s
++#source: funref.s
++#as: -a64
++#ld: -melf64ppc
++#ld_after_inputfiles: tmpdir/funv1.so
++#readelf: -r --wide
++# check that we do the right thing with funref.s that doesn't have
++# anything to mark it as ELFv1 or ELFv2
++
++Relocation section .* contains 1 entries:
++.*
++.* R_PPC64_ADDR64 +0+ my_func \+ 0
+diff -urpN binutils-alan2/ld/testsuite/ld-powerpc/ambiguousv2.d binutils-alan3/ld/testsuite/ld-powerpc/ambiguousv2.d
+--- binutils-alan2/ld/testsuite/ld-powerpc/ambiguousv2.d	1970-01-01 09:30:00.000000000 +0930
++++ binutils-alan3/ld/testsuite/ld-powerpc/ambiguousv2.d	2014-07-31 14:30:15.816565692 +0930
+@@ -0,0 +1,12 @@
++#source: startv2.s
++#source: funref.s
++#as: -a64
++#ld: -melf64ppc
++#ld_after_inputfiles: tmpdir/funv2.so
++#readelf: -r --wide
++# check that we do the right thing with funref.s that doesn't have
++# anything to mark it as ELFv1 or ELFv2
++
++Relocation section .*contains 1 entries:
++.*
++.* R_PPC64_JMP_SLOT .* my_func \+ 0
+diff -urpN binutils-alan2/ld/testsuite/ld-powerpc/funref.s binutils-alan3/ld/testsuite/ld-powerpc/funref.s
+--- binutils-alan2/ld/testsuite/ld-powerpc/funref.s	1970-01-01 09:30:00.000000000 +0930
++++ binutils-alan3/ld/testsuite/ld-powerpc/funref.s	2014-07-31 14:30:15.816565692 +0930
+@@ -0,0 +1,4 @@
++ .data
++ .globl func_tab
++func_tab:
++ .dc.a my_func
+diff -urpN binutils-alan2/ld/testsuite/ld-powerpc/funv1.s binutils-alan3/ld/testsuite/ld-powerpc/funv1.s
+--- binutils-alan2/ld/testsuite/ld-powerpc/funv1.s	1970-01-01 09:30:00.000000000 +0930
++++ binutils-alan3/ld/testsuite/ld-powerpc/funv1.s	2014-07-31 14:30:15.816565692 +0930
+@@ -0,0 +1,10 @@
++ .globl my_func
++ .type my_func,@function
++ .section .opd,"aw",@progbits
++my_func:
++ .quad .Lmy_func, .TOC.@tocbase
++
++ .text
++.Lmy_func:
++ blr
++ .size my_func,.-.Lmy_func
+diff -urpN binutils-alan2/ld/testsuite/ld-powerpc/funv2.s binutils-alan3/ld/testsuite/ld-powerpc/funv2.s
+--- binutils-alan2/ld/testsuite/ld-powerpc/funv2.s	1970-01-01 09:30:00.000000000 +0930
++++ binutils-alan3/ld/testsuite/ld-powerpc/funv2.s	2014-07-31 14:30:15.816565692 +0930
+@@ -0,0 +1,6 @@
++ .abiversion 2
++ .globl my_func
++ .type my_func,@function
++my_func:
++ blr
++ .size my_func,.-my_func
+diff -urpN binutils-alan2/ld/testsuite/ld-powerpc/powerpc.exp binutils-alan3/ld/testsuite/ld-powerpc/powerpc.exp
+--- binutils-alan2/ld/testsuite/ld-powerpc/powerpc.exp	2014-07-31 10:57:23.830363894 +0930
++++ binutils-alan3/ld/testsuite/ld-powerpc/powerpc.exp	2014-07-31 14:32:08.843996200 +0930
+@@ -213,6 +213,8 @@ set ppc64elftests {
+         {tocopt4a.s tocopt4b.s} {{objdump -s tocopt4.d}} "tocopt4"}
+     {"TOC opt5" "-melf64ppc" "" "-a64"  {tocopt5.s}
+ 	{{objdump -s tocopt5.d}} "tocopt5"}
++    {"ambig shared v1" "-shared -melf64ppc" "" "-a64" {funv1.s} {} "funv1.so"}
++    {"ambig shared v2" "-shared -melf64ppc" "" "-a64" {funv2.s} {} "funv2.so"}
+ }
+ 
+ set ppceabitests {
+@@ -271,6 +273,8 @@ if [ supports_ppc64 ] then {
+     run_dump_test "relbrlt"
+     run_dump_test "elfv2so"
+     run_dump_test "elfv2exe"
++    run_dump_test "ambiguousv1"
++    run_dump_test "ambiguousv2"
+ }
+ 
+ if { [istarget "powerpc*-eabi*"] } {
+diff -urpN binutils-alan2/ld/testsuite/ld-powerpc/startv1.s binutils-alan3/ld/testsuite/ld-powerpc/startv1.s
+--- binutils-alan2/ld/testsuite/ld-powerpc/startv1.s	1970-01-01 09:30:00.000000000 +0930
++++ binutils-alan3/ld/testsuite/ld-powerpc/startv1.s	2014-07-31 14:30:15.820565530 +0930
+@@ -0,0 +1,8 @@
++ .globl _start
++ .section .opd,"aw",@progbits
++_start:
++ .quad .L_start, .TOC.@tocbase
++
++ .text
++.L_start:
++ b _start
+diff -urpN binutils-alan2/ld/testsuite/ld-powerpc/startv2.s binutils-alan3/ld/testsuite/ld-powerpc/startv2.s
+--- binutils-alan2/ld/testsuite/ld-powerpc/startv2.s	1970-01-01 09:30:00.000000000 +0930
++++ binutils-alan3/ld/testsuite/ld-powerpc/startv2.s	2014-07-31 14:30:15.820565530 +0930
+@@ -0,0 +1,5 @@
++ .abiversion 2
++ .text
++ .globl _start
++_start:
++ b _start

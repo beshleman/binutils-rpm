@@ -1,0 +1,125 @@
+From d7dbef3c3149dfd404f5dc68f9337e1f9b5d3e8c Mon Sep 17 00:00:00 2001
+From: Mark Salter <msalter@redhat.com>
+Date: Sat, 14 Jun 2014 00:34:58 -0400
+Subject: [PATCH] gas: Backport support for full range of aarch64 sysregs
+
+gas/
+
+	Backport from mainline:
+
+	2013-02-27 Yufeng Zhang <yufeng.zhang@arm.com>
+	* config/tc-aarch64.c (parse_sys_reg): Allow the full range of CRn
+	for system registers.
+
+gas/testsuite/
+
+	Backport from mainline:
+
+	2013-02-27 Yufeng Zhang <yufeng.zhang@arm.com>
+	* gas/aarch64/illegal.l: Delete the error message for
+	msr S3_1_C13_C15_1,x7.
+	* gas/aarch64/sysreg.s: Add new tests.
+	* gas/aarch64/sysreg.d: Update.
+---
+ gas/ChangeLog                       |  8 ++++++++
+ gas/config/tc-aarch64.c             | 10 +++++++---
+ gas/testsuite/ChangeLog             | 10 ++++++++++
+ gas/testsuite/gas/aarch64/illegal.l |  1 -
+ gas/testsuite/gas/aarch64/sysreg.d  |  3 +++
+ gas/testsuite/gas/aarch64/sysreg.s  |  4 ++++
+ 6 files changed, 32 insertions(+), 4 deletions(-)
+
+diff --git a/gas/ChangeLog b/gas/ChangeLog
+index 0014922..e03e191 100644
+--- a/gas/ChangeLog
++++ b/gas/ChangeLog
+@@ -1,3 +1,11 @@
++2013-05-13 Yufeng Zhang <yufeng.zhang@arm.com>
++
++	Backport from mainline:
++
++	2013-02-27 Yufeng Zhang <yufeng.zhang@arm.com>
++	* config/tc-aarch64.c (parse_sys_reg): Allow the full range of CRn
++	for system registers.
++
+ 2013-02-25  Kaushik Phatak  <Kaushik.Phatak@kpitcummins.com>
+ 
+ 	* config/rl78-parse.y: Fix encoding of DIVWU insn.
+diff --git a/gas/config/tc-aarch64.c b/gas/config/tc-aarch64.c
+index 620ae8a..1e88891 100644
+--- a/gas/config/tc-aarch64.c
++++ b/gas/config/tc-aarch64.c
+@@ -3288,10 +3288,14 @@ parse_sys_reg (char **str, struct hash_control *sys_regs, int imple_defined_p)
+ 	  unsigned int op0, op1, cn, cm, op2;
+ 	  if (sscanf (buf, "s%u_%u_c%u_c%u_%u", &op0, &op1, &cn, &cm, &op2) != 5)
+ 	    return PARSE_FAIL;
+-	  /* Register access is encoded as follows:
++	  /* The architecture specifies the encoding space for implementation
++	     defined registers as:
+ 	     op0  op1  CRn   CRm   op2
+-	     11   xxx  1x11  xxxx  xxx.  */
+-	  if (op0 != 3 || op1 > 7 || (cn | 0x4) != 0xf || cm > 15 || op2 > 7)
++	     11   xxx  1x11  xxxx  xxx
++	     For convenience GAS accepts a wider encoding space, as follows:
++	     op0  op1  CRn   CRm   op2
++	     11   xxx  xxxx  xxxx  xxx  */
++	  if (op0 != 3 || op1 > 7 || cn > 15 || cm > 15 || op2 > 7)
+ 	    return PARSE_FAIL;
+ 	  value = (op0 << 14) | (op1 << 11) | (cn << 7) | (cm << 3) | op2;
+ 	}
+diff --git a/gas/testsuite/ChangeLog b/gas/testsuite/ChangeLog
+index 4508042..48574c4 100644
+--- a/gas/testsuite/ChangeLog
++++ b/gas/testsuite/ChangeLog
+@@ -1,3 +1,13 @@
++2013-05-13 Yufeng Zhang <yufeng.zhang@arm.com>
++
++	Backport from mainline:
++
++	2013-02-27 Yufeng Zhang <yufeng.zhang@arm.com>
++	* gas/aarch64/illegal.l: Delete the error message for
++	msr S3_1_C13_C15_1,x7.
++	* gas/aarch64/sysreg.s: Add new tests.
++	* gas/aarch64/sysreg.d: Update.
++
+ 2013-02-19  H.J. Lu  <hongjiu.lu@intel.com>
+ 
+ 	PR gas/15159
+diff --git a/gas/testsuite/gas/aarch64/illegal.l b/gas/testsuite/gas/aarch64/illegal.l
+index 6905866..5bc9c3c 100644
+--- a/gas/testsuite/gas/aarch64/illegal.l
++++ b/gas/testsuite/gas/aarch64/illegal.l
+@@ -520,7 +520,6 @@
+ [^:]*:496: Error: .*`str x1,page_table_count'
+ [^:]*:498: Error: .*`prfm PLDL3KEEP,\[x9,x15,sxtx#2\]'
+ [^:]*:500: Error: .*`mrs x5,S1_0_C13_C8_0'
+-[^:]*:501: Error: .*`msr S3_1_C13_C15_1,x7'
+ [^:]*:502: Error: .*`msr S3_1_C11_C15_-1,x7'
+ [^:]*:503: Error: .*`msr S3_1_11_15_1,x7'
+ [^:]*:506: Error: .*`movi w1,#15'
+diff --git a/gas/testsuite/gas/aarch64/sysreg.d b/gas/testsuite/gas/aarch64/sysreg.d
+index b83b270..c7cf00e 100644
+--- a/gas/testsuite/gas/aarch64/sysreg.d
++++ b/gas/testsuite/gas/aarch64/sysreg.d
+@@ -23,3 +23,6 @@ Disassembly of section \.text:
+   3c:	d5380260 	mrs	x0, id_isar3_el1
+   40:	d5380280 	mrs	x0, id_isar4_el1
+   44:	d53802a0 	mrs	x0, id_isar5_el1
++  48:	d538cc00 	mrs	x0, s3_0_c12_c12_0
++  4c:	d5384600 	mrs	x0, s3_0_c4_c6_0
++  50:	d5184600 	msr	s3_0_c4_c6_0, x0
+diff --git a/gas/testsuite/gas/aarch64/sysreg.s b/gas/testsuite/gas/aarch64/sysreg.s
+index e6f770e..3287594 100644
+--- a/gas/testsuite/gas/aarch64/sysreg.s
++++ b/gas/testsuite/gas/aarch64/sysreg.s
+@@ -22,3 +22,7 @@
+ 	mrs x0, id_isar3_el1
+ 	mrs x0, id_isar4_el1
+ 	mrs x0, id_isar5_el1
++
++	mrs x0, s3_0_c12_c12_0
++	mrs x0, s3_0_c4_c6_0
++	msr s3_0_c4_c6_0, x0
+-- 
+1.9.0
+

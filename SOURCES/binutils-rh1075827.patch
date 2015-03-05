@@ -1,0 +1,49 @@
+Backport of f44a1f8e513b37bcc52ba9ea0c172c3e94852756:
+
+2014-01-14  Michael Hudson-Doyle  <michael.hudson@linaro.org>
+	    Kugan Vivekanandarajah  <kugan.vivekanandarajah@linaro.org>
+
+	* elfnn-aarch64.c (elfNN_aarch64_final_link_relocate): Use correct
+	offset while calculating relocation address.
+	(elfNN_aarch64_create_small_pltn_entry): Likewise.
+	(elfNN_aarch64_init_small_plt0_entry): Likewise.
+
+
+--- a/bfd/elf64-aarch64.c	2013-02-27 15:28:03.000000000 -0500
++++ b/bfd/elf64-aarch64.c	2014-03-13 13:47:08.003066253 -0400
+@@ -4060,7 +4060,7 @@
+ 
+       value = (symbol_got_offset (input_bfd, h, r_symndx)
+ 	       + globals->root.sgot->output_section->vma
+-	       + globals->root.sgot->output_section->output_offset);
++	       + globals->root.sgot->output_offset);
+ 
+       value = aarch64_resolve_relocation (r_type, place, value,
+ 					  0, weak_undef_p);
+@@ -4090,7 +4090,7 @@
+ 
+       value = (symbol_tlsdesc_got_offset (input_bfd, h, r_symndx)
+ 	       + globals->root.sgotplt->output_section->vma
+-	       + globals->root.sgotplt->output_section->output_offset
++	       + globals->root.sgotplt->output_offset
+ 	       + globals->sgotplt_jump_table_size);
+ 
+       value = aarch64_resolve_relocation (r_type, place, value,
+@@ -6454,7 +6454,7 @@
+   got_offset = (plt_index + 3) * GOT_ENTRY_SIZE;
+   plt_entry = htab->root.splt->contents + h->plt.offset;
+   plt_entry_address = htab->root.splt->output_section->vma
+-    + htab->root.splt->output_section->output_offset + h->plt.offset;
++    + htab->root.splt->output_offset + h->plt.offset;
+   gotplt_entry_address = htab->root.sgotplt->output_section->vma +
+     htab->root.sgotplt->output_offset + got_offset;
+ 
+@@ -6676,7 +6676,7 @@
+ 		  + htab->root.sgotplt->output_offset);
+ 
+   plt_base = htab->root.splt->output_section->vma +
+-    htab->root.splt->output_section->output_offset;
++    htab->root.splt->output_offset;
+ 
+   /* Fill in the top 21 bits for this: ADRP x16, PLT_GOT + n * 8.
+      ADRP:   ((PG(S+A)-PG(P)) >> 12) & 0x1fffff */

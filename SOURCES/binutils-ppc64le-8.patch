@@ -1,0 +1,71 @@
+commit 2dc0e7b400e46f105960c0dfcd431013f0013c6a
+Author: Alan Modra <amodra@gmail.com>
+Date:   Tue Jul 1 18:10:25 2014 +0930
+
+    Don't include sys/param.h
+    
+    sys/param.h on recent versions of powerpc glibc ends up including
+    asm/elf.h via asm/sigcontex.h.  asm/elf.h defines R_PPC_* and R_PPC64_*
+    macros, which clash with our include/elf/ppc.h and include/elf/ppc64.h.
+    It turns out that no current source uses LD_PATHMAX, so there is no
+    need for limits.h or sys/param.h, except for one occurrence of UINT_MAX.
+    I don't have a quarrel with limits.h, but it seems unnecessary just
+    for UINT_MAX.
+    
+    	* sysdep.h: Don't include limits.h and sys/param.h.  Don't
+    	include unistd.h twice.
+    	(LD_PATHMAX): Don't define.
+    	* ldlang.c (lang_common): Don't use UINT_MAX.
+
+diff --git a/ld/ldlang.c b/ld/ldlang.c
+index e7c9669..60877b8 100644
+--- a/ld/ldlang.c
++++ b/ld/ldlang.c
+@@ -5981,7 +5981,7 @@ lang_common (void)
+ 	  for (power = 0; power <= 4; power++)
+ 	    bfd_link_hash_traverse (link_info.hash, lang_one_common, &power);
+ 
+-	  power = UINT_MAX;
++	  power = (unsigned int) -1;
+ 	  bfd_link_hash_traverse (link_info.hash, lang_one_common, &power);
+ 	}
+     }
+diff --git a/ld/sysdep.h b/ld/sysdep.h
+index c0b8445..99caf18 100644
+--- a/ld/sysdep.h
++++ b/ld/sysdep.h
+@@ -56,34 +56,12 @@ extern char *strrchr ();
+ #include <unistd.h>
+ #endif
+ 
+-/* for PATH_MAX */
+-#ifdef HAVE_LIMITS_H
+-#include <limits.h>
+-#endif
+-/* for MAXPATHLEN */
+-#ifdef HAVE_SYS_PARAM_H
+-#include <sys/param.h>
+-#endif
+-#ifdef PATH_MAX
+-# define LD_PATHMAX PATH_MAX
+-#else
+-# ifdef MAXPATHLEN
+-#  define LD_PATHMAX MAXPATHLEN
+-# else
+-#  define LD_PATHMAX 1024
+-# endif
+-#endif
+-
+ #ifdef HAVE_REALPATH
+ # define REALPATH(a,b) realpath (a, b)
+ #else
+ # define REALPATH(a,b) NULL
+ #endif
+ 
+-#ifdef HAVE_UNISTD_H
+-#include <unistd.h>
+-#endif
+-
+ #ifdef USE_BINARY_FOPEN
+ #include "fopen-bin.h"
+ #else

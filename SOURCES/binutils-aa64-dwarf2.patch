@@ -1,0 +1,108 @@
+diff -ruP binutils-orig/binutils/dwarf.c binutils-new/binutils/dwarf.c
+--- binutils-orig/binutils/dwarf.c	2014-08-21 11:06:45.920455860 -0700
++++ binutils-new/binutils/dwarf.c	2014-08-21 11:13:15.920455860 -0700
+@@ -4781,6 +4781,29 @@
+   dwarf_regnames_count = ARRAY_SIZE (dwarf_regnames_x86_64);
+ }
+ 
++static const char *const dwarf_regnames_aarch64[] =
++{
++   "x0",  "x1",  "x2",  "x3",  "x4",  "x5",  "x6",  "x7", 
++   "x8",  "x9", "x10", "x11", "x12", "x13", "x14", "x15", 
++  "x16", "x17", "x18", "x19", "x20", "x21", "x22", "x23",
++  "x24", "x25", "x26", "x27", "x28", "x29", "x30", "sp",
++   NULL, "elr",  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,
++   NULL,  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,
++   NULL,  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,
++   NULL,  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,  NULL,
++   "v0",  "v1",  "v2",  "v3",  "v4",  "v5",  "v6",  "v7", 
++   "v8",  "v9", "v10", "v11", "v12", "v13", "v14", "v15", 
++  "v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23",
++  "v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31",
++};
++
++void
++init_dwarf_regnames_aarch64 (void)
++{
++  dwarf_regnames = dwarf_regnames_aarch64;
++  dwarf_regnames_count = ARRAY_SIZE (dwarf_regnames_aarch64);
++}
++
+ void
+ init_dwarf_regnames (unsigned int e_machine)
+ {
+@@ -4797,6 +4820,10 @@
+       init_dwarf_regnames_x86_64 ();
+       break;
+ 
++    case EM_AARCH64:
++      init_dwarf_regnames_aarch64 ();
++      break;
++
+     default:
+       break;
+     }
+diff -ruP binutils-orig/binutils/dwarf.h binutils-new/binutils/dwarf.h
+--- binutils-orig/binutils/dwarf.h	2013-02-27 12:28:03.000000000 -0800
++++ binutils-new/binutils/dwarf.h	2014-08-21 11:13:15.920455860 -0700
+@@ -232,6 +232,7 @@
+ extern void init_dwarf_regnames (unsigned int);
+ extern void init_dwarf_regnames_i386 (void);
+ extern void init_dwarf_regnames_x86_64 (void);
++extern void init_dwarf_regnames_aarch64 (void);
+ 
+ extern int load_debug_section (enum dwarf_section_display_enum, void *);
+ extern void free_debug_section (enum dwarf_section_display_enum);
+diff -ruP binutils-orig/binutils/objdump.c binutils-new/binutils/objdump.c
+--- binutils-orig/binutils/objdump.c	2013-02-27 12:28:03.000000000 -0800
++++ binutils-new/binutils/objdump.c	2014-08-21 11:13:15.930455860 -0700
+@@ -2404,6 +2404,10 @@
+ 	}
+       break;
+ 
++    case bfd_arch_aarch64:
++      init_dwarf_regnames_aarch64();
++      break;
++
+     default:
+       break;
+     }
+diff -ruP binutils-orig/gas/config/tc-aarch64.c binutils-new/gas/config/tc-aarch64.c
+--- binutils-orig/gas/config/tc-aarch64.c	2014-08-21 11:06:48.090455860 -0700
++++ binutils-new/gas/config/tc-aarch64.c	2014-08-21 11:13:15.930455860 -0700
+@@ -5881,12 +5881,15 @@
+     case REG_TYPE_SP_64:
+     case REG_TYPE_R_32:
+     case REG_TYPE_R_64:
++      return reg->number;
++
+     case REG_TYPE_FP_B:
+     case REG_TYPE_FP_H:
+     case REG_TYPE_FP_S:
+     case REG_TYPE_FP_D:
+     case REG_TYPE_FP_Q:
+-      return reg->number;
++      return reg->number + 64;
++
+     default:
+       break;
+     }
+diff -ruP binutils-orig/gas/config/tc-aarch64.h binutils-new/gas/config/tc-aarch64.h
+--- binutils-orig/gas/config/tc-aarch64.h	2013-02-27 12:28:03.000000000 -0800
++++ binutils-new/gas/config/tc-aarch64.h	2014-08-21 11:13:15.930455860 -0700
+@@ -145,13 +145,13 @@
+       goto LABEL;								\
+     }
+ 
+-#define DWARF2_LINE_MIN_INSN_LENGTH 	2
++#define DWARF2_LINE_MIN_INSN_LENGTH 	4
+ 
+ /* The lr register is r30.  */
+ #define DWARF2_DEFAULT_RETURN_COLUMN  30
+ 
+ /* Registers are generally saved at negative offsets to the CFA.  */
+-#define DWARF2_CIE_DATA_ALIGNMENT     (-4)
++#define DWARF2_CIE_DATA_ALIGNMENT     (-8)
+ 
+ #ifdef OBJ_ELF
+ # define obj_frob_symbol(sym, punt)	aarch64elf_frob_symbol ((sym), & (punt))
