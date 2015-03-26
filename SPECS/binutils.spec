@@ -19,7 +19,7 @@
 Summary: A GNU collection of binary utilities
 Name: %{?cross}binutils%{?_with_debug:-debug}
 Version: 2.23.52.0.1
-Release: 30%{?dist}
+Release: 30%{?dist}.1
 License: GPLv3+
 Group: Development/Tools
 URL: http://sources.redhat.com/binutils
@@ -76,6 +76,9 @@ Patch25: binutils-rh1130479.patch
 Patch26: binutils-2.23.52.0.1-avx512vlbwdq-sgx.patch
 # Change PPC commonpagesize to 64k
 Patch27: binutils-ppc-pgsz.patch
+# RELRO fixes
+Patch28: binutils-rh1200138-1.patch
+Patch29: binutils-rh1200138-2.patch
 
 Patch100: binutils-rh1066712.patch
 Patch101: binutils-rh1075827.patch
@@ -230,6 +233,8 @@ using libelf instead of BFD.
 %patch25 -p1 -b .symmerge~
 %patch26 -p0 -b .avx512-isa~
 %patch27 -p1 -b .ppc-pgsz~
+%patch28 -p1 -b .relro1~
+%patch29 -p1 -b .relro2~
 %patch100 -p0 -b .aarch64-fpintfix~
 %patch101 -p1 -b .aarch64-101~
 %patch102 -p1 -b .aarch64-102~
@@ -562,6 +567,9 @@ exit 0
 %endif # %{isnative}
 
 %changelog
+* Wed Mar 11 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-30.1
+- Backport upstream RELRO fixes. (#1200138)
+
 * Thu Jan 15 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-30
 - Fix syntax for multiple --enable-targets configure option.
   (#1133147)

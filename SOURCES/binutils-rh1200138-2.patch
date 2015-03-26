@@ -1,0 +1,157 @@
+diff -Nrup a/bfd/elf.c b/bfd/elf.c
+--- a/bfd/elf.c	2015-03-11 13:58:14.127506851 -0600
++++ b/bfd/elf.c	2015-03-11 14:01:51.155695916 -0600
+@@ -4482,7 +4482,6 @@ assign_file_positions_for_load_sections
+   unsigned int alloc;
+   unsigned int i, j;
+   bfd_vma header_pad = 0;
+-  bfd_vma relro_start = 0, relro_end = 0;
+ 
+   if (link_info == NULL
+       && !_bfd_elf_map_sections_to_segments (abfd, link_info))
+@@ -4553,23 +4552,6 @@ assign_file_positions_for_load_sections
+     header_pad -= off;
+   off += header_pad;
+ 
+-  /* Get start and end of PT_GNU_RELRO segment.  */
+-  if (link_info != NULL)
+-    {
+-      relro_start = link_info->relro_start;
+-      relro_end = link_info->relro_end;
+-    }
+-  else
+-    {
+-      for (m = elf_seg_map (abfd); m != NULL; m = m->next)
+-	if (m->p_type == PT_GNU_RELRO)
+-	  {
+-	    relro_start = m->p_paddr;
+-	    relro_end = relro_start + m->p_size;
+-	    break;
+-	  }
+-    }
+-
+   for (m = elf_seg_map (abfd), p = phdrs, j = 0;
+        m != NULL;
+        m = m->next, p++, j++)
+@@ -4914,22 +4896,6 @@ assign_file_positions_for_load_sections
+ 	    }
+ 	}
+ 
+-      if (relro_start != 0
+-	  && p->p_type == PT_LOAD
+-	  && p->p_vaddr >= relro_start)
+-	{
+-	  /* If PT_LOAD segment doesn't fit PT_GNU_RELRO segment,
+-	     adjust its p_filesz and p_memsz.  */
+-	  if (p->p_vaddr + p->p_filesz < relro_end)
+-	    {
+-	      bfd_vma adjust = relro_end - (p->p_vaddr + p->p_filesz);
+-	      p->p_filesz += adjust;
+-	      off += adjust;
+-	    }
+-	  if (p->p_vaddr + p->p_memsz < relro_end)
+-	    p->p_memsz += relro_end - (p->p_vaddr + p->p_memsz);
+-	}
+-
+       off -= off_adjust;
+ 
+       /* Check that all sections are in a PT_LOAD segment.
+@@ -5131,14 +5097,11 @@ assign_file_positions_for_non_load_secti
+ 		{
+ 		  if (lp->p_type == PT_LOAD
+ 		      && lp->p_vaddr < link_info->relro_end
+-		      && lp->p_vaddr + lp->p_filesz >= link_info->relro_end
+ 		      && lm->count != 0
+ 		      && lm->sections[0]->vma >= link_info->relro_start)
+ 		    break;
+ 		}
+ 
+-	      /* PR ld/14207.  If the RELRO segment doesn't fit in the
+-		 LOAD segment, it should be removed.  */
+ 	      BFD_ASSERT (lm != NULL);
+ 	    }
+ 	  else
+diff -Nrup a/ld/ld.texinfo b/ld/ld.texinfo
+--- a/ld/ld.texinfo	2013-02-27 13:28:03.000000000 -0700
++++ b/ld/ld.texinfo	2015-03-11 14:01:51.156695894 -0600
+@@ -5865,13 +5865,15 @@ evaluation purposes.
+ @item DATA_SEGMENT_RELRO_END(@var{offset}, @var{exp})
+ @kindex DATA_SEGMENT_RELRO_END(@var{offset}, @var{exp})
+ This defines the end of the @code{PT_GNU_RELRO} segment when
+-@samp{-z relro} option is used.  Second argument is returned.
++@samp{-z relro} option is used.
+ When @samp{-z relro} option is not present, @code{DATA_SEGMENT_RELRO_END}
+ does nothing, otherwise @code{DATA_SEGMENT_ALIGN} is padded so that
+ @var{exp} + @var{offset} is aligned to the most commonly used page
+ boundary for particular target.  If present in the linker script,
+ it must always come in between @code{DATA_SEGMENT_ALIGN} and
+-@code{DATA_SEGMENT_END}.
++@code{DATA_SEGMENT_END}.  Evaluates to the second argument plus any
++padding needed at the end of the @code{PT_GNU_RELRO} segment due to
++section alignment.
+ 
+ @smallexample
+   . = DATA_SEGMENT_RELRO_END(24, .);
+diff -Nrup a/ld/ldlang.c b/ld/ldlang.c
+--- a/ld/ldlang.c	2015-03-11 13:58:14.128506829 -0600
++++ b/ld/ldlang.c	2015-03-11 14:01:51.157695872 -0600
+@@ -5379,18 +5379,14 @@ lang_size_sections (bfd_boolean *relax,
+       && link_info.relro && expld.dataseg.relro_end)
+     {
+       /* If DATA_SEGMENT_ALIGN DATA_SEGMENT_RELRO_END pair was seen, try
+-	 to put expld.dataseg.relro on a (common) page boundary.  */
+-      bfd_vma min_base, old_base, relro_end, maxpage;
++	 to put expld.dataseg.relro_end on a (common) page boundary.  */
++      bfd_vma min_base, relro_end, maxpage;
+ 
+       expld.dataseg.phase = exp_dataseg_relro_adjust;
+       maxpage = expld.dataseg.maxpagesize;
+       /* MIN_BASE is the absolute minimum address we are allowed to start the
+ 	 read-write segment (byte before will be mapped read-only).  */
+       min_base = (expld.dataseg.min_base + maxpage - 1) & ~(maxpage - 1);
+-      /* OLD_BASE is the address for a feasible minimum address which will
+-	 still not cause a data overlap inside MAXPAGE causing file offset skip
+-	 by MAXPAGE.  */
+-      old_base = expld.dataseg.base;
+       expld.dataseg.base += (-expld.dataseg.relro_end
+ 			     & (expld.dataseg.pagesize - 1));
+       /* Compute the expected PT_GNU_RELRO segment end.  */
+@@ -5406,9 +5402,9 @@ lang_size_sections (bfd_boolean *relax,
+       if (expld.dataseg.relro_end > relro_end)
+ 	{
+ 	  /* The alignment of sections between DATA_SEGMENT_ALIGN
+-	     and DATA_SEGMENT_RELRO_END caused huge padding to be
+-	     inserted at DATA_SEGMENT_RELRO_END.  Try to start a bit lower so
+-	     that the section alignments will fit in.  */
++	     and DATA_SEGMENT_RELRO_END can cause excessive padding to
++	     be inserted at DATA_SEGMENT_RELRO_END.  Try to start a
++	     bit lower so that the section alignments will fit in.  */
+ 	  asection *sec;
+ 	  unsigned int max_alignment_power = 0;
+ 
+@@ -5422,9 +5418,10 @@ lang_size_sections (bfd_boolean *relax,
+ 
+ 	  if (((bfd_vma) 1 << max_alignment_power) < expld.dataseg.pagesize)
+ 	    {
+-	      if (expld.dataseg.base - (1 << max_alignment_power) < old_base)
+-		expld.dataseg.base += expld.dataseg.pagesize;
+-	      /* Properly align base to max_alignment_power.  */
++	      /* Aligning the adjusted base guarantees the padding
++		 between sections won't change.  This is better than
++		 simply subtracting 1 << max_alignment_power which is
++		 what we used to do here.  */
+ 	      expld.dataseg.base &= ~((1 << max_alignment_power) - 1);
+ 	      lang_reset_memory_regions ();
+ 	      one_lang_size_sections_pass (relax, check_regions);
+diff -Nrup a/ld/testsuite/ld-x86-64/pr14207.d b/ld/testsuite/ld-x86-64/pr14207.d
+--- a/ld/testsuite/ld-x86-64/pr14207.d	2015-03-11 13:58:14.128506829 -0600
++++ b/ld/testsuite/ld-x86-64/pr14207.d	2015-03-11 14:01:51.157695872 -0600
+@@ -11,7 +11,7 @@ There are 4 program headers, starting at
+ Program Headers:
+   Type           Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align
+   LOAD           0x000000 0x0000000000000000 0x0000000000000000 0x0001e0 0x0001e0 R   0x200000
+-  LOAD           0x000b48 0x0000000000200b48 0x0000000000200b48 0x0004b8 0x000cf8 RW  0x200000
++  LOAD           0x000b48 0x0000000000200b48 0x0000000000200b48 0x0004b0 0x000cf8 RW  0x200000
+   DYNAMIC        0x000b90 0x0000000000200b90 0x0000000000200b90 0x0001c0 0x0001c0 RW  0x8
+   GNU_RELRO      0x000b48 0x0000000000200b48 0x0000000000200b48 0x0004b8 0x0004b8 R   0x1
+ 
