@@ -1,0 +1,117 @@
+From binutils-return-84754-listarch-binutils=sources dot redhat dot com at sourceware dot org Tue Sep 09 07:53:21 2014
+Return-Path: <binutils-return-84754-listarch-binutils=sources dot redhat dot com at sourceware dot org>
+Delivered-To: listarch-binutils at sources dot redhat dot com
+Received: (qmail 32519 invoked by alias); 9 Sep 2014 07:53:21 -0000
+Mailing-List: contact binutils-help at sourceware dot org; run by ezmlm
+Precedence: bulk
+List-Id: <binutils.sourceware.org>
+List-Subscribe: <mailto:binutils-subscribe at sourceware dot org>
+List-Archive: <http://sourceware.org/ml/binutils/>
+List-Post: <mailto:binutils at sourceware dot org>
+List-Help: <mailto:binutils-help at sourceware dot org>, <http://sourceware dot org/ml/#faqs>
+Sender: binutils-owner at sourceware dot org
+Delivered-To: mailing list binutils at sourceware dot org
+Received: (qmail 32506 invoked by uid 89); 9 Sep 2014 07:53:20 -0000
+Authentication-Results: sourceware.org; auth=none
+X-Virus-Found: No
+X-Spam-SWARE-Status: No, score=-3.4 required=5.0 tests=AWL,BAYES_00,RP_MATCHES_RCVD autolearn=ham version=3.3.2
+X-HELO: e06smtp17.uk.ibm.com
+Received: from e06smtp17.uk.ibm.com (HELO e06smtp17.uk.ibm.com) (195.75.94.113) by sourceware.org (qpsmtpd/0.93/v0.84-503-g423c35a) with (AES256-SHA encrypted) ESMTPS; Tue, 09 Sep 2014 07:53:13 +0000
+Received: from /spool/local	by e06smtp17.uk.ibm.com with IBM ESMTP SMTP Gateway: Authorized Use Only! Violators will be prosecuted	for <binutils@sourceware.org> from <krebbel@linux.vnet.ibm.com>;	Tue, 9 Sep 2014 08:53:10 +0100
+Received: from d06dlp02.portsmouth.uk.ibm.com (9.149.20.14)	by e06smtp17.uk.ibm.com (192.168.101.147) with IBM ESMTP SMTP Gateway: Authorized Use Only! Violators will be prosecuted;	Tue, 9 Sep 2014 08:53:07 +0100
+Received: from b06cxnps3074.portsmouth.uk.ibm.com (d06relay09.portsmouth.uk.ibm.com [9.149.109.194])	by d06dlp02.portsmouth.uk.ibm.com (Postfix) with ESMTP id 27FA52190043	for <binutils@sourceware.org>; Tue,  9 Sep 2014 08:52:47 +0100 (BST)
+Received: from d06av09.portsmouth.uk.ibm.com (d06av09.portsmouth.uk.ibm.com [9.149.37.250])	by b06cxnps3074.portsmouth.uk.ibm.com (8.14.9/8.14.9/NCO v10.0) with ESMTP id s897r6Gc45220048	for <binutils@sourceware.org>; Tue, 9 Sep 2014 07:53:06 GMT
+Received: from d06av09.portsmouth.uk.ibm.com (localhost [127.0.0.1])	by d06av09.portsmouth.uk.ibm.com (8.14.4/8.14.4/NCO v10.0 AVout) with ESMTP id s897r6bk006416	for <binutils@sourceware.org>; Tue, 9 Sep 2014 01:53:06 -0600
+Received: from bart (dyn-9-152-212-108.boeblingen.de.ibm.com [9.152.212.108])	by d06av09.portsmouth.uk.ibm.com (8.14.4/8.14.4/NCO v10.0 AVin) with SMTP id s897r59h006331	for <binutils@sourceware.org>; Tue, 9 Sep 2014 01:53:05 -0600
+Received: by bart (sSMTP sendmail emulation); Tue, 09 Sep 2014 09:53:05 +0200
+Date: Tue, 9 Sep 2014 09:53:05 +0200
+From: Andreas Krebbel <krebbel at linux dot vnet dot ibm dot com>
+To: binutils at sourceware dot org
+Subject: [PATCH] S/390: Avoid TLS_LE* -> TLS_TPOFF translation for PIE
+Message-ID: <20140909075305.GA8292@maggie>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=us-ascii
+Content-Disposition: inline
+User-Agent: Mutt/1.5.21 (2010-09-15)
+X-TM-AS-MML: disable
+X-Content-Scanned: Fidelis XPS MAILER
+x-cbid: 14090907-0542-0000-0000-000000A8E687
+
+Hi,
+
+for S/390 there is code which is supposed to handle non-pic objects
+being linked to a shared lib.  For TLS this code replaces the TLS_LE*
+relocs with a runtime reloc.  The code is triggered by the `shared`
+flag and therefore also for PIE.  But for PIE no runtime reloc is
+needed since the TLS offsets are always link-time computable.
+
+(Btw. for s390x that special handling is anyway rather questionable
+since non-pic code will not work in a shared lib for various other
+reasons.)
+
+Fixed with the attached patch.
+
+No regressions on s390 and s390x.
+
+bfd/
+
+2014-09-09  Andreas Krebbel  <krebbel@linux.vnet.ibm.com>
+
+	* elf32-s390.c: Don't replace R_390_TLS_LE32 with R_390_TLS_TPOFF
+	for PIE.
+	* elf64-s390.c: Don't replace R_390_TLS_LE64 with R_390_TLS_TPOFF
+	for PIE.
+
+diff --git a/bfd/elf32-s390.c b/bfd/elf32-s390.c
+index 11c726f..ebcb028 100644
+--- a/bfd/elf32-s390.c
++++ b/bfd/elf32-s390.c
+@@ -1250,6 +1250,12 @@ elf_s390_check_relocs (bfd *abfd,
+ 	  /* Fall through.  */
+ 
+ 	case R_390_TLS_LE32:
++	  /* For static linking and executables this reloc will be
++	     calculated at linktime otherwise a TLS_TPOFF runtime
++	     reloc will be generated.  */
++	  if (r_type == R_390_TLS_LE32 && info->pie)
++	    break;
++
+ 	  if (!info->shared)
+ 	    break;
+ 	  info->flags |= DF_STATIC_TLS;
+@@ -3104,7 +3110,7 @@ elf_s390_relocate_section (bfd *output_bfd,
+ 	  break;
+ 
+ 	case R_390_TLS_LE32:
+-	  if (info->shared)
++	  if (info->shared && !info->pie)
+ 	    {
+ 	      /* Linking a shared library with non-fpic code requires
+ 		 a R_390_TLS_TPOFF relocation.  */
+diff --git a/bfd/elf64-s390.c b/bfd/elf64-s390.c
+index d7b2f08..b2f1aa5 100644
+--- a/bfd/elf64-s390.c
++++ b/bfd/elf64-s390.c
+@@ -1183,6 +1183,12 @@ elf_s390_check_relocs (bfd *abfd,
+ 	  /* Fall through */
+ 
+ 	case R_390_TLS_LE64:
++	  /* For static linking and executables this reloc will be
++	     calculated at linktime otherwise a TLS_TPOFF runtime
++	     reloc will be generated.  */
++	  if (r_type == R_390_TLS_LE64 && info->pie)
++	    break;
++
+ 	  if (!info->shared)
+ 	    break;
+ 	  info->flags |= DF_STATIC_TLS;
+@@ -3074,7 +3080,7 @@ elf_s390_relocate_section (bfd *output_bfd,
+ 	  break;
+ 
+ 	case R_390_TLS_LE64:
+-	  if (info->shared)
++	  if (info->shared && !info->pie)
+ 	    {
+ 	      /* Linking a shared library with non-fpic code requires
+ 		 a R_390_TLS_TPOFF relocation.  */
+
