@@ -1,0 +1,65 @@
+--- a/bfd/elf-bfd.h	2015-01-20 14:18:26.027084406 -0700
++++ b/bfd/elf-bfd.h	2015-01-20 14:29:25.280023651 -0700
+@@ -1130,8 +1130,13 @@
+     (char *);
+ 
+   /* This function returns class of a reloc type.  */
++#if __PPC__
+   enum elf_reloc_type_class (*elf_backend_reloc_type_class)
+   (const struct bfd_link_info *, const asection *, const Elf_Internal_Rela *);
++#else
++  enum elf_reloc_type_class (*elf_backend_reloc_type_class)
++  (const Elf_Internal_Rela *);
++#endif
+ 
+   /* This function, if defined, removes information about discarded functions
+      from other sections which mention them.  */
+@@ -1789,8 +1794,13 @@
+   (bfd *input_bfd, struct bfd_link_info *info, asection *eh_frame_section);
+ 
+ extern enum elf_reloc_type_class _bfd_elf_reloc_type_class
++#if __PPC__
+   (const struct bfd_link_info *, const asection *,
+    const Elf_Internal_Rela *);
++#else
++ (const Elf_Internal_Rela *);
++#endif
++
+ extern bfd_vma _bfd_elf_rela_local_sym
+   (bfd *, Elf_Internal_Sym *, asection **, Elf_Internal_Rela *);
+ extern bfd_vma _bfd_elf_rel_local_sym
+--- a/bfd/elflink.c	2015-01-20 14:18:26.053084125 -0700
++++ b/bfd/elflink.c	2015-01-20 14:32:18.350170081 -0700
+@@ -8496,7 +8496,11 @@
+ 	    struct elf_link_sort_rela *s = (struct elf_link_sort_rela *) p;
+ 
+ 	    (*swap_in) (abfd, erel, s->rela);
++#if __PPC__
+ 	    s->type = (*bed->elf_backend_reloc_type_class) (info, o, s->rela);
++#else
++            s->type = (*bed->elf_backend_reloc_type_class) (s->rela);
++#endif
+ 	    s->u.sym_mask = r_sym_mask;
+ 	    p += sort_elt;
+ 	    erel += ext_size;
+--- binutils-2.23.52.0.1/bfd/elf.c	2015-01-29 10:25:53.120250272 -0700
++++ srcroot/bfd/elf.c	2015-01-29 15:53:56.300896880 -0700
+@@ -9876,10 +9876,14 @@
+   return num_phdrs;
+ }
+ 
+-enum elf_reloc_type_class
+-_bfd_elf_reloc_type_class (const struct bfd_link_info *info ATTRIBUTE_UNUSED,
+-			   const asection *rel_sec ATTRIBUTE_UNUSED,
+-			   const Elf_Internal_Rela *rela ATTRIBUTE_UNUSED)
++extern enum elf_reloc_type_class _bfd_elf_reloc_type_class
++#if __PPC__
++  (const struct bfd_link_info *info ATTRIBUTE_UNUSED,
++   const asection *rel_sec ATTRIBUTE_UNUSED,
++   const Elf_Internal_Rela *rela ATTRIBUTE_UNUSED)
++#else
++ (const Elf_Internal_Rela *rela ATTRIBUTE_UNUSED)
++#endif
+ {
+   return reloc_class_normal;
+ }

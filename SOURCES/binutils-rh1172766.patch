@@ -1,0 +1,204 @@
+commit b53dfeb26ed06e97fff1e8f469e33637ebdf6624
+Author: Alan Modra <amodra@gmail.com>
+Date:   Sat Oct 18 21:46:48 2014 +1030
+
+    PowerPC64 ELFv1 function symbol definition vs LTO and discarded sections
+    
+    When functions are emitted in comdat groups, global symbols defined in
+    duplicates of the group are treated as if they were undefined.  That
+    prevents the symbols in the discarded sections from affecting the
+    linker's global symbol hash table or causing duplicate symbol errors.
+    Annoyingly, when gcc emits a function to a comdat group, it does not
+    put *all* of a function's code and data in the comdat group.
+    Typically, constant tables, exception handling info, and debug info
+    are emitted to normal sections outside of the group, which is a
+    perennial source of linker problems due to the special handling needed
+    to deal with the extra-group pieces that ought to be discarded.  In
+    the case of powerpc64-gcc, the OPD entry for a function is not put in
+    the group.  Since the function symbol is defined on the OPD entry this
+    means we need to handle symbols in .opd specially.
+    
+    To see how this affects LTO in particular, consider the linker
+    testcase PR ld/12942 (1).  This testcase links an LTO object file
+    pr12942a.o with a normal (non-LTO) object pr12942b.o.  Both objects
+    contain a definition for _Z4testv in a comdat group.  On loading
+    pr12942a.o, the linker sees a comdat group (actually linkonce section)
+    for _Z4testv and a weak _Z4testv defined in the IR.  On loading
+    pr12942b.o, the linker sees the same comdat group, and thus discards
+    it.  However, _Z4testv is a weak symbol defined in .opd, not part of
+    the group, so this weak symbol overrides the weak IR symbol.  On
+    (re)loading the LTO version of pr12942a.o, the linker sees another
+    weak _Z4testv, but this one does not override the value we have from
+    pr12942b.o.  The result is a linker complaint about "`_Z4testv'
+    ... defined in discarded section `.group' of tmpdir/pr12942b.o".
+    
+        * elf64-ppc.c (ppc64_elf_add_symbol_hook): If function code
+        section for function symbols defined in .opd is discarded, let
+        the symbol appear to be undefined.
+        (opd_entry_value): Ensure the result section is that for the
+        function code section in the same object as the OPD entry.
+
+--- a/bfd/elf64-ppc.c	2015-02-06 19:28:48.000000000 -0500
++++ b/bfd/elf64-ppc.c	2015-02-06 19:24:12.000000000 -0500
+@@ -4774,22 +4774,37 @@
+ 			   const char **name,
+ 			   flagword *flags ATTRIBUTE_UNUSED,
+ 			   asection **sec,
+-			   bfd_vma *value ATTRIBUTE_UNUSED)
++			   bfd_vma *value)
+ {
+   if ((ibfd->flags & DYNAMIC) == 0
+       && ELF_ST_BIND (isym->st_info) == STB_GNU_UNIQUE)
+     elf_tdata (info->output_bfd)->has_gnu_symbols = TRUE;
+ 
+-  if (ELF_ST_TYPE (isym->st_info) == STT_GNU_IFUNC)
++  if ((ELF_ST_TYPE (isym->st_info) == STT_GNU_IFUNC)
++      && ((ibfd->flags & DYNAMIC) == 0))
++    elf_tdata (info->output_bfd)->has_gnu_symbols = TRUE;
++
++  if (*sec != NULL
++      && strcmp ((*sec)->name, ".opd") == 0)
+     {
+-      if ((ibfd->flags & DYNAMIC) == 0)
+-	elf_tdata (info->output_bfd)->has_gnu_symbols = TRUE;
++      asection *code_sec;
++
++      if (!(ELF_ST_TYPE (isym->st_info) == STT_GNU_IFUNC
++	    || ELF_ST_TYPE (isym->st_info) == STT_FUNC))
++	isym->st_info = ELF_ST_INFO (ELF_ST_BIND (isym->st_info), STT_FUNC);
++
++      /* If the symbol is a function defined in .opd, and the function
++	 code is in a discarded group, let it appear to be undefined.  */
++      if (!info->relocatable
++	  && (*sec)->reloc_count != 0
++	  && opd_entry_value (*sec, *value, &code_sec, NULL,
++			      FALSE) != (bfd_vma) -1
++	  && discarded_section (code_sec))
++	{
++	  *sec = bfd_und_section_ptr;
++	  isym->st_shndx = SHN_UNDEF;
++	}
+     }
+-  else if (ELF_ST_TYPE (isym->st_info) == STT_FUNC)
+-    ;
+-  else if (*sec != NULL
+-	   && strcmp ((*sec)->name, ".opd") == 0)
+-    isym->st_info = ELF_ST_INFO (ELF_ST_BIND (isym->st_info), STT_FUNC);
+ 
+   if ((STO_PPC64_LOCAL_MASK & isym->st_other) != 0)
+     {
+@@ -5855,7 +5870,8 @@
+ }
+ 
+ /* OFFSET in OPD_SEC specifies a function descriptor.  Return the address
+-   of the code entry point, and its section.  */
++   of the code entry point, and its section, which must be in the same
++   object as OPD_SEC.  Returns (bfd_vma) -1 on error.  */
+ 
+ static bfd_vma
+ opd_entry_value (asection *opd_sec,
+@@ -5938,32 +5954,10 @@
+ 	      && ELF64_R_TYPE ((look + 1)->r_info) == R_PPC64_TOC)
+ 	    {
+ 	      unsigned long symndx = ELF64_R_SYM (look->r_info);
+-	      asection *sec;
++	      asection *sec = NULL;
+ 
+-	      if (symndx < symtab_hdr->sh_info
+-		  || elf_sym_hashes (opd_bfd) == NULL)
+-		{
+-		  Elf_Internal_Sym *sym;
+-
+-		  sym = (Elf_Internal_Sym *) symtab_hdr->contents;
+-		  if (sym == NULL)
+-		    {
+-		      size_t symcnt = symtab_hdr->sh_info;
+-		      if (elf_sym_hashes (opd_bfd) == NULL)
+-			symcnt = symtab_hdr->sh_size / symtab_hdr->sh_entsize;
+-		      sym = bfd_elf_get_elf_syms (opd_bfd, symtab_hdr, symcnt,
+-						  0, NULL, NULL, NULL);
+-		      if (sym == NULL)
+-			break;
+-		      symtab_hdr->contents = (bfd_byte *) sym;
+-		    }
+-
+-		  sym += symndx;
+-		  val = sym->st_value;
+-		  sec = bfd_section_from_elf_index (opd_bfd, sym->st_shndx);
+-		  BFD_ASSERT ((sec->flags & SEC_MERGE) == 0);
+-		}
+-	      else
++	      if (symndx >= symtab_hdr->sh_info
++		  && elf_sym_hashes (opd_bfd) != NULL)
+ 		{
+ 		  struct elf_link_hash_entry **sym_hashes;
+ 		  struct elf_link_hash_entry *rh;
+@@ -5977,24 +5971,48 @@
+ 				  || rh->root.type == bfd_link_hash_defweak);
+ 		      val = rh->root.u.def.value;
+ 		      sec = rh->root.u.def.section;
++		      if (sec->owner != opd_bfd)
++			{
++			  sec = NULL;
++			  val = (bfd_vma) -1;
++			}
++		    }
++		}
++
++	      if (sec == NULL)
++		{
++		  Elf_Internal_Sym *sym;
++
++		  if (symndx < symtab_hdr->sh_info)
++		    {
++		      sym = (Elf_Internal_Sym *) symtab_hdr->contents;
++		      if (sym == NULL)
++			{
++			  size_t symcnt = symtab_hdr->sh_info;
++			  sym = bfd_elf_get_elf_syms (opd_bfd, symtab_hdr,
++						      symcnt, 0,
++						      NULL, NULL, NULL);
++			  if (sym == NULL)
++			    break;
++			  symtab_hdr->contents = (bfd_byte *) sym;
++			}
++		      sym += symndx;
+ 		    }
+ 		  else
+ 		    {
+-		      /* Handle the odd case where we can be called
+-			 during bfd_elf_link_add_symbols before the
+-			 symbol hashes have been fully populated.  */
+-		      Elf_Internal_Sym *sym;
+-
+-		      sym = bfd_elf_get_elf_syms (opd_bfd, symtab_hdr, 1,
+-						  symndx, NULL, NULL, NULL);
++		      sym = bfd_elf_get_elf_syms (opd_bfd, symtab_hdr,
++						  1, symndx,
++						  NULL, NULL, NULL);
+ 		      if (sym == NULL)
+ 			break;
+-
+-		      val = sym->st_value;
+-		      sec = bfd_section_from_elf_index (opd_bfd, sym->st_shndx);
+-		      free (sym);
+ 		    }
++		  sec = bfd_section_from_elf_index (opd_bfd, sym->st_shndx);
++		  if (sec == NULL)
++		    break;
++		  BFD_ASSERT ((sec->flags & SEC_MERGE) == 0);
++		  val = sym->st_value;
+ 		}
++
+ 	      val += look->r_addend;
+ 	      if (code_off != NULL)
+ 		*code_off = val;
+@@ -6005,7 +6023,7 @@
+ 		  else
+ 		    *code_sec = sec;
+ 		}
+-	      if (sec != NULL && sec->output_section != NULL)
++	      if (sec->output_section != NULL)
+ 		val += sec->output_section->vma + sec->output_offset;
+ 	    }
+ 	  break;

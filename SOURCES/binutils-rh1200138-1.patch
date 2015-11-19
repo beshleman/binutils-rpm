@@ -118,7 +118,7 @@ diff -Nrup a/ld/testsuite/ld-x86-64/pr14207.d b/ld/testsuite/ld-x86-64/pr14207.d
 -  NULL +.*
 -#...
 +Elf file type is DYN \(Shared object file\)
-+Entry point 0x1d9
++Entry point 0x1dc
 +There are 4 program headers, starting at offset 64
 +
 +Program Headers:

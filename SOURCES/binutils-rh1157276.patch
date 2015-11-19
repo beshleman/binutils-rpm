@@ -1,0 +1,296 @@
+diff -rup binutils-2.23.52.0.1.orig/binutils/config.in binutils-2.23.52.0.1/binutils/config.in
+--- binutils-2.23.52.0.1.orig/binutils/config.in	2015-06-29 11:32:47.721653986 +0100
++++ binutils-2.23.52.0.1/binutils/config.in	2015-06-29 11:35:48.377753127 +0100
+@@ -18,6 +18,9 @@
+ /* Should ar and ranlib use -D behavior by default? */
+ #undef DEFAULT_AR_DETERMINISTIC
+ 
++/* Should strings use -a behavior by default? */
++#undef DEFAULT_STRINGS_ALL
++
+ /* Define to 1 if translation of program messages to the user's native
+    language is requested. */
+ #undef ENABLE_NLS
+diff -rup binutils-2.23.52.0.1.orig/binutils/configure binutils-2.23.52.0.1/binutils/configure
+--- binutils-2.23.52.0.1.orig/binutils/configure	2015-06-29 11:32:47.699653852 +0100
++++ binutils-2.23.52.0.1/binutils/configure	2015-06-29 11:36:53.932149340 +0100
+@@ -772,6 +772,7 @@ with_gnu_ld
+ enable_libtool_lock
+ enable_targets
+ enable_deterministic_archives
++enable_default_strings_all
+ enable_werror
+ enable_build_warnings
+ enable_nls
+@@ -1421,6 +1422,8 @@ Optional Features:
+   --enable-targets        alternative target configurations
+   --enable-deterministic-archives
+                           ar and ranlib default to -D behavior
++  --disable-default-strings-all
++                          strings defaults to --data behavior
+   --enable-werror         treat compile warnings as errors
+   --enable-build-warnings enable build-time compiler warnings
+   --disable-nls           do not use Native Language Support
+@@ -11602,13 +11605,27 @@ else
+   default_ar_deterministic=0
+ fi
+ 
+-
+-
+ cat >>confdefs.h <<_ACEOF
+ #define DEFAULT_AR_DETERMINISTIC $default_ar_deterministic
+ _ACEOF
+ 
+ 
++# Check whether --enable-default-strings-all was given.
++if test "${enable_default_strings_all+set}" = set; then :
++  enableval=$enable_default_strings_all;
++if test "${enableval}" = no; then
++  default_strings_all=0
++else
++  default_strings_all=1
++fi
++else
++  default_strings_all=1
++fi
++
++cat >>confdefs.h <<_ACEOF
++#define DEFAULT_STRINGS_ALL $default_strings_all
++_ACEOF
++
+ 
+ GCC_WARN_CFLAGS="-W -Wall -Wstrict-prototypes -Wmissing-prototypes"
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+diff -rup binutils-2.23.52.0.1.orig/binutils/configure.in binutils-2.23.52.0.1/binutils/configure.in
+--- binutils-2.23.52.0.1.orig/binutils/configure.in	2015-06-29 11:32:47.702653870 +0100
++++ binutils-2.23.52.0.1/binutils/configure.in	2015-06-29 11:37:17.355289171 +0100
+@@ -57,6 +57,18 @@ fi], [default_ar_deterministic=0])
+ AC_DEFINE_UNQUOTED(DEFAULT_AR_DETERMINISTIC, $default_ar_deterministic,
+ 		   [Should ar and ranlib use -D behavior by default?])
+ 
++AC_ARG_ENABLE(default-strings-all,
++[AS_HELP_STRING([--disable-default-strings-all],
++		[strings defaults to --data behavior])], [
++if test "${enableval}" = no; then
++  default_strings_all=0
++else
++  default_strings_all=1
++fi], [default_strings_all=1])
++
++AC_DEFINE_UNQUOTED(DEFAULT_STRINGS_ALL, $default_strings_all,
++		   [Should strings use -a behavior by default?])
++
+ AM_BINUTILS_WARNINGS
+ 
+ AC_CONFIG_HEADERS(config.h:config.in)
+diff -rup binutils-2.23.52.0.1.orig/binutils/doc/binutils.texi binutils-2.23.52.0.1/binutils/doc/binutils.texi
+--- binutils-2.23.52.0.1.orig/binutils/doc/binutils.texi	2015-06-29 11:32:47.708653907 +0100
++++ binutils-2.23.52.0.1/binutils/doc/binutils.texi	2015-06-29 11:38:49.645840128 +0100
+@@ -2658,15 +2658,24 @@ strings [@option{-afovV}] [@option{-}@va
+ 
+ @c man begin DESCRIPTION strings
+ 
+-For each @var{file} given, @sc{gnu} @command{strings} prints the printable
+-character sequences that are at least 4 characters long (or the number
+-given with the options below) and are followed by an unprintable
+-character.  By default, it only prints the strings from the initialized
+-and loaded sections of object files; for other types of files, it prints
+-the strings from the whole file.
++For each @var{file} given, @sc{gnu} @command{strings} prints the
++printable character sequences that are at least 4 characters long (or
++the number given with the options below) and are followed by an
++unprintable character.
++
++Depending upon how the strings program was configured it will default
++to either displaying all the printable sequences that it can find in
++each file, or only those sequences that are in loadable, initialized
++data sections.  If the file type in unrecognizable, or if strings is
++reading from stdin then it will always display all of the printable
++sequences that it can find.
++
++For backwards compatibility any file that occurs after a command line
++option of just @option{-} will also be scanned in full, regardless of
++the presence of any @option{-d} option. 
+ 
+-@command{strings} is mainly useful for determining the contents of non-text
+-files.
++@command{strings} is mainly useful for determining the contents of
++non-text files.
+ 
+ @c man end
+ 
+@@ -2676,8 +2685,25 @@ files.
+ @item -a
+ @itemx --all
+ @itemx -
+-Do not scan only the initialized and loaded sections of object files;
+-scan the whole files.
++Scan the whole file, regardless of what sections it contains or
++whether those sections are loaded or initialized.  Normally this is
++the default behaviour, but strings can be configured so that the
++@option{-d} is the default instead.
++
++The @option{-} option is position dependent and forces strings to
++perform full scans of any file that is mentioned after the @option{-}
++on the command line, even if the @option{-d} option has been
++specified.
++
++@item -d
++@itemx --data
++Only print strings from initialized, loaded data sections in the
++file.  This may reduce the amount of garbage in the output, but it
++also exposes the strings program to any security flaws that may be
++present in the BFD library used to scan and load sections.  Strings
++can be configured so that this option is the default behaviour.  In
++such cases the @option{-a} option can be used to avoid using the BFD
++library and instead just print all of the strings found in the file.
+ 
+ @item -f
+ @itemx --print-file-name
+diff -rup binutils-2.23.52.0.1.orig/binutils/NEWS binutils-2.23.52.0.1/binutils/NEWS
+--- binutils-2.23.52.0.1.orig/binutils/NEWS	2015-06-29 11:32:47.701653864 +0100
++++ binutils-2.23.52.0.1/binutils/NEWS	2015-06-29 11:39:07.052944045 +0100
+@@ -1,5 +1,10 @@
+ -*- text -*-
+ 
++* Add --data option to strings to only print strings in loadable, initialized
++  data sections.  Change the default behaviour to be --all, but add a new
++  configure time option of --disable-default-strings-all to restore the old
++  default behaviour.
++
+ * Objcopy now supports wildcard characters in command line options that take
+   section names.
+ 
+diff -rup binutils-2.23.52.0.1.orig/binutils/strings.c binutils-2.23.52.0.1/binutils/strings.c
+--- binutils-2.23.52.0.1.orig/binutils/strings.c	2015-06-29 11:32:47.721653986 +0100
++++ binutils-2.23.52.0.1/binutils/strings.c	2015-06-29 11:41:06.159655090 +0100
+@@ -23,7 +23,10 @@
+    Options:
+    --all
+    -a
+-   -		Do not scan only the initialized data section of object files.
++   -		Scan each file in its entirety.
++
++   --data
++   -d		Scan only the initialized data section(s) of object files.
+ 
+    --print-file-name
+    -f		Print the name of the file before each string.
+@@ -107,6 +110,7 @@ static int encoding_bytes;
+ static struct option long_options[] =
+ {
+   {"all", no_argument, NULL, 'a'},
++  {"data", no_argument, NULL, 'd'},
+   {"print-file-name", no_argument, NULL, 'f'},
+   {"bytes", required_argument, NULL, 'n'},
+   {"radix", required_argument, NULL, 't'},
+@@ -158,11 +162,14 @@ main (int argc, char **argv)
+   string_min = 4;
+   print_addresses = FALSE;
+   print_filenames = FALSE;
+-  datasection_only = TRUE;
++  if (DEFAULT_STRINGS_ALL)
++    datasection_only = FALSE;
++  else
++    datasection_only = TRUE;
+   target = NULL;
+   encoding = 's';
+ 
+-  while ((optc = getopt_long (argc, argv, "afhHn:ot:e:T:Vv0123456789",
++  while ((optc = getopt_long (argc, argv, "adfhHn:ot:e:T:Vv0123456789",
+ 			      long_options, (int *) 0)) != EOF)
+     {
+       switch (optc)
+@@ -171,6 +178,10 @@ main (int argc, char **argv)
+ 	  datasection_only = FALSE;
+ 	  break;
+ 
++	case 'd':
++	  datasection_only = TRUE;
++	  break;
++
+ 	case 'f':
+ 	  print_filenames = TRUE;
+ 	  break;
+@@ -659,8 +670,18 @@ usage (FILE *stream, int status)
+ {
+   fprintf (stream, _("Usage: %s [option(s)] [file(s)]\n"), program_name);
+   fprintf (stream, _(" Display printable strings in [file(s)] (stdin by default)\n"));
+-  fprintf (stream, _(" The options are:\n\
++  fprintf (stream, _(" The options are:\n"));
++
++  if (DEFAULT_STRINGS_ALL)
++    fprintf (stream, _("\
++  -a - --all                Scan the entire file, not just the data section [default]\n\
++  -d --data                 Only scan the data sections in the file\n"));
++  else
++    fprintf (stream, _("\
+   -a - --all                Scan the entire file, not just the data section\n\
++  -d --data                 Only scan the data sections in the file [default]\n"));
++
++  fprintf (stream, _("\
+   -f --print-file-name      Print the name of the file before each string\n\
+   -n --bytes=[number]       Locate & print any NUL-terminated sequence of at\n\
+   -<number>                   least [number] characters (default 4).\n\
+diff -rup binutils-2.23.52.0.1.orig/bfd/elf.c binutils-2.23.52.0.1/bfd/elf.c
+--- binutils-2.23.52.0.1.orig/bfd/elf.c	2015-06-29 11:32:47.637653475 +0100
++++ binutils-2.23.52.0.1/bfd/elf.c	2015-06-29 11:48:24.632272687 +0100
+@@ -613,7 +613,8 @@ setup_group (bfd *abfd, Elf_Internal_Shd
+ 		      _bfd_error_handler
+ 			(_("%B: Corrupt size field in group section header: 0x%lx"), abfd, shdr->sh_size);
+ 		      bfd_set_error (bfd_error_bad_value);
+-		      return FALSE;
++		      -- num_group;
++		      continue;
+ 		    }
+ 
+ 		  memset (shdr->contents, 0, amt);
+@@ -621,7 +622,16 @@ setup_group (bfd *abfd, Elf_Internal_Shd
+ 		  if (bfd_seek (abfd, shdr->sh_offset, SEEK_SET) != 0
+ 		      || (bfd_bread (shdr->contents, shdr->sh_size, abfd)
+ 			  != shdr->sh_size))
+-		    return FALSE;
++                   {
++                     _bfd_error_handler
++                       (_("%B: invalid size field in group section header: 0x%lx"), abfd, shdr->sh_size);
++                     bfd_set_error (bfd_error_bad_value);
++                     -- num_group;
++                     /* PR 17510: If the group contents are even partially
++                        corrupt, do not allow any of the contents to be used.  */
++                     memset (shdr->contents, 0, amt);
++                     continue;
++                   }
+ 
+ 		  /* Translate raw contents, a flag word followed by an
+ 		     array of elf section indices all in target byte order,
+@@ -654,6 +664,21 @@ setup_group (bfd *abfd, Elf_Internal_Shd
+ 		    }
+ 		}
+ 	    }
++
++	  /* PR 17510: Corrupt binaries might contain invalid groups.  */
++	  if (num_group != (unsigned) elf_tdata (abfd)->num_group)
++	    {
++	      elf_tdata (abfd)->num_group = num_group;
++
++	      /* If all groups are invalid then fail.  */
++	      if (num_group == 0)
++		{
++		  elf_tdata (abfd)->group_sect_ptr = NULL;
++		  elf_tdata (abfd)->num_group = num_group = -1;
++		  (*_bfd_error_handler) (_("%B: no valid group sections found"), abfd);
++		  bfd_set_error (bfd_error_bad_value);
++		}
++	    }
+ 	}
+     }
+ 
+@@ -719,6 +744,7 @@ setup_group (bfd *abfd, Elf_Internal_Shd
+     {
+       (*_bfd_error_handler) (_("%B: no group info for section %A"),
+ 			     abfd, newsect);
++      return FALSE;
+     }
+   return TRUE;
+ }
+

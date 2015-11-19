@@ -4023,9 +4023,9 @@ index 8d6ff30..72ef3f4 100644
 -.* NOTYPE +GLOBAL +DEFAULT +12 __bss_start
 +.* NOTYPE +GLOBAL +DEFAULT +13 __bss_start
  .* FUNC +GLOBAL +DEFAULT +UND __tls_get_addr_opt
--.* NOTYPE +GLOBAL +DEFAULT +11 _edata
+-.* NOTYPE +GLOBAL +DEFAULT +12 _edata
 -.* NOTYPE +GLOBAL +DEFAULT +12 _end
-+.* NOTYPE +GLOBAL +DEFAULT +12 _edata
++.* NOTYPE +GLOBAL +DEFAULT +13 _edata
 +.* NOTYPE +GLOBAL +DEFAULT +13 _end
  
  Symbol table '\.symtab' contains [0-9]+ entries:
@@ -4049,9 +4049,9 @@ index 8d6ff30..72ef3f4 100644
 -.* NOTYPE +GLOBAL +DEFAULT +12 __bss_start
 +.* NOTYPE +GLOBAL +DEFAULT +13 __bss_start
  .* FUNC +GLOBAL +DEFAULT +UND __tls_get_addr_opt
--.* NOTYPE +GLOBAL +DEFAULT +11 _edata
+-.* NOTYPE +GLOBAL +DEFAULT +12 _edata
 -.* NOTYPE +GLOBAL +DEFAULT +12 _end
-+.* NOTYPE +GLOBAL +DEFAULT +12 _edata
++.* NOTYPE +GLOBAL +DEFAULT +13 _edata
 +.* NOTYPE +GLOBAL +DEFAULT +13 _end
  .* TLS +GLOBAL +DEFAULT +9 gd0
  .* TLS +GLOBAL +DEFAULT +9 ie0
@@ -4151,9 +4151,9 @@ index 71d6c9e..e6f606b 100644
 -.* NOTYPE +GLOBAL +DEFAULT +12 __bss_start
 +.* NOTYPE +GLOBAL +DEFAULT +13 __bss_start
  .* FUNC +GLOBAL +DEFAULT +UND __tls_get_addr_opt
--.* NOTYPE +GLOBAL +DEFAULT +11 _edata
+-.* NOTYPE +GLOBAL +DEFAULT +12 _edata
 -.* NOTYPE +GLOBAL +DEFAULT +12 _end
-+.* NOTYPE +GLOBAL +DEFAULT +12 _edata
++.* NOTYPE +GLOBAL +DEFAULT +13 _edata
 +.* NOTYPE +GLOBAL +DEFAULT +13 _end
  
  Symbol table '\.symtab' contains [0-9]+ entries:
@@ -4186,9 +4186,9 @@ index 71d6c9e..e6f606b 100644
 -.* NOTYPE +GLOBAL +DEFAULT +12 __bss_start
 +.* NOTYPE +GLOBAL +DEFAULT +13 __bss_start
  .* FUNC +GLOBAL +DEFAULT +UND __tls_get_addr_opt
--.* NOTYPE +GLOBAL +DEFAULT +11 _edata
+-.* NOTYPE +GLOBAL +DEFAULT +12 _edata
 -.* NOTYPE +GLOBAL +DEFAULT +12 _end
-+.* NOTYPE +GLOBAL +DEFAULT +12 _edata
++.* NOTYPE +GLOBAL +DEFAULT +13 _edata
 +.* NOTYPE +GLOBAL +DEFAULT +13 _end
  .* TLS +GLOBAL +DEFAULT +9 gd0
  .* TLS +GLOBAL +DEFAULT +9 ie0
@@ -4297,10 +4297,10 @@ index fab50e0..6464be0 100644
  .* TLS +GLOBAL +DEFAULT +8 ld2
  .* TLS +GLOBAL +DEFAULT +8 ld1
 -.* NOTYPE +GLOBAL +DEFAULT +11 __bss_start
--.* NOTYPE +GLOBAL +DEFAULT +10 _edata
+-.* NOTYPE +GLOBAL +DEFAULT +11 _edata
 -.* NOTYPE +GLOBAL +DEFAULT +11 _end
 +.* NOTYPE +GLOBAL +DEFAULT +12 __bss_start
-+.* NOTYPE +GLOBAL +DEFAULT +11 _edata
++.* NOTYPE +GLOBAL +DEFAULT +12 _edata
 +.* NOTYPE +GLOBAL +DEFAULT +12 _end
  .* TLS +GLOBAL +DEFAULT +8 gd0
  .* TLS +GLOBAL +DEFAULT +8 ie0
@@ -4322,10 +4322,10 @@ index fab50e0..6464be0 100644
  .* TLS +GLOBAL +DEFAULT +8 ld2
  .* TLS +GLOBAL +DEFAULT +8 ld1
 -.* NOTYPE +GLOBAL +DEFAULT +11 __bss_start
--.* NOTYPE +GLOBAL +DEFAULT +10 _edata
+-.* NOTYPE +GLOBAL +DEFAULT +11 _edata
 -.* NOTYPE +GLOBAL +DEFAULT +11 _end
 +.* NOTYPE +GLOBAL +DEFAULT +12 __bss_start
-+.* NOTYPE +GLOBAL +DEFAULT +11 _edata
++.* NOTYPE +GLOBAL +DEFAULT +12 _edata
 +.* NOTYPE +GLOBAL +DEFAULT +12 _end
  .* TLS +GLOBAL +DEFAULT +8 gd0
  .* TLS +GLOBAL +DEFAULT +8 ie0
@@ -4471,10 +4471,10 @@ index 1ec8b63..f397915 100644
  .* TLS +GLOBAL +DEFAULT +8 ld2
  .* TLS +GLOBAL +DEFAULT +8 ld1
 -.* NOTYPE +GLOBAL +DEFAULT +11 __bss_start
--.* NOTYPE +GLOBAL +DEFAULT +10 _edata
+-.* NOTYPE +GLOBAL +DEFAULT +11 _edata
 -.* NOTYPE +GLOBAL +DEFAULT +11 _end
 +.* NOTYPE +GLOBAL +DEFAULT +12 __bss_start
-+.* NOTYPE +GLOBAL +DEFAULT +11 _edata
++.* NOTYPE +GLOBAL +DEFAULT +12 _edata
 +.* NOTYPE +GLOBAL +DEFAULT +12 _end
  .* TLS +GLOBAL +DEFAULT +8 gd0
  .* TLS +GLOBAL +DEFAULT +8 ie0
@@ -4505,10 +4505,10 @@ index 1ec8b63..f397915 100644
  .* TLS +GLOBAL +DEFAULT +8 ld2
  .* TLS +GLOBAL +DEFAULT +8 ld1
 -.* NOTYPE +GLOBAL +DEFAULT +11 __bss_start
--.* NOTYPE +GLOBAL +DEFAULT +10 _edata
+-.* NOTYPE +GLOBAL +DEFAULT +11 _edata
 -.* NOTYPE +GLOBAL +DEFAULT +11 _end
 +.* NOTYPE +GLOBAL +DEFAULT +12 __bss_start
-+.* NOTYPE +GLOBAL +DEFAULT +11 _edata
++.* NOTYPE +GLOBAL +DEFAULT +12 _edata
 +.* NOTYPE +GLOBAL +DEFAULT +12 _end
  .* TLS +GLOBAL +DEFAULT +8 gd0
  .* TLS +GLOBAL +DEFAULT +8 ie0

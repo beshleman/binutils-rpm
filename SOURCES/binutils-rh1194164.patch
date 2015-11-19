@@ -1,0 +1,267 @@
+diff -Nrup a/bfd/bfd-in2.h b/bfd/bfd-in2.h
+--- a/bfd/bfd-in2.h	2015-03-31 11:11:36.351939753 -0600
++++ b/bfd/bfd-in2.h	2015-03-31 11:12:07.733201604 -0600
+@@ -3191,6 +3191,7 @@ instruction.  */
+   BFD_RELOC_PPC64_PLTGOT16_LO_DS,
+   BFD_RELOC_PPC64_ADDR16_HIGH,
+   BFD_RELOC_PPC64_ADDR16_HIGHA,
++  BFD_RELOC_PPC64_ADDR64_LOCAL,
+ 
+ /* PowerPC and PowerPC64 thread-local storage relocations.  */
+   BFD_RELOC_PPC_TLS,
+diff -Nrup a/bfd/elf64-ppc.c b/bfd/elf64-ppc.c
+--- a/bfd/elf64-ppc.c	2015-03-31 11:11:36.348939823 -0600
++++ b/bfd/elf64-ppc.c	2015-03-31 11:12:07.735201557 -0600
+@@ -2097,6 +2097,21 @@ static reloc_howto_type ppc64_elf_howto_
+ 	 0xffff,		/* dst_mask */
+ 	 FALSE),		/* pcrel_offset */
+ 
++  /* Like ADDR64, but use local entry point of function.  */
++  HOWTO (R_PPC64_ADDR64_LOCAL,	/* type */
++	 0,			/* rightshift */
++	 4,			/* size (0=byte, 1=short, 2=long, 4=64 bits) */
++	 64,			/* bitsize */
++	 FALSE,			/* pc_relative */
++	 0,			/* bitpos */
++	 complain_overflow_dont, /* complain_on_overflow */
++	 bfd_elf_generic_reloc,	/* special_function */
++	 "R_PPC64_ADDR64_LOCAL", /* name */
++	 FALSE,			/* partial_inplace */
++	 0,			/* src_mask */
++	 ONES (64),		/* dst_mask */
++	 FALSE),		/* pcrel_offset */
++
+   /* GNU extension to record C++ vtable hierarchy.  */
+   HOWTO (R_PPC64_GNU_VTINHERIT,	/* type */
+ 	 0,			/* rightshift */
+@@ -2385,6 +2400,8 @@ ppc64_elf_reloc_type_lookup (bfd *abfd A
+       break;
+     case BFD_RELOC_HI16_S_PCREL:		r = R_PPC64_REL16_HA;
+       break;
++    case BFD_RELOC_PPC64_ADDR64_LOCAL:		r = R_PPC64_ADDR64_LOCAL;
++      break;
+     case BFD_RELOC_VTABLE_INHERIT:		r = R_PPC64_GNU_VTINHERIT;
+       break;
+     case BFD_RELOC_VTABLE_ENTRY:		r = R_PPC64_GNU_VTENTRY;
+@@ -5431,6 +5448,21 @@ ppc64_elf_check_relocs (bfd *abfd, struc
+ 	case R_PPC64_REL16_HA:
+ 	  break;
+ 
++	  /* Not supported as a dynamic relocation.  */
++	case R_PPC64_ADDR64_LOCAL:
++	  if (info->shared)
++	    {
++	      if (!ppc64_elf_howto_table[R_PPC64_ADDR32])
++		ppc_howto_init ();
++	      info->callbacks->einfo (_("%P: %H: %s reloc unsupported "
++					"in shared libraries and PIEs.\n"),
++				      abfd, sec, rel->r_offset,
++				      ppc64_elf_howto_table[r_type]->name);
++	      bfd_set_error (bfd_error_bad_value);
++	      return FALSE;
++	    }
++	  break;
++
+ 	case R_PPC64_TOC16:
+ 	case R_PPC64_TOC16_DS:
+ 	  htab->do_multi_toc = 1;
+@@ -14162,6 +14194,12 @@ ppc64_elf_relocate_section (bfd *output_
+ 	  addend -= htab->elf.tls_sec->vma + DTP_OFFSET;
+ 	  break;
+ 
++	case R_PPC64_ADDR64_LOCAL:
++	  addend += PPC64_LOCAL_ENTRY_OFFSET (h != NULL
++					      ? h->elf.other
++					      : sym->st_other);
++	  break;
++
+ 	case R_PPC64_DTPMOD64:
+ 	  relocation = 1;
+ 	  addend = 0;
+diff -Nrup a/bfd/libbfd.h b/bfd/libbfd.h
+--- a/bfd/libbfd.h	2015-03-31 11:11:36.300940952 -0600
++++ b/bfd/libbfd.h	2015-03-31 11:12:07.735201557 -0600
+@@ -1398,6 +1398,7 @@ static const char *const bfd_reloc_code_
+   "BFD_RELOC_PPC64_PLTGOT16_LO_DS",
+   "BFD_RELOC_PPC64_ADDR16_HIGH",
+   "BFD_RELOC_PPC64_ADDR16_HIGHA",
++  "BFD_RELOC_PPC64_ADDR64_LOCAL",
+   "BFD_RELOC_PPC_TLS",
+   "BFD_RELOC_PPC_TLSGD",
+   "BFD_RELOC_PPC_TLSLD",
+diff -Nrup a/bfd/reloc.c b/bfd/reloc.c
+--- a/bfd/reloc.c	2015-03-31 11:11:36.300940952 -0600
++++ b/bfd/reloc.c	2015-03-31 11:12:07.736201534 -0600
+@@ -2896,6 +2896,8 @@ ENUMX
+   BFD_RELOC_PPC64_ADDR16_HIGH
+ ENUMX
+   BFD_RELOC_PPC64_ADDR16_HIGHA
++ENUMX
++  BFD_RELOC_PPC64_ADDR64_LOCAL
+ ENUMDOC
+   Power(rs6000) and PowerPC relocations.
+ 
+diff -Nrup a/elfcpp/powerpc.h b/elfcpp/powerpc.h
+--- a/elfcpp/powerpc.h	2015-03-31 11:11:36.301940929 -0600
++++ b/elfcpp/powerpc.h	2015-03-31 11:12:07.736201534 -0600
+@@ -176,6 +176,8 @@ enum
+   R_PPC_EMB_BIT_FLD = 115,
+   R_PPC64_DTPREL16_HIGHA = 115,
+   R_PPC_EMB_RELSDA = 116,
++  R_PPC64_REL24_NOTOC = 116,
++  R_PPC64_ADDR64_LOCAL = 117,
+ 
+   R_PPC_VLE_REL8 = 216,
+   R_PPC_VLE_REL15 = 217,
+diff -Nrup a/gas/config/tc-ppc.c b/gas/config/tc-ppc.c
+--- a/gas/config/tc-ppc.c	2015-03-31 11:11:36.321940458 -0600
++++ b/gas/config/tc-ppc.c	2015-03-31 11:12:07.737201510 -0600
+@@ -1952,6 +1952,7 @@ ppc_elf_suffix (char **str_p, expression
+     MAP64 ("dtprel@highera",	BFD_RELOC_PPC64_DTPREL16_HIGHERA),
+     MAP64 ("dtprel@highest",	BFD_RELOC_PPC64_DTPREL16_HIGHEST),
+     MAP64 ("dtprel@highesta",	BFD_RELOC_PPC64_DTPREL16_HIGHESTA),
++    MAP64 ("localentry",	BFD_RELOC_PPC64_ADDR64_LOCAL),
+     MAP64 ("tprel@high",	BFD_RELOC_PPC64_TPREL16_HIGH),
+     MAP64 ("tprel@higha",	BFD_RELOC_PPC64_TPREL16_HIGHA),
+     MAP64 ("tprel@higher",	BFD_RELOC_PPC64_TPREL16_HIGHER),
+@@ -6868,6 +6869,7 @@ md_apply_fix (fixS *fixP, valueT *valP,
+ 	case BFD_RELOC_PPC64_HIGHEST_S:
+ 	case BFD_RELOC_PPC64_ADDR16_HIGH:
+ 	case BFD_RELOC_PPC64_ADDR16_HIGHA:
++	case BFD_RELOC_PPC64_ADDR64_LOCAL:
+ 	  break;
+ 
+ 	case BFD_RELOC_PPC_DTPMOD:
+diff -Nrup a/include/elf/ppc64.h b/include/elf/ppc64.h
+--- a/include/elf/ppc64.h	2015-03-31 11:11:36.303940882 -0600
++++ b/include/elf/ppc64.h	2015-03-31 11:12:07.740201440 -0600
+@@ -149,6 +149,10 @@ START_RELOC_NUMBERS (elf_ppc64_reloc_typ
+   RELOC_NUMBER (R_PPC64_DTPREL16_HIGH,	   114)
+   RELOC_NUMBER (R_PPC64_DTPREL16_HIGHA,	   115)
+ 
++/* Added for ELFv2.  */
++  RELOC_NUMBER (R_PPC64_REL24_NOTOC,	   116)
++  RELOC_NUMBER (R_PPC64_ADDR64_LOCAL,	   117)
++
+ #ifndef RELOC_MACROS_GEN_FUNC
+ /* Fake relocation only used internally by ld.  */
+   RELOC_NUMBER (R_PPC64_LO_DS_OPT,	   128)
+diff -Nrup a/ld/testsuite/ld-powerpc/elfv2-2a.s b/ld/testsuite/ld-powerpc/elfv2-2a.s
+--- a/ld/testsuite/ld-powerpc/elfv2-2a.s	1969-12-31 17:00:00.000000000 -0700
++++ b/ld/testsuite/ld-powerpc/elfv2-2a.s	2015-03-31 11:12:07.740201440 -0600
+@@ -0,0 +1,27 @@
++ .globl f1
++ .type f1,@function
++ .text
++f1:
++ addis 2,12,.TOC.-f1@ha
++ addi 2,2,.TOC.-f1@l
++ .localentry f1,.-f1
++ blr
++ .size f1,.-f1
++
++ .globl f2
++ .type f2,@function
++ .text
++f2:
++ addi 2,12,.TOC.-f2
++ .localentry f2,.-f2
++ blr
++ .size f2,.-f2
++
++ .quad f1
++ .quad f1@localentry
++ .quad f2
++ .quad f2@localentry
++ .quad f3
++ .quad f3@localentry
++ .quad f4
++ .quad f4@localentry
+diff -Nrup a/ld/testsuite/ld-powerpc/elfv2-2b.s b/ld/testsuite/ld-powerpc/elfv2-2b.s
+--- a/ld/testsuite/ld-powerpc/elfv2-2b.s	1969-12-31 17:00:00.000000000 -0700
++++ b/ld/testsuite/ld-powerpc/elfv2-2b.s	2015-03-31 11:12:07.740201440 -0600
+@@ -0,0 +1,17 @@
++ .globl f3
++ .type f3,@function
++ .text
++f3:
++ addis 2,12,.TOC.-f3@ha
++ addi 2,2,.TOC.-f3@l
++ .localentry f3,.-f3
++ blr
++ .size f3,.-f3
++
++ .globl f4
++ .type f4,@function
++ .text
++f4:
++ .localentry f4,0
++ blr
++ .size f4,.-f4
+diff -Nrup a/ld/testsuite/ld-powerpc/elfv2-2exe.d b/ld/testsuite/ld-powerpc/elfv2-2exe.d
+--- a/ld/testsuite/ld-powerpc/elfv2-2exe.d	1969-12-31 17:00:00.000000000 -0700
++++ b/ld/testsuite/ld-powerpc/elfv2-2exe.d	2015-03-31 11:12:07.740201440 -0600
+@@ -0,0 +1,41 @@
++#source: elfv2-2a.s
++#source: elfv2-2b.s
++#as: -a64
++#ld: -melf64ppc -e f1
++#objdump: -dr
++
++.*
++
++Disassembly of section \.text:
++
++0+10000078 <f1>:
++.*:	(3c 40 10 01|01 10 40 3c) 	lis     r2,4097
++.*:	(38 42 80 78|78 80 42 38) 	addi    r2,r2,-32648
++.*:	(4e 80 00 20|20 00 80 4e) 	blr
++0+10000084 <f2>:
++.*:	(38 4c 7f f4|f4 7f 4c 38) 	addi    r2,r12,32756
++.*:	(4e 80 00 20|20 00 80 4e) 	blr
++.*:	(00 00 00 00|78 00 00 10) .*
++.*:	(10 00 00 78|00 00 00 00) .*
++.*:	(00 00 00 00|80 00 00 10) .*
++.*:	(10 00 00 80|00 00 00 00) .*
++.*:	(00 00 00 00|84 00 00 10) .*
++.*:	(10 00 00 84|00 00 00 00) .*
++.*:	(00 00 00 00|88 00 00 10) .*
++.*:	(10 00 00 88|00 00 00 00) .*
++.*:	(00 00 00 00|cc 00 00 10) .*
++.*:	(10 00 00 cc|00 00 00 00) .*
++.*:	(00 00 00 00|d4 00 00 10) .*
++.*:	(10 00 00 d4|00 00 00 00) .*
++.*:	(00 00 00 00|d8 00 00 10) .*
++.*:	(10 00 00 d8|00 00 00 00) .*
++.*:	(00 00 00 00|d8 00 00 10) .*
++.*:	(10 00 00 d8|00 00 00 00) .*
++
++0+100000cc <f3>:
++.*:	(3c 40 10 01|01 10 40 3c) 	lis     r2,4097
++.*:	(38 42 80 78|78 80 42 38) 	addi    r2,r2,-32648
++.*:	(4e 80 00 20|20 00 80 4e) 	blr
++
++0+100000d8 <f4>:
++.*:	(4e 80 00 20|20 00 80 4e) 	blr
+diff -Nrup a/ld/testsuite/ld-powerpc/elfv2-2so.d b/ld/testsuite/ld-powerpc/elfv2-2so.d
+--- a/ld/testsuite/ld-powerpc/elfv2-2so.d	1969-12-31 17:00:00.000000000 -0700
++++ b/ld/testsuite/ld-powerpc/elfv2-2so.d	2015-03-31 11:12:07.740201440 -0600
+@@ -0,0 +1,5 @@
++#source: elfv2-2a.s
++#source: elfv2-2b.s
++#as: -a64
++#ld: -melf64ppc -shared -e f1
++#error: .* R_PPC64_ADDR64_LOCAL reloc unsupported in shared libraries and PIEs.*
+diff -Nrup a/ld/testsuite/ld-powerpc/powerpc.exp b/ld/testsuite/ld-powerpc/powerpc.exp
+--- a/ld/testsuite/ld-powerpc/powerpc.exp	2015-03-31 11:11:36.355939659 -0600
++++ b/ld/testsuite/ld-powerpc/powerpc.exp	2015-03-31 11:13:19.569511875 -0600
+@@ -276,6 +276,9 @@ if [ supports_ppc64 ] then {
+     run_dump_test "ambiguousv1"
+     run_dump_test "ambiguousv2"
+     run_dump_test "defsym"
++    run_dump_test "elfv2-2so"
++    run_dump_test "elfv2-2exe"
++
+ }
+ 
+ if { [istarget "powerpc*-eabi*"] } {

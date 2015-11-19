@@ -19,7 +19,7 @@
 Summary: A GNU collection of binary utilities
 Name: %{?cross}binutils%{?_with_debug:-debug}
 Version: 2.23.52.0.1
-Release: 30%{?dist}.2
+Release: 55%{?dist}
 License: GPLv3+
 Group: Development/Tools
 URL: http://sources.redhat.com/binutils
@@ -79,7 +79,12 @@ Patch27: binutils-ppc-pgsz.patch
 # RELRO fixes
 Patch28: binutils-rh1200138-1.patch
 Patch29: binutils-rh1200138-2.patch
+# Fix to PIE support on s390
 Patch30: binutils-rh872148.patch
+# Enable RELRO on AArch64
+Patch31: binutils-rh1203449.patch
+# Improve RELRO on PPC64
+Patch32: binutils-rh1175624.patch
 
 Patch100: binutils-rh1066712.patch
 Patch101: binutils-rh1075827.patch
@@ -96,6 +101,7 @@ Patch117: binutils-aa64-ifunc.patch
 Patch118: binutils-aa64-gas-movi.patch
 Patch119: binutils-aa64-dwarf2.patch
 Patch120: binutils-rh1179810.patch
+Patch121: binutils-rh1182111.patch
 
 # ppc64 little endian support
 Patch201: binutils-ppc64le-1.patch
@@ -109,6 +115,50 @@ Patch208: binutils-ppc64le-8.patch
 Patch209: binutils-ppc64le-9.patch
 Patch210: binutils-ppc64le-10.patch
 Patch211: binutils-ppc64le-11.patch
+Patch212: binutils-rh1194164.patch
+
+Patch300: binutils-rh1182153.patch
+# Undo unnecessary and problematic Gold changes applied in
+# binutils-ppc64le-1.patch above (Gold isn't built on ppc64le).
+Patch301: binutils-ppc64le-1.1.patch
+
+# Enable conflicting changes to BFD for powerpc only via #ifdefs.
+Patch302: bfd-ppc64le.patch
+# Bug 1172766 - ppc64: segv in libbfd
+Patch303: binutils-rh1172766.patch
+
+# Fixes minor testsuite issues after PPC64 merge
+Patch304: binutils-rh1183838.patch
+
+# Tweak for 1172766 ppc64: segv in libbfd.
+Patch305: binutils-rh1172766-1.patch
+
+# Fix segfault building libhugetlbfs when bogus 
+# max-page-size is passed to ld.
+Patch306: binutils-rh1203449-2.patch
+
+# Don't discard stap probe note sections on aarch64
+Patch307: binutils-rh1225091.patch
+
+# Fixes ld crash with -oformat binary
+Patch308: binutils-rh1226864.patch
+
+# Avoid reading beyond function boundary when disassembling
+Patch309: binutils-rh1060282.patch
+
+# Patches related to BZ 1168302 - security flaws in the BFD
+# library:
+Patch400: binutils-rh1157276.patch
+Patch401: binutils-rh1162594.patch
+Patch402: binutils-rh1162607.patch
+Patch403: binutils-rh1162621.patch
+Patch404: binutils-rh1162655.patch
+Patch405: binutils-rh1162666.patch
+
+# Fix incorrectly generated ELF binaries and DSOs
+Patch406: binutils-rh1247126.patch
+# AArch64: Create GOT entries for local symbols: BZ #1238783
+Patch407: binutils-2.23.52.0.1-aarch64-local-GOT-entries.patch
 
 Provides: bundled(libiberty)
 
@@ -236,7 +286,9 @@ using libelf instead of BFD.
 %patch27 -p1 -b .ppc-pgsz~
 %patch28 -p1 -b .relro1~
 %patch29 -p1 -b .relro2~
-%patch30 -p1 -b .s390x~
+%patch30 -p1 -b .s390pie~
+%patch31 -p0 -b .aarch64relro~
+%patch32 -p1 -b .ppc64relro~
 %patch100 -p0 -b .aarch64-fpintfix~
 %patch101 -p1 -b .aarch64-101~
 %patch102 -p1 -b .aarch64-102~
@@ -251,6 +303,7 @@ using libelf instead of BFD.
 %patch118 -p1 -b .aarch64-118~
 %patch119 -p1 -b .aarch64-119~
 %patch120 -p1 -b .aarch64-120~
+%patch121 -p1 -b .aarch64-121~
 
 # We cannot run autotools as there is an exact requirement of autoconf-2.59.
 
@@ -273,9 +326,6 @@ do
 done
 touch */configure
 
-%ifarch ppc64le
-# ppc64le support has some wholesale replacement of ppc/ppc64 infrastructure
-# not suitable for vanilla ppc.
 %patch201 -p1
 %patch202 -p1
 %patch203 -p1
@@ -287,7 +337,55 @@ touch */configure
 %patch209 -p1
 %patch210 -p1
 %patch211 -p1
-%endif
+%patch212 -p1
+
+%patch300 -p1
+# Revert bad changes made in patch201.
+%patch301 -p1
+# Guard BFD changes with __PPC__.
+%patch302 -p1
+
+# Fix segfault in bfd for ppc64
+%patch303 -p1
+
+# Minor testsuite issues after PPC merge
+%patch304 -p1
+
+# Tweak for 1172766 ppc64: segv in libbfd.
+%patch305 -p1
+
+# Fix segfault building libhugetlbfs when bogus 
+# max-page-size is passed to ld.
+%patch306 -p1
+
+# Don't discard stap probe note sections on aarch64
+%patch307 -p1
+
+# Fix ld segfault with --oformat binary
+%patch308 -p1
+
+# Avoid reading beyond function boundary when disassembling
+%patch309 -p1
+
+# Change the strings program to default to -a.
+# Fix parsing corrupt ELF group sections.
+%patch400 -p1
+# Fix parsing corrupt PE binaries.
+%patch401 -p1
+# Fix parsing corrupt iHex files.
+%patch402 -p1
+# Fix parsing corrupt SREC files.
+%patch403 -p1
+# Fix directory traversal vulnerability.
+%patch404 -p1
+# Fix memory corruption parsing a fuzzed archive.
+%patch405 -p1
+
+# Fix incorrectly generated ELF binaries and DSOs.
+%patch406 -p1
+
+# Fix generation of GOT entries for local symbols on AArch64
+%patch407 -p1 -b .aarch64-local-GOT
 
 %ifarch %{power64} ppc64le
 %define _target_platform %{_arch}-%{_vendor}-%{_host_os}
@@ -395,7 +493,7 @@ install -m 644 libiberty/libiberty.a %{buildroot}%{_libdir}
 install -m 644 include/libiberty.h %{buildroot}%{_prefix}/include
 install -m 644 opcodes/libopcodes.a %{buildroot}%{_libdir}
 # Remove Windows/Novell only man pages
-rm -f %{buildroot}%{_mandir}/man1/{dlltool,nlmconv,windres}*
+rm -f %{buildroot}%{_mandir}/man1/{dlltool,nlmconv,windres,windmc}*
 
 %if %{enable_shared}
 chmod +x %{buildroot}%{_libdir}/lib*.so*
@@ -569,11 +667,92 @@ exit 0
 %endif # %{isnative}
 
 %changelog
-* Tue Mar 30 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-30.2
+* Tue Oct 13 2015 Nick Clifton <nickc@redhat.com> 2.23.52.0.1-55
+- Add missing delta to patch that fixes parsing corrupted archives.
+  (#1162666)
+
+* Wed Jul 29 2015 Nick Clifton <nickc@redhat.com> 2.23.52.0.1-54
+- Import patch for PR 18270: Create AArch64 GOT entries for local symbols.
+  (#1238783)
+
+* Tue Jul 28 2015 Jeff Law  <law@redhat.com> - 2.23.52.0.1-51
+- Fix incorrectly generated binaries and DSOs on PPC platforms.
+  (#1247126)
+
+* Mon Jun 29 2015 Nick Clifton <nickc@redhat.com> - 2.23.52.0.1-50
+- Fix memory corruption parsing corrupt archives.
+  (#1162666)
+
+* Mon Jun 29 2015 Nick Clifton <nickc@redhat.com> - 2.23.52.0.1-49
+- Fix directory traversal vulnerability.
+  (#1162655)
+
+* Mon Jun 29 2015 Nick Clifton <nickc@redhat.com> - 2.23.52.0.1-48
+- Fix stack overflow in SREC parser.
+  (#1162621)
+
+* Mon Jun 29 2015 Nick Clifton <nickc@redhat.com> - 2.23.52.0.1-47
+- Fix stack overflow whilst parsing a corrupt iHex file.
+  (#1162607)
+
+* Mon Jun 29 2015 Nick Clifton <nickc@redhat.com> - 2.23.52.0.1-46
+- Fix out of bounds memory accesses when parsing corrupt PE binaries.
+  (#1162594, #1162570)
+
+* Mon Jun 29 2015 Nick Clifton <nickc@redhat.com> - 2.23.52.0.1-45
+- Change strings program to default to -a.  Fix problems parsing
+  files containg corrupt ELF group sections.  (#1157276)
+
+* Tue Jun 23 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-44
+- Avoid reading beyond function boundary when disassembling.
+  (#1060282)
+
+- For binary ouput, we don't have an ELF bfd output so can't access
+  elf_elfheader.  (#1226864)
+
+* Thu May 28 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-43
+- Don't discard stap probe note sections on aarch64 (#1225091)
+
+* Tue May 26 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-42
+- Clamp maxpagesize at 1 (rather than 0) to avoid segfaults
+  in the linker when passed a bogus max-page-size argument.
+  (#1203449)
+
+* Thu May 21 2015 Martin Sebor <msebor@redhat.com> - 2.23.52.0.1-41
+- Fixup bfd elf_link_add_object_symbols for ppc64 to prevent subsequent
+  uninitialized accesses elsewhere. (#1172766)
+
+* Thu May 7 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-40
+- Minor testsuite adjustments for PPC changes in -38/-39.
+  (#1183838)
+  Fix md_assemble for PPC to handle arithmetic involving the TOC
+  better.  (#1183838)
+
+* Wed May 6 2015 Martin Sebor <msebor@redhat.com> - 2.23.52.0.1-39
+- Fix ppc64: segv in libbfd (#1172766).
+
+* Wed May 6 2015 Martin Sebor <msebor@redhat.com> - 2.23.52.0.1-38
+- Unconditionally apply ppc64le patches (#1183838).
+
+* Mon May 4 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-37
+- Andreas's backport of z13 and dependent fixes for s390,
+  including tesetcase fix from Apr 27, 2015.  (#1182153)
+
+* Tue Apr 7 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-35
+- Fixup testsuite for AArch64 (#1182111)
+- Add support for @localentry for LE PPC64 (#1194164)
+
+* Tue Mar 31 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-34
+- Do not install windmc(1) man page (#850832)
+
+* Fri Mar 27 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-33
 - Don't replace R_390_TLS_LE{32,64} with R_390_TLS_TPOFF for PIE
-  (#872148) (#1207533)
- 
-* Wed Mar 11 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-30.1
+  (#872148)
+- Enable relro by default for arm and aarch64 (#1203449)
+- Backport 3 RELRO improvements for ppc64/ppc64le from upstream
+  (#1175624)
+
+* Wed Mar 11 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-31
 - Backport upstream RELRO fixes. (#1200138)
 
 * Thu Jan 15 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-30
