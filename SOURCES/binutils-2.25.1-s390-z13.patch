@@ -1,0 +1,3323 @@
+diff -rup binutils-2.25.1.orig/bfd/elf32-s390.c binutils-2.25.1/bfd/elf32-s390.c
+--- binutils-2.25.1.orig/bfd/elf32-s390.c	2016-08-08 14:06:27.693069800 +0100
++++ binutils-2.25.1/bfd/elf32-s390.c	2016-08-08 14:08:11.325736562 +0100
+@@ -1527,6 +1527,12 @@ elf_s390_gc_sweep_hook (bfd *abfd,
+ 	    elf_s390_hash_table (info)->tls_ldm_got.refcount -= 1;
+ 	  break;
+ 
++	case R_390_GOTOFF16:
++	case R_390_GOTOFF32:
++	case R_390_GOTPC:
++	case R_390_GOTPCDBL:
++	  break;
++
+ 	case R_390_TLS_GD32:
+ 	case R_390_TLS_IE32:
+ 	case R_390_TLS_GOTIE12:
+@@ -1537,10 +1543,6 @@ elf_s390_gc_sweep_hook (bfd *abfd,
+ 	case R_390_GOT16:
+ 	case R_390_GOT20:
+ 	case R_390_GOT32:
+-	case R_390_GOTOFF16:
+-	case R_390_GOTOFF32:
+-	case R_390_GOTPC:
+-	case R_390_GOTPCDBL:
+ 	case R_390_GOTENT:
+ 	  if (h != NULL)
+ 	    {
+@@ -3980,9 +3982,18 @@ elf_s390_plt_sym_val (bfd_vma i, const a
+   return plt->vma + PLT_FIRST_ENTRY_SIZE + i * PLT_ENTRY_SIZE;
+ }
+ 
++/* Merge backend specific data from an object file to the output
++   object file when linking.  */
++
+ static bfd_boolean
+ elf32_s390_merge_private_bfd_data (bfd *ibfd, bfd *obfd)
+ {
++  if (!is_s390_elf (ibfd) || !is_s390_elf (obfd))
++    return TRUE;
++
++  if (!elf_s390_merge_obj_attributes (ibfd, obfd))
++    return FALSE;
++
+   elf_elfheader (obfd)->e_flags |= elf_elfheader (ibfd)->e_flags;
+   return TRUE;
+ }
+diff -rup binutils-2.25.1.orig/bfd/elf64-s390.c binutils-2.25.1/bfd/elf64-s390.c
+--- binutils-2.25.1.orig/bfd/elf64-s390.c	2016-08-08 14:06:27.698069833 +0100
++++ binutils-2.25.1/bfd/elf64-s390.c	2016-08-08 14:08:23.868817263 +0100
+@@ -1462,6 +1462,12 @@ elf_s390_gc_sweep_hook (bfd *abfd,
+ 	  if (htab->tls_ldm_got.refcount > 0)
+ 	    htab->tls_ldm_got.refcount -= 1;
+ 	  break;
++	case R_390_GOTOFF16:
++	case R_390_GOTOFF32:
++	case R_390_GOTOFF64:
++	case R_390_GOTPC:
++	case R_390_GOTPCDBL:
++	  break;
+ 
+ 	case R_390_TLS_GD64:
+ 	case R_390_TLS_IE64:
+@@ -1474,11 +1480,6 @@ elf_s390_gc_sweep_hook (bfd *abfd,
+ 	case R_390_GOT20:
+ 	case R_390_GOT32:
+ 	case R_390_GOT64:
+-	case R_390_GOTOFF16:
+-	case R_390_GOTOFF32:
+-	case R_390_GOTOFF64:
+-	case R_390_GOTPC:
+-	case R_390_GOTPCDBL:
+ 	case R_390_GOTENT:
+ 	  if (h != NULL)
+ 	    {
+@@ -3693,9 +3694,10 @@ elf_s390_finish_dynamic_sections (bfd *o
+ 		  PLT_FIRST_ENTRY_SIZE);
+ 	  /* Fixup relative address to start of GOT */
+ 	  bfd_put_32 (output_bfd,
+-		      (htab->elf.sgotplt->output_section->vma +
+-		       htab->elf.sgotplt->output_offset
+-		       - htab->elf.splt->output_section->vma - 6)/2,
++		      (htab->elf.sgotplt->output_section->vma
++		       + htab->elf.sgotplt->output_offset
++		       - htab->elf.splt->output_section->vma
++		       - htab->elf.splt->output_offset - 6)/2,
+ 		      htab->elf.splt->contents + 8);
+ 	}
+       if (elf_section_data (htab->elf.splt->output_section) != NULL)
+@@ -3766,6 +3768,21 @@ elf_s390_plt_sym_val (bfd_vma i, const a
+   return plt->vma + PLT_FIRST_ENTRY_SIZE + i * PLT_ENTRY_SIZE;
+ }
+ 
++/* Merge backend specific data from an object file to the output
++   object file when linking.  */
++
++static bfd_boolean
++elf64_s390_merge_private_bfd_data (bfd *ibfd, bfd *obfd)
++{
++  if (!is_s390_elf (ibfd) || !is_s390_elf (obfd))
++    return TRUE;
++
++  if (!elf_s390_merge_obj_attributes (ibfd, obfd))
++    return FALSE;
++
++  return TRUE;
++}
++
+ /* Why was the hash table entry size definition changed from
+    ARCH_SIZE/8 to 4? This breaks the 64 bit dynamic linker and
+    this is the only reason for the s390_elf64_size_info structure.  */
+@@ -3824,7 +3841,8 @@ const struct elf_size_info s390_elf64_si
+ #define bfd_elf64_bfd_is_local_label_name     elf_s390_is_local_label_name
+ #define bfd_elf64_bfd_link_hash_table_create  elf_s390_link_hash_table_create
+ #define bfd_elf64_bfd_reloc_type_lookup	      elf_s390_reloc_type_lookup
+-#define bfd_elf64_bfd_reloc_name_lookup elf_s390_reloc_name_lookup
++#define bfd_elf64_bfd_reloc_name_lookup       elf_s390_reloc_name_lookup
++#define bfd_elf64_bfd_merge_private_bfd_data  elf64_s390_merge_private_bfd_data
+ 
+ #define elf_backend_adjust_dynamic_symbol     elf_s390_adjust_dynamic_symbol
+ #define elf_backend_check_relocs	      elf_s390_check_relocs
+diff -rup binutils-2.25.1.orig/bfd/elf-s390-common.c binutils-2.25.1/bfd/elf-s390-common.c
+--- binutils-2.25.1.orig/bfd/elf-s390-common.c	2016-08-08 14:06:27.684069742 +0100
++++ binutils-2.25.1/bfd/elf-s390-common.c	2016-08-08 14:07:29.964470448 +0100
+@@ -254,3 +254,61 @@ elf_s390_elf_sort_relocs_p (asection *se
+ {
+   return (sec->flags & SEC_CODE) == 0;
+ }
++
++/* Merge object attributes from IBFD into OBFD.  Raise an error if
++   there are conflicting attributes.  */
++static bfd_boolean
++elf_s390_merge_obj_attributes (bfd *ibfd, bfd *obfd)
++{
++  obj_attribute *in_attr, *in_attrs;
++  obj_attribute *out_attr, *out_attrs;
++
++  if (!elf_known_obj_attributes_proc (obfd)[0].i)
++    {
++      /* This is the first object.  Copy the attributes.  */
++      _bfd_elf_copy_obj_attributes (ibfd, obfd);
++
++      /* Use the Tag_null value to indicate the attributes have been
++	 initialized.  */
++      elf_known_obj_attributes_proc (obfd)[0].i = 1;
++
++      return TRUE;
++    }
++
++  in_attrs = elf_known_obj_attributes (ibfd)[OBJ_ATTR_GNU];
++  out_attrs = elf_known_obj_attributes (obfd)[OBJ_ATTR_GNU];
++
++  /* Check for conflicting Tag_GNU_S390_ABI_Vector attributes and
++     merge non-conflicting ones.  */
++  in_attr = &in_attrs[Tag_GNU_S390_ABI_Vector];
++  out_attr = &out_attrs[Tag_GNU_S390_ABI_Vector];
++
++  if (in_attr->i > 2)
++    _bfd_error_handler
++      (_("Warning: %B uses unknown vector ABI %d"), ibfd,
++       in_attr->i);
++  else if (out_attr->i > 2)
++    _bfd_error_handler
++      (_("Warning: %B uses unknown vector ABI %d"), obfd,
++       out_attr->i);
++  else if (in_attr->i != out_attr->i)
++    {
++      out_attr->type = ATTR_TYPE_FLAG_INT_VAL;
++
++      if (in_attr->i && out_attr->i)
++	{
++	  const char abi_str[3][9] = { "none", "software", "hardware" };
++
++	  _bfd_error_handler
++	    (_("Warning: %B uses vector %s ABI, %B uses %s ABI"),
++	     ibfd, obfd, abi_str[in_attr->i], abi_str[out_attr->i]);
++	}
++      if (in_attr->i > out_attr->i)
++	out_attr->i = in_attr->i;
++    }
++
++  /* Merge Tag_compatibility attributes and any common GNU ones.  */
++  _bfd_elf_merge_object_attributes (ibfd, obfd);
++
++  return TRUE;
++}
+diff -rup binutils-2.25.1.orig/binutils/readelf.c binutils-2.25.1/binutils/readelf.c
+--- binutils-2.25.1.orig/binutils/readelf.c	2016-08-08 14:06:27.809070547 +0100
++++ binutils-2.25.1/binutils/readelf.c	2016-08-08 14:07:29.970470487 +0100
+@@ -12474,6 +12474,41 @@ display_power_gnu_attribute (unsigned ch
+   return display_tag_value (tag & 1, p, end);
+ }
+ 
++static unsigned char *
++display_s390_gnu_attribute (unsigned char * p,
++			    int tag,
++			    const unsigned char * const end)
++{
++  unsigned int len;
++  int val;
++
++  if (tag == Tag_GNU_S390_ABI_Vector)
++    {
++      val = read_uleb128 (p, &len, end);
++      p += len;
++      printf ("  Tag_GNU_S390_ABI_Vector: ");
++
++      switch (val)
++	{
++	case 0:
++	  printf (_("any\n"));
++	  break;
++	case 1:
++	  printf (_("software\n"));
++	  break;
++	case 2:
++	  printf (_("hardware\n"));
++	  break;
++	default:
++	  printf ("??? (%d)\n", val);
++	  break;
++	}
++      return p;
++   }
++
++  return display_tag_value (tag & 1, p, end);
++}
++
+ static void
+ display_sparc_hwcaps (int mask)
+ {
+@@ -13245,6 +13280,13 @@ process_power_specific (FILE * file)
+ }
+ 
+ static int
++process_s390_specific (FILE * file)
++{
++  return process_attributes (file, NULL, SHT_GNU_ATTRIBUTES, NULL,
++			     display_s390_gnu_attribute);
++}
++
++static int
+ process_sparc_specific (FILE * file)
+ {
+   return process_attributes (file, NULL, SHT_GNU_ATTRIBUTES, NULL,
+@@ -15058,6 +15100,10 @@ process_arch_specific (FILE * file)
+     case EM_PPC:
+       return process_power_specific (file);
+       break;
++    case EM_S390:
++    case EM_S390_OLD:
++      return process_s390_specific (file);
++      break;
+     case EM_SPARC:
+     case EM_SPARC32PLUS:
+     case EM_SPARCV9:
+Only in binutils-2.25.1/binutils: readelf.c.orig
+diff -rup binutils-2.25.1.orig/gas/config/tc-s390.c binutils-2.25.1/gas/config/tc-s390.c
+--- binutils-2.25.1.orig/gas/config/tc-s390.c	2016-08-08 14:06:27.832070695 +0100
++++ binutils-2.25.1/gas/config/tc-s390.c	2016-08-08 14:07:07.580326431 +0100
+@@ -109,138 +109,35 @@ const pseudo_typeS md_pseudo_table[] =
+   { NULL,	    NULL,		0 }
+ };
+ 
+-
+-/* Structure to hold information about predefined registers.  */
+-struct pd_reg
+-  {
+-    char *name;
+-    int value;
+-  };
+-
+-/* List of registers that are pre-defined:
+-
+-   Each access register has a predefined name of the form:
+-     a<reg_num> which has the value <reg_num>.
+-
+-   Each control register has a predefined name of the form:
+-     c<reg_num> which has the value <reg_num>.
+-
+-   Each general register has a predefined name of the form:
+-     r<reg_num> which has the value <reg_num>.
+-
+-   Each floating point register a has predefined name of the form:
+-     f<reg_num> which has the value <reg_num>.
+-
+-   There are individual registers as well:
+-     sp     has the value 15
+-     lit    has the value 12
+-
+-   The table is sorted. Suitable for searching by a binary search.  */
+-
+-static const struct pd_reg pre_defined_registers[] =
+-{
+-  { "a0", 0 },     /* Access registers */
+-  { "a1", 1 },
+-  { "a10", 10 },
+-  { "a11", 11 },
+-  { "a12", 12 },
+-  { "a13", 13 },
+-  { "a14", 14 },
+-  { "a15", 15 },
+-  { "a2", 2 },
+-  { "a3", 3 },
+-  { "a4", 4 },
+-  { "a5", 5 },
+-  { "a6", 6 },
+-  { "a7", 7 },
+-  { "a8", 8 },
+-  { "a9", 9 },
+-
+-  { "c0", 0 },     /* Control registers */
+-  { "c1", 1 },
+-  { "c10", 10 },
+-  { "c11", 11 },
+-  { "c12", 12 },
+-  { "c13", 13 },
+-  { "c14", 14 },
+-  { "c15", 15 },
+-  { "c2", 2 },
+-  { "c3", 3 },
+-  { "c4", 4 },
+-  { "c5", 5 },
+-  { "c6", 6 },
+-  { "c7", 7 },
+-  { "c8", 8 },
+-  { "c9", 9 },
+-
+-  { "f0", 0 },     /* Floating point registers */
+-  { "f1", 1 },
+-  { "f10", 10 },
+-  { "f11", 11 },
+-  { "f12", 12 },
+-  { "f13", 13 },
+-  { "f14", 14 },
+-  { "f15", 15 },
+-  { "f2", 2 },
+-  { "f3", 3 },
+-  { "f4", 4 },
+-  { "f5", 5 },
+-  { "f6", 6 },
+-  { "f7", 7 },
+-  { "f8", 8 },
+-  { "f9", 9 },
+-
+-  { "lit", 13 },   /* Pointer to literal pool */
+-
+-  { "r0", 0 },     /* General purpose registers */
+-  { "r1", 1 },
+-  { "r10", 10 },
+-  { "r11", 11 },
+-  { "r12", 12 },
+-  { "r13", 13 },
+-  { "r14", 14 },
+-  { "r15", 15 },
+-  { "r2", 2 },
+-  { "r3", 3 },
+-  { "r4", 4 },
+-  { "r5", 5 },
+-  { "r6", 6 },
+-  { "r7", 7 },
+-  { "r8", 8 },
+-  { "r9", 9 },
+-
+-  { "sp", 15 },   /* Stack pointer */
+-
+-};
+-
+-#define REG_NAME_CNT (sizeof (pre_defined_registers) / sizeof (struct pd_reg))
+-
+ /* Given NAME, find the register number associated with that name, return
+    the integer value associated with the given name or -1 on failure.  */
+ 
+ static int
+-reg_name_search (const struct pd_reg *regs, int regcount, const char *name)
++reg_name_search (const char *name)
+ {
+-  int middle, low, high;
+-  int cmp;
++  int val = -1;
+ 
+-  low = 0;
+-  high = regcount - 1;
++  if (strcasecmp (name, "lit") == 0)
++    return 13;
+ 
+-  do
++  if (strcasecmp (name, "sp") == 0)
++    return 15;
++
++  if (name[0] != 'a' && name[0] != 'c' && name[0] != 'f'
++      && name[0] != 'r' && name[0] != 'v')
++    return -1;
++
++  if (ISDIGIT (name[1]))
+     {
+-      middle = (low + high) / 2;
+-      cmp = strcasecmp (name, regs[middle].name);
+-      if (cmp < 0)
+-	high = middle - 1;
+-      else if (cmp > 0)
+-	low = middle + 1;
+-      else
+-	return regs[middle].value;
++      val = name[1] - '0';
++      if (ISDIGIT (name[2]))
++	val = val * 10 + name[2] - '0';
+     }
+-  while (low <= high);
+ 
+-  return -1;
++  if ((name[0] != 'v' && val > 15) || val > 31)
++    val = -1;
++
++  return val;
+ }
+ 
+ 
+@@ -272,7 +169,7 @@ register_name (expressionS *expressionP)
+     return FALSE;
+ 
+   c = get_symbol_end ();
+-  reg_number = reg_name_search (pre_defined_registers, REG_NAME_CNT, name);
++  reg_number = reg_name_search (name);
+ 
+   /* Put back the delimiting char.  */
+   *input_line_pointer = c;
+@@ -382,6 +279,8 @@ s390_parse_cpu (char *arg)
+     return S390_OPCODE_Z196;
+   else if (strcmp (arg, "zEC12") == 0)
+     return S390_OPCODE_ZEC12;
++  else if (strcmp (arg, "z13") == 0)
++    return S390_OPCODE_Z13;
+   else if (strcmp (arg, "all") == 0)
+     return S390_OPCODE_MAXCPU - 1;
+   else
+@@ -633,6 +532,12 @@ s390_insert_operand (unsigned char *insn
+       max = (((addressT) 1 << (operand->bits - 1)) << 1) - 1;
+       min = (offsetT) 0;
+       uval = (addressT) val;
++
++      /* Vector register operands have an additional bit in the RXB
++	 field.  */
++      if (operand->flags & S390_OPERAND_VR)
++	max = (max << 1) | 1;
++
+       /* Length x in an instructions has real length x+1.  */
+       if (operand->flags & S390_OPERAND_LENGTH)
+ 	uval--;
+@@ -652,6 +557,43 @@ s390_insert_operand (unsigned char *insn
+ 	}
+     }
+ 
++  if (operand->flags & S390_OPERAND_VR)
++    {
++      /* Insert the extra bit into the RXB field.  */
++      switch (operand->shift)
++	{
++	case 8:
++	  insn[4] |= (uval & 0x10) >> 1;
++	  break;
++	case 12:
++	  insn[4] |= (uval & 0x10) >> 2;
++	  break;
++	case 16:
++	  insn[4] |= (uval & 0x10) >> 3;
++	  break;
++	case 32:
++	  insn[4] |= (uval & 0x10) >> 4;
++	  break;
++	}
++      uval &= 0xf;
++    }
++
++  if (operand->flags & S390_OPERAND_OR1)
++    uval |= 1;
++  if (operand->flags & S390_OPERAND_OR2)
++    uval |= 2;
++  if (operand->flags & S390_OPERAND_OR8)
++    uval |= 8;
++
++  /* Duplicate the operand at bit pos 12 to 16.  */
++  if (operand->flags & S390_OPERAND_CP16)
++    {
++      /* Copy VR operand at bit pos 12 to bit pos 16.  */
++      insn[2] |= uval << 4;
++      /* Copy the flag in the RXB field.  */
++      insn[4] |= (insn[4] & 4) >> 1;
++    }
++
+   /* Insert fragments of the operand byte for byte.  */
+   offset = operand->shift + operand->bits;
+   uval <<= (-offset) & 7;
+@@ -1206,6 +1148,14 @@ md_gather_operands (char *str,
+ 
+       operand = s390_operands + *opindex_ptr;
+ 
++      if ((opcode->flags & S390_INSTR_FLAG_OPTPARM) && *str == '\0')
++	{
++	  /* Optional parameters might need to be ORed with a
++	     value so calling s390_insert_operand is needed.  */
++	  s390_insert_operand (insn, operand, 0, NULL, 0);
++	  break;
++	}
++
+       if (skip_optional && (operand->flags & S390_OPERAND_INDEX))
+ 	{
+ 	  /* We do an early skip. For D(X,B) constructions the index
+@@ -1266,6 +1216,9 @@ md_gather_operands (char *str,
+ 	    }
+ 	  else
+ 	    {
++	      if ((operand->flags & S390_OPERAND_LENGTH)
++		  && ex.X_op != O_constant)
++		as_fatal (_("invalid length field specified"));
+ 	      if ((operand->flags & S390_OPERAND_INDEX)
+ 		  && ex.X_add_number == 0
+ 		  && warn_areg_zero)
+@@ -1477,6 +1430,10 @@ md_gather_operands (char *str,
+ 		as_bad (_("syntax error; ')' not allowed here"));
+ 	      str++;
+ 	    }
++
++	  if ((opcode->flags & S390_INSTR_FLAG_OPTPARM) && *str == '\0')
++	    continue;
++
+ 	  /* If there is a next operand it must be separated by a comma.  */
+ 	  if (opindex_ptr[1] != '\0')
+ 	    {
+@@ -2499,7 +2456,7 @@ tc_s390_regname_to_dw2regnum (char *regn
+ 
+   if (regname[0] != 'c' && regname[0] != 'a')
+     {
+-      regnum = reg_name_search (pre_defined_registers, REG_NAME_CNT, regname);
++      regnum = reg_name_search (regname);
+       if (regname[0] == 'f' && regnum != -1)
+         regnum += 16;
+     }
+diff -rup binutils-2.25.1.orig/gas/doc/as.texinfo binutils-2.25.1/gas/doc/as.texinfo
+--- binutils-2.25.1.orig/gas/doc/as.texinfo	2016-08-08 14:06:27.838070733 +0100
++++ binutils-2.25.1/gas/doc/as.texinfo	2016-08-08 14:07:29.972470499 +0100
+@@ -1590,7 +1590,7 @@ Architecture (esa) or the z/Architecture
+ @item -march=@var{processor}
+ Specify which s390 processor variant is the target, @samp{g6}, @samp{g6},
+ @samp{z900}, @samp{z990}, @samp{z9-109}, @samp{z9-ec}, @samp{z10},
+-@samp{z196}, or @samp{zEC12}.
++@samp{z196}, @samp{zEC12}, or @samp{z13}.
+ @item -mregnames
+ @itemx -mno-regnames
+ Allow or disallow symbolic names for registers.
+@@ -7087,6 +7087,22 @@ The vector ABI used by this object file.
+ @end itemize
+ @end table
+ 
++@subsection IBM z Systems Attributes
++
++@table @r
++@item Tag_GNU_S390_ABI_Vector (8)
++The vector ABI used by this object file.  The value will be:
++
++@itemize @bullet
++@item
++0 for files not affected by the vector ABI.
++@item
++1 for files using software vector ABI.
++@item
++2 for files using hardware vector ABI.
++@end itemize
++@end table
++
+ @node Defining New Object Attributes
+ @section Defining New Object Attributes
+ 
+Only in binutils-2.25.1/gas/doc: as.texinfo.orig
+diff -rup binutils-2.25.1.orig/gas/doc/c-s390.texi binutils-2.25.1/gas/doc/c-s390.texi
+--- binutils-2.25.1.orig/gas/doc/c-s390.texi	2016-08-08 14:06:27.841070753 +0100
++++ binutils-2.25.1/gas/doc/c-s390.texi	2016-08-08 14:06:58.510268075 +0100
+@@ -16,7 +16,7 @@
+ The s390 version of @code{@value{AS}} supports two architectures modes
+ and seven chip levels. The architecture modes are the Enterprise System
+ Architecture (ESA) and the newer z/Architecture mode. The chip levels
+-are g5, g6, z900, z990, z9-109, z9-ec, z10, z196, and zEC12.
++are g5, g6, z900, z990, z9-109, z9-ec, z10, z196, zEC12, and z13.
+ 
+ @menu
+ * s390 Options::                Command-line Options.
+@@ -64,8 +64,10 @@ are recognized:
+ @code{z990},
+ @code{z9-109},
+ @code{z9-ec},
+-@code{z10} and
+-@code{z196}.
++@code{z10},
++@code{z196},
++@code{zEC12}, and
++@code{z13}.
+ Assembling an instruction that is not supported on the target processor
+ results in an error message. Do not specify @code{g5} or @code{g6}
+ with @samp{-mzarch}.
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/s390/esa-g5.d binutils-2.25.1/gas/testsuite/gas/s390/esa-g5.d
+--- binutils-2.25.1.orig/gas/testsuite/gas/s390/esa-g5.d	2016-08-08 14:06:28.061072168 +0100
++++ binutils-2.25.1/gas/testsuite/gas/s390/esa-g5.d	2016-08-08 14:08:17.708777630 +0100
+@@ -157,6 +157,7 @@ Disassembly of section .text:
+ .*:	de ff 5f ff af ff [	 ]*ed	4095\(256,%r5\),4095\(%r10\)
+ .*:	df ff 5f ff af ff [	 ]*edmk	4095\(256,%r5\),4095\(%r10\)
+ .*:	b3 8c 00 69 [	 ]*efpc	%r6,%r9
++.*:	b3 8c 00 60 [	 ]*efpc	%r6
+ .*:	b2 26 00 60 [	 ]*epar	%r6
+ .*:	b2 49 00 69 [	 ]*ereg	%r6,%r9
+ .*:	b2 27 00 60 [	 ]*esar	%r6
+@@ -179,27 +180,27 @@ Disassembly of section .text:
+ .*:	b2 21 00 69 [	 ]*ipte	%r6,%r9
+ .*:	b2 29 00 69 [	 ]*iske	%r6,%r9
+ .*:	b2 23 00 69 [	 ]*ivsk	%r6,%r9
+-.*:	a7 f4 00 00 [	 ]*j	274 <foo\+0x274>
+-.*:	a7 84 00 00 [	 ]*je	278 <foo\+0x278>
+-.*:	a7 24 00 00 [	 ]*jh	27c <foo\+0x27c>
+-.*:	a7 a4 00 00 [	 ]*jhe	280 <foo\+0x280>
+-.*:	a7 44 00 00 [	 ]*jl	284 <foo\+0x284>
+-.*:	a7 c4 00 00 [	 ]*jle	288 <foo\+0x288>
+-.*:	a7 64 00 00 [	 ]*jlh	28c <foo\+0x28c>
+-.*:	a7 44 00 00 [	 ]*jl	290 <foo\+0x290>
+-.*:	a7 74 00 00 [	 ]*jne	294 <foo\+0x294>
+-.*:	a7 d4 00 00 [	 ]*jnh	298 <foo\+0x298>
+-.*:	a7 54 00 00 [	 ]*jnhe	29c <foo\+0x29c>
+-.*:	a7 b4 00 00 [	 ]*jnl	2a0 <foo\+0x2a0>
+-.*:	a7 34 00 00 [	 ]*jnle	2a4 <foo\+0x2a4>
+-.*:	a7 94 00 00 [	 ]*jnlh	2a8 <foo\+0x2a8>
+-.*:	a7 b4 00 00 [	 ]*jnl	2ac <foo\+0x2ac>
+-.*:	a7 e4 00 00 [	 ]*jno	2b0 <foo\+0x2b0>
+-.*:	a7 d4 00 00 [	 ]*jnh	2b4 <foo\+0x2b4>
+-.*:	a7 74 00 00 [	 ]*jne	2b8 <foo\+0x2b8>
+-.*:	a7 14 00 00 [	 ]*jo	2bc <foo\+0x2bc>
+-.*:	a7 24 00 00 [	 ]*jh	2c0 <foo\+0x2c0>
+-.*:	a7 84 00 00 [	 ]*je	2c4 <foo\+0x2c4>
++.*:	a7 f4 00 00 [	 ]*j	278 <foo\+0x278>
++.*:	a7 84 00 00 [	 ]*je	27c <foo\+0x27c>
++.*:	a7 24 00 00 [	 ]*jh	280 <foo\+0x280>
++.*:	a7 a4 00 00 [	 ]*jhe	284 <foo\+0x284>
++.*:	a7 44 00 00 [	 ]*jl	288 <foo\+0x288>
++.*:	a7 c4 00 00 [	 ]*jle	28c <foo\+0x28c>
++.*:	a7 64 00 00 [	 ]*jlh	290 <foo\+0x290>
++.*:	a7 44 00 00 [	 ]*jl	294 <foo\+0x294>
++.*:	a7 74 00 00 [	 ]*jne	298 <foo\+0x298>
++.*:	a7 d4 00 00 [	 ]*jnh	29c <foo\+0x29c>
++.*:	a7 54 00 00 [	 ]*jnhe	2a0 <foo\+0x2a0>
++.*:	a7 b4 00 00 [	 ]*jnl	2a4 <foo\+0x2a4>
++.*:	a7 34 00 00 [	 ]*jnle	2a8 <foo\+0x2a8>
++.*:	a7 94 00 00 [	 ]*jnlh	2ac <foo\+0x2ac>
++.*:	a7 b4 00 00 [	 ]*jnl	2b0 <foo\+0x2b0>
++.*:	a7 e4 00 00 [	 ]*jno	2b4 <foo\+0x2b4>
++.*:	a7 d4 00 00 [	 ]*jnh	2b8 <foo\+0x2b8>
++.*:	a7 74 00 00 [	 ]*jne	2bc <foo\+0x2bc>
++.*:	a7 14 00 00 [	 ]*jo	2c0 <foo\+0x2c0>
++.*:	a7 24 00 00 [	 ]*jh	2c4 <foo\+0x2c4>
++.*:	a7 84 00 00 [	 ]*je	2c8 <foo\+0x2c8>
+ .*:	ed 65 af ff 00 18 [	 ]*kdb	%f6,4095\(%r5,%r10\)
+ .*:	b3 18 00 69 [	 ]*kdbr	%f6,%f9
+ .*:	ed 65 af ff 00 08 [	 ]*keb	%f6,4095\(%r5,%r10\)
+@@ -372,6 +373,7 @@ Disassembly of section .text:
+ .*:	b3 0b 00 69 [	 ]*sebr	%f6,%f9
+ .*:	3b 69 [	 ]*ser	%f6,%f9
+ .*:	b3 84 00 69 [	 ]*sfpc	%r6,%r9
++.*:	b3 84 00 60 [	 ]*sfpc	%r6
+ .*:	4b 65 af ff [	 ]*sh	%r6,4095\(%r5,%r10\)
+ .*:	b2 14 5f ff [	 ]*sie	4095\(%r5\)
+ .*:	b2 74 5f ff [	 ]*siga	4095\(%r5\)
+@@ -462,11 +464,11 @@ Disassembly of section .text:
+ .*:	01 ff [	 ]*trap2
+ .*:	b2 ff 5f ff [	 ]*trap4	4095\(%r5\)
+ .*:	b2 a5 00 69 [	 ]*tre	%r6,%r9
+-.*:	b9 93 00 68 [	 ]*troo	%r6,%r8
+-.*:	b9 92 00 68 [	 ]*trot	%r6,%r8
++.*:	b9 93 00 69 [	 ]*troo	%r6,%r9
++.*:	b9 92 00 69 [	 ]*trot	%r6,%r9
+ .*:	dd ff 5f ff af ff [	 ]*trt	4095\(256,%r5\),4095\(%r10\)
+-.*:	b9 91 00 68 [	 ]*trto	%r6,%r8
+-.*:	b9 90 00 68 [	 ]*trtt	%r6,%r8
++.*:	b9 91 00 69 [	 ]*trto	%r6,%r9
++.*:	b9 90 00 69 [	 ]*trtt	%r6,%r9
+ .*:	93 00 5f ff [	 ]*ts	4095\(%r5\)
+ .*:	b2 35 5f ff [	 ]*tsch	4095\(%r5\)
+ .*:	f3 58 5f ff af ff [	 ]*unpk	4095\(6,%r5\),4095\(9,%r10\)
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/s390/esa-g5.s binutils-2.25.1/gas/testsuite/gas/s390/esa-g5.s
+--- binutils-2.25.1.orig/gas/testsuite/gas/s390/esa-g5.s	2016-08-08 14:06:28.061072168 +0100
++++ binutils-2.25.1/gas/testsuite/gas/s390/esa-g5.s	2016-08-08 14:08:17.709777636 +0100
+@@ -151,6 +151,7 @@ foo:
+ 	ed	4095(256,%r5),4095(%r10)
+ 	edmk	4095(256,%r5),4095(%r10)
+ 	efpc	%r6,%r9
++	efpc	%r6
+ 	epar	%r6
+ 	ereg	%r6,%r9
+ 	esar	%r6
+@@ -366,6 +367,7 @@ foo:
+ 	sebr	%f6,%f9
+ 	ser	%f6,%f9
+ 	sfpc	%r6,%r9
++	sfpc	%r6
+ 	sh	%r6,4095(%r5,%r10)
+ 	sie	4095(%r5)
+ 	siga	4095(%r5)
+@@ -456,11 +458,11 @@ foo:
+ 	trap2
+ 	trap4	4095(%r5)
+ 	tre	%r6,%r9
+-	troo	%r6,%r8
+-	trot	%r6,%r8
++	troo	%r6,%r9
++	trot	%r6,%r9
+ 	trt	4095(256,%r5),4095(%r10)
+-	trto	%r6,%r8
+-	trtt	%r6,%r8
++	trto	%r6,%r9
++	trtt	%r6,%r9
+ 	ts	4095(%r5)
+ 	tsch	4095(%r5)
+ 	unpk	4095(6,%r5),4095(9,%r10)
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/s390/esa-z9-109.d binutils-2.25.1/gas/testsuite/gas/s390/esa-z9-109.d
+--- binutils-2.25.1.orig/gas/testsuite/gas/s390/esa-z9-109.d	2016-08-08 14:06:28.061072168 +0100
++++ binutils-2.25.1/gas/testsuite/gas/s390/esa-z9-109.d	2016-08-08 14:08:17.709777636 +0100
+@@ -6,8 +6,12 @@
+ Disassembly of section .text:
+ 
+ .* <foo>:
+-.*:	b9 93 f0 68 [	 ]*troo	%r6,%r8,15
+-.*:	b9 92 f0 68 [	 ]*trot	%r6,%r8,15
+-.*:	b9 91 f0 68 [	 ]*trto	%r6,%r8,15
+-.*:	b9 90 f0 68 [	 ]*trtt	%r6,%r8,15
++.*:	b9 93 f0 69 [	 ]*troo	%r6,%r9,15
++.*:	b9 93 00 69 [	 ]*troo	%r6,%r9
++.*:	b9 92 f0 69 [	 ]*trot	%r6,%r9,15
++.*:	b9 92 00 69 [	 ]*trot	%r6,%r9
++.*:	b9 91 f0 69 [	 ]*trto	%r6,%r9,15
++.*:	b9 91 00 69 [	 ]*trto	%r6,%r9
++.*:	b9 90 f0 69 [	 ]*trtt	%r6,%r9,15
++.*:	b9 90 00 69 [	 ]*trtt	%r6,%r9
+ .*:	b2 2b 00 69 [	 ]*sske	%r6,%r9
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/s390/esa-z9-109.s binutils-2.25.1/gas/testsuite/gas/s390/esa-z9-109.s
+--- binutils-2.25.1.orig/gas/testsuite/gas/s390/esa-z9-109.s	2016-08-08 14:06:28.061072168 +0100
++++ binutils-2.25.1/gas/testsuite/gas/s390/esa-z9-109.s	2016-08-08 14:08:17.709777636 +0100
+@@ -1,9 +1,13 @@
+ .text
+ foo:
+-	troo	%r6,%r8,15
+-	trot	%r6,%r8,15
+-	trto	%r6,%r8,15
+-	trtt	%r6,%r8,15
++	troo	%r6,%r9,15
++	troo	%r6,%r9
++	trot	%r6,%r9,15
++	trot	%r6,%r9
++	trto	%r6,%r9,15
++	trto	%r6,%r9
++	trtt	%r6,%r9,15
++	trtt	%r6,%r9
+ # z9-109 z/Architecture mode extended sske with an additional parameter
+ # make sure the old version still works for esa
+ 	sske	%r6,%r9
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/s390/s390.exp binutils-2.25.1/gas/testsuite/gas/s390/s390.exp
+--- binutils-2.25.1.orig/gas/testsuite/gas/s390/s390.exp	2016-08-08 14:06:28.061072168 +0100
++++ binutils-2.25.1/gas/testsuite/gas/s390/s390.exp	2016-08-08 14:06:58.512268088 +0100
+@@ -27,6 +27,7 @@ if [expr [istarget "s390-*-*"] ||  [ista
+     run_dump_test "zarch-z10" "{as -m64} {as -march=z10}"
+     run_dump_test "zarch-z196" "{as -m64} {as -march=z196}"
+     run_dump_test "zarch-zEC12" "{as -m64} {as -march=zEC12}"
++    run_dump_test "zarch-z13" "{as -m64} {as -march=z13}"
+     run_dump_test "zarch-reloc" "{as -m64}"
+     run_dump_test "zarch-operands" "{as -m64} {as -march=z9-109}"
+     run_dump_test "zarch-machine" "{as -m64} {as -march=z900}"
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/s390/zarch-z10.d binutils-2.25.1/gas/testsuite/gas/s390/zarch-z10.d
+--- binutils-2.25.1.orig/gas/testsuite/gas/s390/zarch-z10.d	2016-08-08 14:06:28.061072168 +0100
++++ binutils-2.25.1/gas/testsuite/gas/s390/zarch-z10.d	2016-08-08 14:08:02.940682614 +0100
+@@ -39,19 +39,19 @@ Disassembly of section .text:
+ .*:	ec 67 84 57 a0 e4 [	 ]*cgrbnl	%r6,%r7,1111\(%r8\)
+ .*:	ec 67 84 57 c0 e4 [	 ]*cgrbnh	%r6,%r7,1111\(%r8\)
+ .*:	ec 67 84 57 c0 e4 [	 ]*cgrbnh	%r6,%r7,1111\(%r8\)
+-.*:	ec 67 00 00 a0 76 [	 ]*crj	%r6,%r7,10,c6 <foo\+0xc6>
+-.*:	ec 67 00 00 20 76 [	 ]*crj	%r6,%r7,2,cc <foo\+0xcc>
+-.*:	ec 67 00 00 20 76 [	 ]*crj	%r6,%r7,2,d2 <foo\+0xd2>
+-.*:	ec 67 00 00 40 76 [	 ]*crj	%r6,%r7,4,d8 <foo\+0xd8>
+-.*:	ec 67 00 00 40 76 [	 ]*crj	%r6,%r7,4,de <foo\+0xde>
+-.*:	ec 67 00 00 60 76 [	 ]*crj	%r6,%r7,6,e4 <foo\+0xe4>
+-.*:	ec 67 00 00 60 76 [	 ]*crj	%r6,%r7,6,ea <foo\+0xea>
+-.*:	ec 67 00 00 80 76 [	 ]*crj	%r6,%r7,8,f0 <foo\+0xf0>
+-.*:	ec 67 00 00 80 76 [	 ]*crj	%r6,%r7,8,f6 <foo\+0xf6>
+-.*:	ec 67 00 00 a0 76 [	 ]*crj	%r6,%r7,10,fc <foo\+0xfc>
+-.*:	ec 67 00 00 a0 76 [	 ]*crj	%r6,%r7,10,102 <foo\+0x102>
+-.*:	ec 67 00 00 c0 76 [	 ]*crj	%r6,%r7,12,108 <foo\+0x108>
+-.*:	ec 67 00 00 c0 76 [	 ]*crj	%r6,%r7,12,10e <foo\+0x10e>
++.*:	ec 67 00 00 a0 76 [	 ]*crjnl	%r6,%r7,c6 <foo\+0xc6>
++.*:	ec 67 00 00 20 76 [	 ]*crjh	%r6,%r7,cc <foo\+0xcc>
++.*:	ec 67 00 00 20 76 [	 ]*crjh	%r6,%r7,d2 <foo\+0xd2>
++.*:	ec 67 00 00 40 76 [	 ]*crjl	%r6,%r7,d8 <foo\+0xd8>
++.*:	ec 67 00 00 40 76 [	 ]*crjl	%r6,%r7,de <foo\+0xde>
++.*:	ec 67 00 00 60 76 [	 ]*crjne	%r6,%r7,e4 <foo\+0xe4>
++.*:	ec 67 00 00 60 76 [	 ]*crjne	%r6,%r7,ea <foo\+0xea>
++.*:	ec 67 00 00 80 76 [	 ]*crje	%r6,%r7,f0 <foo\+0xf0>
++.*:	ec 67 00 00 80 76 [	 ]*crje	%r6,%r7,f6 <foo\+0xf6>
++.*:	ec 67 00 00 a0 76 [	 ]*crjnl	%r6,%r7,fc <foo\+0xfc>
++.*:	ec 67 00 00 a0 76 [	 ]*crjnl	%r6,%r7,102 <foo\+0x102>
++.*:	ec 67 00 00 c0 76 [	 ]*crjnh	%r6,%r7,108 <foo\+0x108>
++.*:	ec 67 00 00 c0 76 [	 ]*crjnh	%r6,%r7,10e <foo\+0x10e>
+ .*:	ec 67 00 00 a0 64 [	 ]*cgrjnl	%r6,%r7,114 <foo\+0x114>
+ .*:	ec 67 00 00 20 64 [	 ]*cgrjh	%r6,%r7,11a <foo\+0x11a>
+ .*:	ec 67 00 00 20 64 [	 ]*cgrjh	%r6,%r7,120 <foo\+0x120>
+@@ -91,32 +91,32 @@ Disassembly of section .text:
+ .*:	ec 6a 74 57 d6 fc [	 ]*cgibnl	%r6,-42,1111\(%r7\)
+ .*:	ec 6c 74 57 d6 fc [	 ]*cgibnh	%r6,-42,1111\(%r7\)
+ .*:	ec 6c 74 57 d6 fc [	 ]*cgibnh	%r6,-42,1111\(%r7\)
+-.*:	ec 6a 00 00 d6 7e [	 ]*cij	%r6,-42,10,1fe <foo\+0x1fe>
+-.*:	ec 62 00 00 d6 7e [	 ]*cij	%r6,-42,2,204 <foo\+0x204>
+-.*:	ec 62 00 00 d6 7e [	 ]*cij	%r6,-42,2,20a <foo\+0x20a>
+-.*:	ec 64 00 00 d6 7e [	 ]*cij	%r6,-42,4,210 <foo\+0x210>
+-.*:	ec 64 00 00 d6 7e [	 ]*cij	%r6,-42,4,216 <foo\+0x216>
+-.*:	ec 66 00 00 d6 7e [	 ]*cij	%r6,-42,6,21c <foo\+0x21c>
+-.*:	ec 66 00 00 d6 7e [	 ]*cij	%r6,-42,6,222 <foo\+0x222>
+-.*:	ec 68 00 00 d6 7e [	 ]*cij	%r6,-42,8,228 <foo\+0x228>
+-.*:	ec 68 00 00 d6 7e [	 ]*cij	%r6,-42,8,22e <foo\+0x22e>
+-.*:	ec 6a 00 00 d6 7e [	 ]*cij	%r6,-42,10,234 <foo\+0x234>
+-.*:	ec 6a 00 00 d6 7e [	 ]*cij	%r6,-42,10,23a <foo\+0x23a>
+-.*:	ec 6c 00 00 d6 7e [	 ]*cij	%r6,-42,12,240 <foo\+0x240>
+-.*:	ec 6c 00 00 d6 7e [	 ]*cij	%r6,-42,12,246 <foo\+0x246>
+-.*:	ec 6a 00 00 d6 7c [	 ]*cgij	%r6,-42,10,24c <foo\+0x24c>
+-.*:	ec 62 00 00 d6 7c [	 ]*cgij	%r6,-42,2,252 <foo\+0x252>
+-.*:	ec 62 00 00 d6 7c [	 ]*cgij	%r6,-42,2,258 <foo\+0x258>
+-.*:	ec 64 00 00 d6 7c [	 ]*cgij	%r6,-42,4,25e <foo\+0x25e>
+-.*:	ec 64 00 00 d6 7c [	 ]*cgij	%r6,-42,4,264 <foo\+0x264>
+-.*:	ec 66 00 00 d6 7c [	 ]*cgij	%r6,-42,6,26a <foo\+0x26a>
+-.*:	ec 66 00 00 d6 7c [	 ]*cgij	%r6,-42,6,270 <foo\+0x270>
+-.*:	ec 68 00 00 d6 7c [	 ]*cgij	%r6,-42,8,276 <foo\+0x276>
+-.*:	ec 68 00 00 d6 7c [	 ]*cgij	%r6,-42,8,27c <foo\+0x27c>
+-.*:	ec 6a 00 00 d6 7c [	 ]*cgij	%r6,-42,10,282 <foo\+0x282>
+-.*:	ec 6a 00 00 d6 7c [	 ]*cgij	%r6,-42,10,288 <foo\+0x288>
+-.*:	ec 6c 00 00 d6 7c [	 ]*cgij	%r6,-42,12,28e <foo\+0x28e>
+-.*:	ec 6c 00 00 d6 7c [	 ]*cgij	%r6,-42,12,294 <foo\+0x294>
++.*:	ec 6a 00 00 d6 7e [	 ]*cijnl	%r6,-42,1fe <foo\+0x1fe>
++.*:	ec 62 00 00 d6 7e [	 ]*cijh	%r6,-42,204 <foo\+0x204>
++.*:	ec 62 00 00 d6 7e [	 ]*cijh	%r6,-42,20a <foo\+0x20a>
++.*:	ec 64 00 00 d6 7e [	 ]*cijl	%r6,-42,210 <foo\+0x210>
++.*:	ec 64 00 00 d6 7e [	 ]*cijl	%r6,-42,216 <foo\+0x216>
++.*:	ec 66 00 00 d6 7e [	 ]*cijne	%r6,-42,21c <foo\+0x21c>
++.*:	ec 66 00 00 d6 7e [	 ]*cijne	%r6,-42,222 <foo\+0x222>
++.*:	ec 68 00 00 d6 7e [	 ]*cije	%r6,-42,228 <foo\+0x228>
++.*:	ec 68 00 00 d6 7e [	 ]*cije	%r6,-42,22e <foo\+0x22e>
++.*:	ec 6a 00 00 d6 7e [	 ]*cijnl	%r6,-42,234 <foo\+0x234>
++.*:	ec 6a 00 00 d6 7e [	 ]*cijnl	%r6,-42,23a <foo\+0x23a>
++.*:	ec 6c 00 00 d6 7e [	 ]*cijnh	%r6,-42,240 <foo\+0x240>
++.*:	ec 6c 00 00 d6 7e [	 ]*cijnh	%r6,-42,246 <foo\+0x246>
++.*:	ec 6a 00 00 d6 7c [	 ]*cgijnl	%r6,-42,24c <foo\+0x24c>
++.*:	ec 62 00 00 d6 7c [	 ]*cgijh	%r6,-42,252 <foo\+0x252>
++.*:	ec 62 00 00 d6 7c [	 ]*cgijh	%r6,-42,258 <foo\+0x258>
++.*:	ec 64 00 00 d6 7c [	 ]*cgijl	%r6,-42,25e <foo\+0x25e>
++.*:	ec 64 00 00 d6 7c [	 ]*cgijl	%r6,-42,264 <foo\+0x264>
++.*:	ec 66 00 00 d6 7c [	 ]*cgijne	%r6,-42,26a <foo\+0x26a>
++.*:	ec 66 00 00 d6 7c [	 ]*cgijne	%r6,-42,270 <foo\+0x270>
++.*:	ec 68 00 00 d6 7c [	 ]*cgije	%r6,-42,276 <foo\+0x276>
++.*:	ec 68 00 00 d6 7c [	 ]*cgije	%r6,-42,27c <foo\+0x27c>
++.*:	ec 6a 00 00 d6 7c [	 ]*cgijnl	%r6,-42,282 <foo\+0x282>
++.*:	ec 6a 00 00 d6 7c [	 ]*cgijnl	%r6,-42,288 <foo\+0x288>
++.*:	ec 6c 00 00 d6 7c [	 ]*cgijnh	%r6,-42,28e <foo\+0x28e>
++.*:	ec 6c 00 00 d6 7c [	 ]*cgijnh	%r6,-42,294 <foo\+0x294>
+ .*:	b9 72 a0 67 [	 ]*crtnl	%r6,%r7
+ .*:	b9 72 20 67 [	 ]*crth	%r6,%r7
+ .*:	b9 72 20 67 [	 ]*crth	%r6,%r7
+@@ -209,32 +209,32 @@ Disassembly of section .text:
+ .*:	ec 67 84 57 a0 e5 [	 ]*clgrbnl	%r6,%r7,1111\(%r8\)
+ .*:	ec 67 84 57 c0 e5 [	 ]*clgrbnh	%r6,%r7,1111\(%r8\)
+ .*:	ec 67 84 57 c0 e5 [	 ]*clgrbnh	%r6,%r7,1111\(%r8\)
+-.*:	ec 67 00 00 a0 77 [	 ]*clrj	%r6,%r7,10,48e <foo\+0x48e>
+-.*:	ec 67 00 00 20 77 [	 ]*clrj	%r6,%r7,2,494 <foo\+0x494>
+-.*:	ec 67 00 00 20 77 [	 ]*clrj	%r6,%r7,2,49a <foo\+0x49a>
+-.*:	ec 67 00 00 40 77 [	 ]*clrj	%r6,%r7,4,4a0 <foo\+0x4a0>
+-.*:	ec 67 00 00 40 77 [	 ]*clrj	%r6,%r7,4,4a6 <foo\+0x4a6>
+-.*:	ec 67 00 00 60 77 [	 ]*clrj	%r6,%r7,6,4ac <foo\+0x4ac>
+-.*:	ec 67 00 00 60 77 [	 ]*clrj	%r6,%r7,6,4b2 <foo\+0x4b2>
+-.*:	ec 67 00 00 80 77 [	 ]*clrj	%r6,%r7,8,4b8 <foo\+0x4b8>
+-.*:	ec 67 00 00 80 77 [	 ]*clrj	%r6,%r7,8,4be <foo\+0x4be>
+-.*:	ec 67 00 00 a0 77 [	 ]*clrj	%r6,%r7,10,4c4 <foo\+0x4c4>
+-.*:	ec 67 00 00 a0 77 [	 ]*clrj	%r6,%r7,10,4ca <foo\+0x4ca>
+-.*:	ec 67 00 00 c0 77 [	 ]*clrj	%r6,%r7,12,4d0 <foo\+0x4d0>
+-.*:	ec 67 00 00 c0 77 [	 ]*clrj	%r6,%r7,12,4d6 <foo\+0x4d6>
+-.*:	ec 67 00 00 a0 65 [	 ]*clgrj	%r6,%r7,10,4dc <foo\+0x4dc>
+-.*:	ec 67 00 00 20 65 [	 ]*clgrj	%r6,%r7,2,4e2 <foo\+0x4e2>
+-.*:	ec 67 00 00 20 65 [	 ]*clgrj	%r6,%r7,2,4e8 <foo\+0x4e8>
+-.*:	ec 67 00 00 40 65 [	 ]*clgrj	%r6,%r7,4,4ee <foo\+0x4ee>
+-.*:	ec 67 00 00 40 65 [	 ]*clgrj	%r6,%r7,4,4f4 <foo\+0x4f4>
+-.*:	ec 67 00 00 60 65 [	 ]*clgrj	%r6,%r7,6,4fa <foo\+0x4fa>
+-.*:	ec 67 00 00 60 65 [	 ]*clgrj	%r6,%r7,6,500 <foo\+0x500>
+-.*:	ec 67 00 00 80 65 [	 ]*clgrj	%r6,%r7,8,506 <foo\+0x506>
+-.*:	ec 67 00 00 80 65 [	 ]*clgrj	%r6,%r7,8,50c <foo\+0x50c>
+-.*:	ec 67 00 00 a0 65 [	 ]*clgrj	%r6,%r7,10,512 <foo\+0x512>
+-.*:	ec 67 00 00 a0 65 [	 ]*clgrj	%r6,%r7,10,518 <foo\+0x518>
+-.*:	ec 67 00 00 c0 65 [	 ]*clgrj	%r6,%r7,12,51e <foo\+0x51e>
+-.*:	ec 67 00 00 c0 65 [	 ]*clgrj	%r6,%r7,12,524 <foo\+0x524>
++.*:	ec 67 00 00 a0 77 [	 ]*clrjnl	%r6,%r7,48e <foo\+0x48e>
++.*:	ec 67 00 00 20 77 [	 ]*clrjh	%r6,%r7,494 <foo\+0x494>
++.*:	ec 67 00 00 20 77 [	 ]*clrjh	%r6,%r7,49a <foo\+0x49a>
++.*:	ec 67 00 00 40 77 [	 ]*clrjl	%r6,%r7,4a0 <foo\+0x4a0>
++.*:	ec 67 00 00 40 77 [	 ]*clrjl	%r6,%r7,4a6 <foo\+0x4a6>
++.*:	ec 67 00 00 60 77 [	 ]*clrjne	%r6,%r7,4ac <foo\+0x4ac>
++.*:	ec 67 00 00 60 77 [	 ]*clrjne	%r6,%r7,4b2 <foo\+0x4b2>
++.*:	ec 67 00 00 80 77 [	 ]*clrje	%r6,%r7,4b8 <foo\+0x4b8>
++.*:	ec 67 00 00 80 77 [	 ]*clrje	%r6,%r7,4be <foo\+0x4be>
++.*:	ec 67 00 00 a0 77 [	 ]*clrjnl	%r6,%r7,4c4 <foo\+0x4c4>
++.*:	ec 67 00 00 a0 77 [	 ]*clrjnl	%r6,%r7,4ca <foo\+0x4ca>
++.*:	ec 67 00 00 c0 77 [	 ]*clrjnh	%r6,%r7,4d0 <foo\+0x4d0>
++.*:	ec 67 00 00 c0 77 [	 ]*clrjnh	%r6,%r7,4d6 <foo\+0x4d6>
++.*:	ec 67 00 00 a0 65 [	 ]*clgrjnl	%r6,%r7,4dc <foo\+0x4dc>
++.*:	ec 67 00 00 20 65 [	 ]*clgrjh	%r6,%r7,4e2 <foo\+0x4e2>
++.*:	ec 67 00 00 20 65 [	 ]*clgrjh	%r6,%r7,4e8 <foo\+0x4e8>
++.*:	ec 67 00 00 40 65 [	 ]*clgrjl	%r6,%r7,4ee <foo\+0x4ee>
++.*:	ec 67 00 00 40 65 [	 ]*clgrjl	%r6,%r7,4f4 <foo\+0x4f4>
++.*:	ec 67 00 00 60 65 [	 ]*clgrjne	%r6,%r7,4fa <foo\+0x4fa>
++.*:	ec 67 00 00 60 65 [	 ]*clgrjne	%r6,%r7,500 <foo\+0x500>
++.*:	ec 67 00 00 80 65 [	 ]*clgrje	%r6,%r7,506 <foo\+0x506>
++.*:	ec 67 00 00 80 65 [	 ]*clgrje	%r6,%r7,50c <foo\+0x50c>
++.*:	ec 67 00 00 a0 65 [	 ]*clgrjnl	%r6,%r7,512 <foo\+0x512>
++.*:	ec 67 00 00 a0 65 [	 ]*clgrjnl	%r6,%r7,518 <foo\+0x518>
++.*:	ec 67 00 00 c0 65 [	 ]*clgrjnh	%r6,%r7,51e <foo\+0x51e>
++.*:	ec 67 00 00 c0 65 [	 ]*clgrjnh	%r6,%r7,524 <foo\+0x524>
+ .*:	ec 6a 74 57 c8 ff [	 ]*clibnl	%r6,200,1111\(%r7\)
+ .*:	ec 62 74 57 c8 ff [	 ]*clibh	%r6,200,1111\(%r7\)
+ .*:	ec 62 74 57 c8 ff [	 ]*clibh	%r6,200,1111\(%r7\)
+@@ -261,32 +261,32 @@ Disassembly of section .text:
+ .*:	ec 6a 74 57 c8 fd [	 ]*clgibnl	%r6,200,1111\(%r7\)
+ .*:	ec 6c 74 57 c8 fd [	 ]*clgibnh	%r6,200,1111\(%r7\)
+ .*:	ec 6c 74 57 c8 fd [	 ]*clgibnh	%r6,200,1111\(%r7\)
+-.*:	ec 6a 00 00 c8 7f [	 ]*clij	%r6,200,10,5c6 <foo\+0x5c6>
+-.*:	ec 62 00 00 c8 7f [	 ]*clij	%r6,200,2,5cc <foo\+0x5cc>
+-.*:	ec 62 00 00 c8 7f [	 ]*clij	%r6,200,2,5d2 <foo\+0x5d2>
+-.*:	ec 64 00 00 c8 7f [	 ]*clij	%r6,200,4,5d8 <foo\+0x5d8>
+-.*:	ec 64 00 00 c8 7f [	 ]*clij	%r6,200,4,5de <foo\+0x5de>
+-.*:	ec 66 00 00 c8 7f [	 ]*clij	%r6,200,6,5e4 <foo\+0x5e4>
+-.*:	ec 66 00 00 c8 7f [	 ]*clij	%r6,200,6,5ea <foo\+0x5ea>
+-.*:	ec 68 00 00 c8 7f [	 ]*clij	%r6,200,8,5f0 <foo\+0x5f0>
+-.*:	ec 68 00 00 c8 7f [	 ]*clij	%r6,200,8,5f6 <foo\+0x5f6>
+-.*:	ec 6a 00 00 c8 7f [	 ]*clij	%r6,200,10,5fc <foo\+0x5fc>
+-.*:	ec 6a 00 00 c8 7f [	 ]*clij	%r6,200,10,602 <foo\+0x602>
+-.*:	ec 6c 00 00 c8 7f [	 ]*clij	%r6,200,12,608 <foo\+0x608>
+-.*:	ec 6c 00 00 c8 7f [	 ]*clij	%r6,200,12,60e <foo\+0x60e>
+-.*:	ec 6a 00 00 c8 7d [	 ]*clgij	%r6,200,10,614 <foo\+0x614>
+-.*:	ec 62 00 00 c8 7d [	 ]*clgij	%r6,200,2,61a <foo\+0x61a>
+-.*:	ec 62 00 00 c8 7d [	 ]*clgij	%r6,200,2,620 <foo\+0x620>
+-.*:	ec 64 00 00 c8 7d [	 ]*clgij	%r6,200,4,626 <foo\+0x626>
+-.*:	ec 64 00 00 c8 7d [	 ]*clgij	%r6,200,4,62c <foo\+0x62c>
+-.*:	ec 66 00 00 c8 7d [	 ]*clgij	%r6,200,6,632 <foo\+0x632>
+-.*:	ec 66 00 00 c8 7d [	 ]*clgij	%r6,200,6,638 <foo\+0x638>
+-.*:	ec 68 00 00 c8 7d [	 ]*clgij	%r6,200,8,63e <foo\+0x63e>
+-.*:	ec 68 00 00 c8 7d [	 ]*clgij	%r6,200,8,644 <foo\+0x644>
+-.*:	ec 6a 00 00 c8 7d [	 ]*clgij	%r6,200,10,64a <foo\+0x64a>
+-.*:	ec 6a 00 00 c8 7d [	 ]*clgij	%r6,200,10,650 <foo\+0x650>
+-.*:	ec 6c 00 00 c8 7d [	 ]*clgij	%r6,200,12,656 <foo\+0x656>
+-.*:	ec 6c 00 00 c8 7d [	 ]*clgij	%r6,200,12,65c <foo\+0x65c>
++.*:	ec 6a 00 00 c8 7f [	 ]*clijnl	%r6,200,5c6 <foo\+0x5c6>
++.*:	ec 62 00 00 c8 7f [	 ]*clijh	%r6,200,5cc <foo\+0x5cc>
++.*:	ec 62 00 00 c8 7f [	 ]*clijh	%r6,200,5d2 <foo\+0x5d2>
++.*:	ec 64 00 00 c8 7f [	 ]*clijl	%r6,200,5d8 <foo\+0x5d8>
++.*:	ec 64 00 00 c8 7f [	 ]*clijl	%r6,200,5de <foo\+0x5de>
++.*:	ec 66 00 00 c8 7f [	 ]*clijne	%r6,200,5e4 <foo\+0x5e4>
++.*:	ec 66 00 00 c8 7f [	 ]*clijne	%r6,200,5ea <foo\+0x5ea>
++.*:	ec 68 00 00 c8 7f [	 ]*clije	%r6,200,5f0 <foo\+0x5f0>
++.*:	ec 68 00 00 c8 7f [	 ]*clije	%r6,200,5f6 <foo\+0x5f6>
++.*:	ec 6a 00 00 c8 7f [	 ]*clijnl	%r6,200,5fc <foo\+0x5fc>
++.*:	ec 6a 00 00 c8 7f [	 ]*clijnl	%r6,200,602 <foo\+0x602>
++.*:	ec 6c 00 00 c8 7f [	 ]*clijnh	%r6,200,608 <foo\+0x608>
++.*:	ec 6c 00 00 c8 7f [	 ]*clijnh	%r6,200,60e <foo\+0x60e>
++.*:	ec 6a 00 00 c8 7d [	 ]*clgijnl	%r6,200,614 <foo\+0x614>
++.*:	ec 62 00 00 c8 7d [	 ]*clgijh	%r6,200,61a <foo\+0x61a>
++.*:	ec 62 00 00 c8 7d [	 ]*clgijh	%r6,200,620 <foo\+0x620>
++.*:	ec 64 00 00 c8 7d [	 ]*clgijl	%r6,200,626 <foo\+0x626>
++.*:	ec 64 00 00 c8 7d [	 ]*clgijl	%r6,200,62c <foo\+0x62c>
++.*:	ec 66 00 00 c8 7d [	 ]*clgijne	%r6,200,632 <foo\+0x632>
++.*:	ec 66 00 00 c8 7d [	 ]*clgijne	%r6,200,638 <foo\+0x638>
++.*:	ec 68 00 00 c8 7d [	 ]*clgije	%r6,200,63e <foo\+0x63e>
++.*:	ec 68 00 00 c8 7d [	 ]*clgije	%r6,200,644 <foo\+0x644>
++.*:	ec 6a 00 00 c8 7d [	 ]*clgijnl	%r6,200,64a <foo\+0x64a>
++.*:	ec 6a 00 00 c8 7d [	 ]*clgijnl	%r6,200,650 <foo\+0x650>
++.*:	ec 6c 00 00 c8 7d [	 ]*clgijnh	%r6,200,656 <foo\+0x656>
++.*:	ec 6c 00 00 c8 7d [	 ]*clgijnh	%r6,200,65c <foo\+0x65c>
+ .*:	b9 73 a0 67 [	 ]*clrtnl	%r6,%r7
+ .*:	b9 73 20 67 [	 ]*clrth	%r6,%r7
+ .*:	b9 73 20 67 [	 ]*clrth	%r6,%r7
+@@ -371,9 +371,9 @@ Disassembly of section .text:
+ .*:	b9 a2 00 60 [	 ]*ptf	%r6
+ .*:	b9 af 00 67 [	 ]*pfmf	%r6,%r7
+ .*:	b9 bf a0 67 [	 ]*trte	%r6,%r7,10
+-.*:	b9 bf 00 67 [	 ]*trte	%r6,%r7,0
++.*:	b9 bf 00 67 [	 ]*trte	%r6,%r7
+ .*:	b9 bd a0 67 [	 ]*trtre	%r6,%r7,10
+-.*:	b9 bd 00 67 [	 ]*trtre	%r6,%r7,0
++.*:	b9 bd 00 67 [	 ]*trtre	%r6,%r7
+ .*:	b2 ed 00 67 [	 ]*ecpga	%r6,%r7
+ .*:	b2 e4 00 67 [	 ]*ecctr	%r6,%r7
+ .*:	b2 e5 00 67 [	 ]*epctr	%r6,%r7
+Only in binutils-2.25.1/gas/testsuite/gas/s390: zarch-z13.d
+Only in binutils-2.25.1/gas/testsuite/gas/s390: zarch-z13.s
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/s390/zarch-z9-109.d binutils-2.25.1/gas/testsuite/gas/s390/zarch-z9-109.d
+--- binutils-2.25.1.orig/gas/testsuite/gas/s390/zarch-z9-109.d	2016-08-08 14:06:28.061072168 +0100
++++ binutils-2.25.1/gas/testsuite/gas/s390/zarch-z9-109.d	2016-08-08 14:06:58.513268094 +0100
+@@ -45,12 +45,17 @@ Disassembly of section .text:
+ .*:	c8 60 5f ff af ff [	 ]*mvcos	4095\(%r5\),4095\(%r10\),%r6
+ .*:	b9 aa 9f 65 [	 ]*lptea	%r6,%r9,%r5,15
+ .*:	b2 2b f0 69 [	 ]*sske	%r6,%r9,15
++.*:	b2 2b 00 69 [	 ]*sske	%r6,%r9
+ .*:	b9 b1 f0 68 [	 ]*cu24	%r6,%r8,15
++.*:	b9 b1 00 68 [	 ]*cu24	%r6,%r8
+ .*:	b2 a6 f0 68 [	 ]*cu21	%r6,%r8,15
++.*:	b2 a6 00 68 [	 ]*cuutf	%r6,%r8
+ .*:	b9 b3 00 68 [	 ]*cu42	%r6,%r8
+ .*:	b9 b2 00 68 [	 ]*cu41	%r6,%r8
+ .*:	b2 a7 f0 68 [	 ]*cu12	%r6,%r8,15
++.*:	b2 a7 00 68 [	 ]*cutfu	%r6,%r8
+ .*:	b9 b0 f0 68 [	 ]*cu14	%r6,%r8,15
++.*:	b9 b0 00 68 [	 ]*cu14	%r6,%r8
+ .*:	b3 3b 60 95 [	 ]*myr	%f6,%f9,%f5
+ .*:	b3 3d 60 95 [	 ]*myhr	%f6,%f9,%f5
+ .*:	b3 39 60 95 [	 ]*mylr	%f6,%f9,%f5
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/s390/zarch-z9-109.s binutils-2.25.1/gas/testsuite/gas/s390/zarch-z9-109.s
+--- binutils-2.25.1.orig/gas/testsuite/gas/s390/zarch-z9-109.s	2016-08-08 14:06:28.061072168 +0100
++++ binutils-2.25.1/gas/testsuite/gas/s390/zarch-z9-109.s	2016-08-08 14:06:58.513268094 +0100
+@@ -39,12 +39,17 @@ foo:
+ 	mvcos	4095(%r5),4095(%r10),%r6
+ 	lptea	%r6,%r9,%r5,15
+ 	sske	%r6,%r9,15
++	sske	%r6,%r9
+ 	cu24	%r6,%r8,15
++	cu24	%r6,%r8
+ 	cu21	%r6,%r8,15
++	cu21	%r6,%r8
+ 	cu42	%r6,%r8
+ 	cu41	%r6,%r8
+ 	cu12	%r6,%r8,15
++	cu12	%r6,%r8
+ 	cu14	%r6,%r8,15
++	cu14	%r6,%r8
+ 	myr	%f6,%f9,%f5
+ 	myhr	%f6,%f9,%f5
+ 	mylr	%f6,%f9,%f5
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/s390/zarch-zEC12.d binutils-2.25.1/gas/testsuite/gas/s390/zarch-zEC12.d
+--- binutils-2.25.1.orig/gas/testsuite/gas/s390/zarch-zEC12.d	2016-08-08 14:06:28.061072168 +0100
++++ binutils-2.25.1/gas/testsuite/gas/s390/zarch-zEC12.d	2016-08-08 14:06:58.514268101 +0100
+@@ -52,7 +52,7 @@ Disassembly of section .text:
+ .*:	ed 0f 8f a0 6d a8 [	 ]*czdt	%f6,4000\(16,%r8\),13
+ .*:	ed 21 8f a0 4d a9 [	 ]*czxt	%f4,4000\(34,%r8\),13
+ .*:	b2 e8 c0 56 [	 ]*ppa	%r5,%r6,12
+-.*:	b9 8f 60 59 [	 ]*crdte	%r5,%r6,%r9,0
++.*:	b9 8f 60 59 [	 ]*crdte	%r5,%r6,%r9
+ .*:	b9 8f 61 59 [	 ]*crdte	%r5,%r6,%r9,1
+ .*:	c5 a0 06 00 00 06 [	 ]*bprp	10,11e <bar>,11e <bar>
+ .*:	c5 a0 00 00 00 00 [	 ]*bprp	10,118 <foo\+0x118>,118 <foo\+0x118>
+diff -rup binutils-2.25.1.orig/include/elf/s390.h binutils-2.25.1/include/elf/s390.h
+--- binutils-2.25.1.orig/include/elf/s390.h	2016-08-08 14:06:28.126072586 +0100
++++ binutils-2.25.1/include/elf/s390.h	2016-08-08 14:07:29.972470499 +0100
+@@ -129,6 +129,17 @@ START_RELOC_NUMBERS (elf_s390_reloc_type
+     RELOC_NUMBER (R_390_GNU_VTENTRY, 251)
+ END_RELOC_NUMBERS (R_390_max)
+ 
+-#endif /* _ELF_390_H */
++/* Object attribute tags.  */
++enum
++{
++  /* 0-3 are generic. */
++  /* 4 is reserved for the FP ABI. */
+ 
++  /* Vector ABI:
++     0 = not affected by the vector ABI, or not tagged.
++     1 = software vector ABI being used
++     2 = hardware vector ABI being used.  */
++  Tag_GNU_S390_ABI_Vector = 8,
++};
+ 
++#endif /* _ELF_390_H */
+diff -rup binutils-2.25.1.orig/include/opcode/s390.h binutils-2.25.1/include/opcode/s390.h
+--- binutils-2.25.1.orig/include/opcode/s390.h	2016-08-08 14:06:28.129072606 +0100
++++ binutils-2.25.1/include/opcode/s390.h	2016-08-08 14:06:58.514268101 +0100
+@@ -41,9 +41,13 @@ enum s390_opcode_cpu_val
+     S390_OPCODE_Z10,
+     S390_OPCODE_Z196,
+     S390_OPCODE_ZEC12,
++    S390_OPCODE_Z13,
+     S390_OPCODE_MAXCPU
+   };
+ 
++/* Instruction specific flags.  */
++#define S390_INSTR_FLAG_OPTPARM 0x1
++
+ /* The opcode table is an array of struct s390_opcode.  */
+ 
+ struct s390_opcode
+@@ -74,6 +78,9 @@ struct s390_opcode
+ 
+     /* First cpu this opcode is available for.  */
+     enum s390_opcode_cpu_val min_cpu;
++
++    /* Instruction specific flags.  */
++    unsigned int flags;
+   };
+ 
+ /* The table itself is sorted by major opcode number, and is otherwise
+@@ -86,7 +93,7 @@ extern const int                s390_num
+ extern const struct s390_opcode s390_opformats[];
+ extern const int                s390_num_opformats;
+ 
+-/* Values defined for the flags field of a struct powerpc_opcode.  */
++/* Values defined for the flags field of a struct s390_opcode.  */
+ 
+ /* The operands table is an array of struct s390_operand.  */
+ 
+@@ -103,7 +110,7 @@ struct s390_operand
+   };
+ 
+ /* Elements in the table are retrieved by indexing with values from
+-   the operands field of the powerpc_opcodes table.  */
++   the operands field of the s390_opcodes table.  */
+ 
+ extern const struct s390_operand s390_operands[];
+ 
+@@ -151,4 +158,14 @@ extern const struct s390_operand s390_op
+ /* The operand needs to be a valid GP or FP register pair.  */
+ #define S390_OPERAND_REG_PAIR 0x800
+ 
+-	#endif /* S390_H */
++/* This operand names a vector register.  The disassembler uses this
++   to print register names with a leading 'v'.  */
++#define S390_OPERAND_VR 0x1000
++
++#define S390_OPERAND_CP16 0x2000
++
++#define S390_OPERAND_OR1 0x4000
++#define S390_OPERAND_OR2 0x8000
++#define S390_OPERAND_OR8 0x10000
++
++#endif /* S390_H */
+Only in binutils-2.25.1/ld/testsuite/ld-s390: pltoffset-1.dd
+Only in binutils-2.25.1/ld/testsuite/ld-s390: pltoffset-1.ld
+Only in binutils-2.25.1/ld/testsuite/ld-s390: pltoffset-1.s
+diff -rup binutils-2.25.1.orig/ld/testsuite/ld-s390/s390.exp binutils-2.25.1/ld/testsuite/ld-s390/s390.exp
+--- binutils-2.25.1.orig/ld/testsuite/ld-s390/s390.exp	2016-08-08 14:06:28.256073423 +0100
++++ binutils-2.25.1/ld/testsuite/ld-s390/s390.exp	2016-08-08 14:08:23.868817263 +0100
+@@ -74,6 +74,11 @@ set s390xtests {
+      "-m64" {gotreloc-1.s}
+      {{objdump -dzrj.text gotreloc_64-1.dd}}
+      "gotreloc_64-1"}
++    {"PLT: offset test"
++     "-shared -m elf64_s390 -dT pltoffset-1.ld" ""
++     "-m64" {pltoffset-1.s}
++     {{objdump "-dzrj.text --stop-address=16" pltoffset-1.dd}}
++     "pltoffset-1"}
+ }
+ 
+ if [istarget "s390-*-*"] {
+diff -rup binutils-2.25.1.orig/ld/testsuite/ld-s390/tlsbin.dd binutils-2.25.1/ld/testsuite/ld-s390/tlsbin.dd
+--- binutils-2.25.1.orig/ld/testsuite/ld-s390/tlsbin.dd	2016-08-08 14:06:28.256073423 +0100
++++ binutils-2.25.1/ld/testsuite/ld-s390/tlsbin.dd	2016-08-08 14:06:58.514268101 +0100
+@@ -109,17 +109,17 @@ Disassembly of section .text:
+ # IE -> LE against global var defined in exec
+   +[0-9a-f]+:	58 30 d0 38       	l	%r3,56\(%r13\)
+   +[0-9a-f]+:	18 43             	lr	%r4,%r3
+-  +[0-9a-f]+:	07 00             	nopr	%r0
++  +[0-9a-f]+:	07 00             	nopr
+   +[0-9a-f]+:	41 54 90 00       	la	%r5,0\(%r4,%r9\)
+ # IE -> LE against local var
+   +[0-9a-f]+:	58 30 d0 3c       	l	%r3,60\(%r13\)
+   +[0-9a-f]+:	18 43             	lr	%r4,%r3
+-  +[0-9a-f]+:	07 00             	nopr	%r0
++  +[0-9a-f]+:	07 00             	nopr
+   +[0-9a-f]+:	41 54 90 00       	la	%r5,0\(%r4,%r9\)
+ # IE -> LE against hidden var
+   +[0-9a-f]+:	58 30 d0 40       	l	%r3,64\(%r13\)
+   +[0-9a-f]+:	18 43             	lr	%r4,%r3
+-  +[0-9a-f]+:	07 00             	nopr	%r0
++  +[0-9a-f]+:	07 00             	nopr
+   +[0-9a-f]+:	41 54 90 00       	la	%r5,0\(%r4,%r9\)
+ # IE against global var with small got access (no optimization)
+   +[0-9a-f]+:	58 30 c0 14       	l	%r3,20\(%r12\)
+@@ -173,17 +173,17 @@ Disassembly of section .text:
+ # IE -> LE against global var defined in exec
+   +[0-9a-f]+:	58 30 d0 04       	l	%r3,4\(%r13\)
+   +[0-9a-f]+:	18 43             	lr	%r4,%r3
+-  +[0-9a-f]+:	07 00             	nopr	%r0
++  +[0-9a-f]+:	07 00             	nopr
+   +[0-9a-f]+:	41 54 90 00       	la	%r5,0\(%r4,%r9\)
+ # IE -> LE against local var
+   +[0-9a-f]+:	58 30 d0 08       	l	%r3,8\(%r13\)
+   +[0-9a-f]+:	18 43             	lr	%r4,%r3
+-  +[0-9a-f]+:	07 00             	nopr	%r0
++  +[0-9a-f]+:	07 00             	nopr
+   +[0-9a-f]+:	41 54 90 00       	la	%r5,0\(%r4,%r9\)
+ # IE -> LE against hidden but not local var
+   +[0-9a-f]+:	58 30 d0 0c       	l	%r3,12\(%r13\)
+   +[0-9a-f]+:	18 43             	lr	%r4,%r3
+-  +[0-9a-f]+:	07 00             	nopr	%r0
++  +[0-9a-f]+:	07 00             	nopr
+   +[0-9a-f]+:	41 54 90 00       	la	%r5,0\(%r4,%r9\)
+ # LE, global var defined in exec
+   +[0-9a-f]+:	58 40 d0 10       	l	%r4,16\(%r13\)
+diff -rup binutils-2.25.1.orig/opcodes/s390-dis.c binutils-2.25.1/opcodes/s390-dis.c
+--- binutils-2.25.1.orig/opcodes/s390-dis.c	2016-08-08 14:06:28.334073924 +0100
++++ binutils-2.25.1/opcodes/s390-dis.c	2016-08-08 14:06:58.514268101 +0100
+@@ -107,6 +107,7 @@ s390_extract_operand (const bfd_byte *in
+   union operand_value ret;
+   unsigned int val;
+   int bits;
++  const bfd_byte *orig_insn = insn;
+ 
+   /* Extract fragments of the operand byte for byte.  */
+   insn += operand->shift / 8;
+@@ -140,6 +141,16 @@ s390_extract_operand (const bfd_byte *in
+   else if (operand->flags & S390_OPERAND_LENGTH)
+     /* Length x in an instruction has real length x + 1.  */
+     ret.u = val + 1;
++
++  else if (operand->flags & S390_OPERAND_VR)
++    {
++      /* Extract the extra bits for a vector register operand stored
++	 in the RXB field.  */
++      unsigned vr = operand->shift == 32 ? 3
++	: (unsigned) operand->shift / 4 - 2;
++
++      ret.u = val | ((orig_insn[4] & (1 << (3 - vr))) << (vr + 1));
++    }
+   else
+     ret.u = val;
+ 
+@@ -178,22 +189,45 @@ s390_print_insn_with_opcode (bfd_vma mem
+ 	  continue;
+ 	}
+ 
+-      info->fprintf_func (info->stream, "%c", separator);
++      /* For instructions with a last optional operand don't print it
++	 if zero.  */
++      if ((opcode->flags & S390_INSTR_FLAG_OPTPARM)
++	  && val.u == 0
++	  && opindex[1] == 0)
++	break;
+ 
+       if (flags & S390_OPERAND_GPR)
+-	info->fprintf_func (info->stream, "%%r%u", val.u);
++	info->fprintf_func (info->stream, "%c%%r%u", separator, val.u);
+       else if (flags & S390_OPERAND_FPR)
+-	info->fprintf_func (info->stream, "%%f%u", val.u);
++	info->fprintf_func (info->stream, "%c%%f%u", separator, val.u);
++      else if (flags & S390_OPERAND_VR)
++	info->fprintf_func (info->stream, "%c%%v%i", separator, val.u);
+       else if (flags & S390_OPERAND_AR)
+-	info->fprintf_func (info->stream, "%%a%u", val.u);
++	info->fprintf_func (info->stream, "%c%%a%u", separator, val.u);
+       else if (flags & S390_OPERAND_CR)
+-	info->fprintf_func (info->stream, "%%c%u", val.u);
++	info->fprintf_func (info->stream, "%c%%c%u", separator, val.u);
+       else if (flags & S390_OPERAND_PCREL)
+-	info->print_address_func (memaddr + val.i + val.i, info);
++	{
++	  info->fprintf_func (info->stream, "%c", separator);
++	  info->print_address_func (memaddr + val.i + val.i, info);
++	}
+       else if (flags & S390_OPERAND_SIGNED)
+-	info->fprintf_func (info->stream, "%i", val.i);
++	info->fprintf_func (info->stream, "%c%i", separator, val.i);
+       else
+-	info->fprintf_func (info->stream, "%u", val.u);
++	{
++	  if (flags & S390_OPERAND_OR1)
++	    val.u &= ~1;
++	  if (flags & S390_OPERAND_OR2)
++	    val.u &= ~2;
++	  if (flags & S390_OPERAND_OR8)
++	    val.u &= ~8;
++
++	  if ((opcode->flags & S390_INSTR_FLAG_OPTPARM)
++	      && val.u == 0
++	      && opindex[1] == 0)
++	    break;
++	  info->fprintf_func (info->stream, "%c%u", separator, val.u);
++	}
+ 
+       if (flags & S390_OPERAND_DISP)
+ 	separator = '(';
+diff -rup binutils-2.25.1.orig/opcodes/s390-mkopc.c binutils-2.25.1/opcodes/s390-mkopc.c
+--- binutils-2.25.1.orig/opcodes/s390-mkopc.c	2016-08-08 14:06:28.334073924 +0100
++++ binutils-2.25.1/opcodes/s390-mkopc.c	2016-08-08 14:06:58.515268107 +0100
+@@ -22,26 +22,7 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+-
+-/* Taken from opcodes/s390.h */
+-enum s390_opcode_mode_val
+-  {
+-    S390_OPCODE_ESA = 0,
+-    S390_OPCODE_ZARCH
+-  };
+-
+-enum s390_opcode_cpu_val
+-  {
+-    S390_OPCODE_G5 = 0,
+-    S390_OPCODE_G6,
+-    S390_OPCODE_Z900,
+-    S390_OPCODE_Z990,
+-    S390_OPCODE_Z9_109,
+-    S390_OPCODE_Z9_EC,
+-    S390_OPCODE_Z10,
+-    S390_OPCODE_Z196,
+-    S390_OPCODE_ZEC12
+-  };
++#include "opcode/s390.h"
+ 
+ struct op_struct
+   {
+@@ -50,6 +31,7 @@ struct op_struct
+     char  format[16];
+     int   mode_bits;
+     int   min_cpu;
++    int   flags;
+ 
+     unsigned long long sort_value;
+     int   no_nibbles;
+@@ -71,7 +53,7 @@ createTable (void)
+ 
+ static void
+ insertOpcode (char *opcode, char *mnemonic, char *format,
+-	      int min_cpu, int mode_bits)
++	      int min_cpu, int mode_bits, int flags)
+ {
+   char *str;
+   unsigned long long sort_value;
+@@ -115,6 +97,7 @@ insertOpcode (char *opcode, char *mnemon
+   op_array[ix].no_nibbles = no_nibbles;
+   op_array[ix].min_cpu = min_cpu;
+   op_array[ix].mode_bits = mode_bits;
++  op_array[ix].flags = flags;
+   no_ops++;
+ }
+ 
+@@ -176,7 +159,7 @@ const struct s390_cond_ext_format s390_c
+ 
+ static void
+ insertExpandedMnemonic (char *opcode, char *mnemonic, char *format,
+-			int min_cpu, int mode_bits)
++			int min_cpu, int mode_bits, int flags)
+ {
+   char *tag;
+   char prefix[15];
+@@ -189,7 +172,7 @@ insertExpandedMnemonic (char *opcode, ch
+ 
+   if (!(tag = strpbrk (mnemonic, "*$")))
+     {
+-      insertOpcode (opcode, mnemonic, format, min_cpu, mode_bits);
++      insertOpcode (opcode, mnemonic, format, min_cpu, mode_bits, flags);
+       return;
+     }
+ 
+@@ -268,7 +251,7 @@ insertExpandedMnemonic (char *opcode, ch
+       opcode[mask_start] = ext_table[i].nibble;
+       strcat (new_mnemonic, ext_table[i].extension);
+       strcat (new_mnemonic, suffix);
+-      insertOpcode (opcode, new_mnemonic, format, min_cpu, mode_bits);
++      insertOpcode (opcode, new_mnemonic, format, min_cpu, mode_bits, flags);
+     }
+   return;
+ 
+@@ -286,7 +269,10 @@ static const char file_header[] =
+   "     which bits in the actual opcode must match OPCODE.\n"
+   "   OPERANDS is the list of operands.\n\n"
+   "   The disassembler reads the table in order and prints the first\n"
+-  "   instruction which matches.  */\n\n"
++  "   instruction which matches.\n"
++  "   MODE_BITS - zarch or esa\n"
++  "   MIN_CPU - number of the min cpu level required\n"
++  "   FLAGS - instruction flags.  */\n\n"
+   "const struct s390_opcode s390_opcodes[] =\n  {\n";
+ 
+ /* `dumpTable': write opcode table.  */
+@@ -311,7 +297,8 @@ dumpTable (void)
+       printf ("MASK_%s, INSTR_%s, ",
+ 	      op_array[ix].format, op_array[ix].format);
+       printf ("%i, ", op_array[ix].mode_bits);
+-      printf ("%i}", op_array[ix].min_cpu);
++      printf ("%i, ", op_array[ix].min_cpu);
++      printf ("%i}", op_array[ix].flags);
+       if (ix < no_ops-1)
+ 	printf (",\n");
+       else
+@@ -339,67 +326,91 @@ main (void)
+       char  description[80];
+       char  cpu_string[16];
+       char  modes_string[16];
++      char  flags_string[80];
+       int   min_cpu;
+       int   mode_bits;
++      int   flag_bits;
++      int   num_matched;
+       char  *str;
+ 
+       if (currentLine[0] == '#' || currentLine[0] == '\n')
+         continue;
+       memset (opcode, 0, 8);
+-      if (sscanf (currentLine, "%15s %15s %15s \"%79[^\"]\" %15s %15s",
+-		  opcode, mnemonic, format, description,
+-		  cpu_string, modes_string) == 6)
++      num_matched =
++	sscanf (currentLine, "%15s %15s %15s \"%79[^\"]\" %15s %15s %79[^\n]",
++		opcode, mnemonic, format, description,
++		cpu_string, modes_string, flags_string);
++      if (num_matched != 6 && num_matched != 7)
+ 	{
+-	  if (strcmp (cpu_string, "g5") == 0)
+-	    min_cpu = S390_OPCODE_G5;
+-	  else if (strcmp (cpu_string, "g6") == 0)
+-	    min_cpu = S390_OPCODE_G6;
+-	  else if (strcmp (cpu_string, "z900") == 0)
+-	    min_cpu = S390_OPCODE_Z900;
+-	  else if (strcmp (cpu_string, "z990") == 0)
+-	    min_cpu = S390_OPCODE_Z990;
+-	  else if (strcmp (cpu_string, "z9-109") == 0)
+-	    min_cpu = S390_OPCODE_Z9_109;
+-	  else if (strcmp (cpu_string, "z9-ec") == 0)
+-	    min_cpu = S390_OPCODE_Z9_EC;
+-	  else if (strcmp (cpu_string, "z10") == 0)
+-	    min_cpu = S390_OPCODE_Z10;
+-	  else if (strcmp (cpu_string, "z196") == 0)
+-	    min_cpu = S390_OPCODE_Z196;
+-	  else if (strcmp (cpu_string, "zEC12") == 0)
+-	    min_cpu = S390_OPCODE_ZEC12;
+-	  else {
+-	    fprintf (stderr, "Couldn't parse cpu string %s\n", cpu_string);
+-	    exit (1);
+-	  }
++	  fprintf (stderr, "Couldn't scan line %s\n", currentLine);
++	  exit (1);
++	}
+ 
+-	  str = modes_string;
+-	  mode_bits = 0;
++      if (strcmp (cpu_string, "g5") == 0)
++	min_cpu = S390_OPCODE_G5;
++      else if (strcmp (cpu_string, "g6") == 0)
++	min_cpu = S390_OPCODE_G6;
++      else if (strcmp (cpu_string, "z900") == 0)
++	min_cpu = S390_OPCODE_Z900;
++      else if (strcmp (cpu_string, "z990") == 0)
++	min_cpu = S390_OPCODE_Z990;
++      else if (strcmp (cpu_string, "z9-109") == 0)
++	min_cpu = S390_OPCODE_Z9_109;
++      else if (strcmp (cpu_string, "z9-ec") == 0)
++	min_cpu = S390_OPCODE_Z9_EC;
++      else if (strcmp (cpu_string, "z10") == 0)
++	min_cpu = S390_OPCODE_Z10;
++      else if (strcmp (cpu_string, "z196") == 0)
++	min_cpu = S390_OPCODE_Z196;
++      else if (strcmp (cpu_string, "zEC12") == 0)
++	min_cpu = S390_OPCODE_ZEC12;
++      else if (strcmp (cpu_string, "z13") == 0)
++	min_cpu = S390_OPCODE_Z13;
++      else {
++	fprintf (stderr, "Couldn't parse cpu string %s\n", cpu_string);
++	exit (1);
++      }
++
++      str = modes_string;
++      mode_bits = 0;
++      do {
++	if (strncmp (str, "esa", 3) == 0
++	    && (str[3] == 0 || str[3] == ',')) {
++	  mode_bits |= 1 << S390_OPCODE_ESA;
++	  str += 3;
++	} else if (strncmp (str, "zarch", 5) == 0
++		   && (str[5] == 0 || str[5] == ',')) {
++	  mode_bits |= 1 << S390_OPCODE_ZARCH;
++	  str += 5;
++	} else {
++	  fprintf (stderr, "Couldn't parse modes string %s\n",
++		   modes_string);
++	  exit (1);
++	}
++	if (*str == ',')
++	  str++;
++      } while (*str != 0);
++
++      flag_bits = 0;
++
++      if (num_matched == 7)
++	{
++	  str = flags_string;
+ 	  do {
+-	    if (strncmp (str, "esa", 3) == 0
+-		&& (str[3] == 0 || str[3] == ',')) {
+-	      mode_bits |= 1 << S390_OPCODE_ESA;
+-	      str += 3;
+-	    } else if (strncmp (str, "zarch", 5) == 0
+-		       && (str[5] == 0 || str[5] == ',')) {
+-	      mode_bits |= 1 << S390_OPCODE_ZARCH;
+-	      str += 5;
++	    if (strncmp (str, "optparm", 7) == 0
++		&& (str[7] == 0 || str[7] == ',')) {
++	      flag_bits |= S390_INSTR_FLAG_OPTPARM;
++	      str += 7;
+ 	    } else {
+-	      fprintf (stderr, "Couldn't parse modes string %s\n",
+-		       modes_string);
++	      fprintf (stderr, "Couldn't parse flags string %s\n",
++		       flags_string);
+ 	      exit (1);
+ 	    }
+ 	    if (*str == ',')
+ 	      str++;
+ 	  } while (*str != 0);
+-
+-	  insertExpandedMnemonic (opcode, mnemonic, format, min_cpu, mode_bits);
+-	}
+-      else
+-	{
+-	  fprintf (stderr, "Couldn't scan line %s\n", currentLine);
+-	  exit (1);
+ 	}
++      insertExpandedMnemonic (opcode, mnemonic, format, min_cpu, mode_bits, flag_bits);
+     }
+ 
+   dumpTable ();
+diff -rup binutils-2.25.1.orig/opcodes/s390-opc.c binutils-2.25.1/opcodes/s390-opc.c
+--- binutils-2.25.1.orig/opcodes/s390-opc.c	2016-08-08 14:06:28.334073924 +0100
++++ binutils-2.25.1/opcodes/s390-opc.c	2016-08-08 14:08:17.709777636 +0100
+@@ -44,197 +44,206 @@ const struct s390_operand s390_operands[
+ 
+ /* General purpose register operands.  */
+ 
+-#define R_8    1                  /* GPR starting at position 8 */
++#define R_8         1             /* GPR starting at position 8 */
+   { 4, 8, S390_OPERAND_GPR },
+-#define R_12   2                  /* GPR starting at position 12 */
++#define R_12        2             /* GPR starting at position 12 */
+   { 4, 12, S390_OPERAND_GPR },
+-#define RO_12  3                 /* optional GPR starting at position 12 */
+-  { 4, 12, S390_OPERAND_GPR | S390_OPERAND_OPTIONAL },
+-#define R_16   4                  /* GPR starting at position 16 */
++#define R_16        3             /* GPR starting at position 16 */
+   { 4, 16, S390_OPERAND_GPR },
+-#define R_20   5                  /* GPR starting at position 20 */
++#define R_20        4             /* GPR starting at position 20 */
+   { 4, 20, S390_OPERAND_GPR },
+-#define R_24   6                  /* GPR starting at position 24 */
++#define R_24        5             /* GPR starting at position 24 */
+   { 4, 24, S390_OPERAND_GPR },
+-#define R_28   7                  /* GPR starting at position 28 */
++#define R_28        6             /* GPR starting at position 28 */
+   { 4, 28, S390_OPERAND_GPR },
+-#define RO_28  8                  /* optional GPR starting at position 28 */
+-  { 4, 28, (S390_OPERAND_GPR | S390_OPERAND_OPTIONAL) },
+-#define R_32   9                  /* GPR starting at position 32 */
++#define R_32        7             /* GPR starting at position 32 */
+   { 4, 32, S390_OPERAND_GPR },
+ 
+ /* General purpose register pair operands.  */
+ 
+-#define RE_8    10                  /* GPR starting at position 8 */
++#define RE_8        8             /* GPR starting at position 8 */
+   { 4, 8, S390_OPERAND_GPR | S390_OPERAND_REG_PAIR },
+-#define RE_12   11                  /* GPR starting at position 12 */
++#define RE_12       9             /* GPR starting at position 12 */
+   { 4, 12, S390_OPERAND_GPR | S390_OPERAND_REG_PAIR },
+-#define RE_16   12                  /* GPR starting at position 16 */
++#define RE_16       10            /* GPR starting at position 16 */
+   { 4, 16, S390_OPERAND_GPR | S390_OPERAND_REG_PAIR },
+-#define RE_20   13                  /* GPR starting at position 20 */
++#define RE_20       11            /* GPR starting at position 20 */
+   { 4, 20, S390_OPERAND_GPR | S390_OPERAND_REG_PAIR },
+-#define RE_24   14                  /* GPR starting at position 24 */
++#define RE_24       12            /* GPR starting at position 24 */
+   { 4, 24, S390_OPERAND_GPR | S390_OPERAND_REG_PAIR },
+-#define RE_28   15                  /* GPR starting at position 28 */
++#define RE_28       13            /* GPR starting at position 28 */
+   { 4, 28, S390_OPERAND_GPR | S390_OPERAND_REG_PAIR },
+-#define RE_32   16                  /* GPR starting at position 32 */
++#define RE_32       14            /* GPR starting at position 32 */
+   { 4, 32, S390_OPERAND_GPR | S390_OPERAND_REG_PAIR },
+ 
+-
+ /* Floating point register operands.  */
+ 
+-#define F_8    17                 /* FPR starting at position 8 */
++#define F_8         15            /* FPR starting at position 8 */
+   { 4, 8, S390_OPERAND_FPR },
+-#define F_12   18                 /* FPR starting at position 12 */
++#define F_12        16            /* FPR starting at position 12 */
+   { 4, 12, S390_OPERAND_FPR },
+-#define F_16   19                 /* FPR starting at position 16 */
+-  { 4, 16, S390_OPERAND_FPR },
+-#define F_20   20                 /* FPR starting at position 16 */
++#define F_16        17            /* FPR starting at position 16 */
+   { 4, 16, S390_OPERAND_FPR },
+-#define F_24   21                 /* FPR starting at position 24 */
++#define F_24        18            /* FPR starting at position 24 */
+   { 4, 24, S390_OPERAND_FPR },
+-#define F_28   22                 /* FPR starting at position 28 */
++#define F_28        19            /* FPR starting at position 28 */
+   { 4, 28, S390_OPERAND_FPR },
+-#define F_32   23                 /* FPR starting at position 32 */
++#define F_32        20            /* FPR starting at position 32 */
+   { 4, 32, S390_OPERAND_FPR },
+ 
+ /* Floating point register pair operands.  */
+ 
+-#define FE_8    24                 /* FPR starting at position 8 */
++#define FE_8        21            /* FPR starting at position 8 */
+   { 4, 8, S390_OPERAND_FPR | S390_OPERAND_REG_PAIR },
+-#define FE_12   25                 /* FPR starting at position 12 */
++#define FE_12       22            /* FPR starting at position 12 */
+   { 4, 12, S390_OPERAND_FPR | S390_OPERAND_REG_PAIR },
+-#define FE_16   26                 /* FPR starting at position 16 */
+-  { 4, 16, S390_OPERAND_FPR | S390_OPERAND_REG_PAIR },
+-#define FE_20   27                 /* FPR starting at position 16 */
++#define FE_16       23            /* FPR starting at position 16 */
+   { 4, 16, S390_OPERAND_FPR | S390_OPERAND_REG_PAIR },
+-#define FE_24   28                 /* FPR starting at position 24 */
++#define FE_24       24            /* FPR starting at position 24 */
+   { 4, 24, S390_OPERAND_FPR | S390_OPERAND_REG_PAIR },
+-#define FE_28   29                 /* FPR starting at position 28 */
++#define FE_28       25            /* FPR starting at position 28 */
+   { 4, 28, S390_OPERAND_FPR | S390_OPERAND_REG_PAIR },
+-#define FE_32   30                 /* FPR starting at position 32 */
++#define FE_32       26            /* FPR starting at position 32 */
+   { 4, 32, S390_OPERAND_FPR | S390_OPERAND_REG_PAIR },
+ 
++/* Vector register operands.  */
++
++/* For each of these operands and additional bit in the RXB operand is
++   needed.  */
++
++#define V_8         27            /* Vector reg. starting at position 8 */
++  { 4, 8, S390_OPERAND_VR },
++#define V_12        28            /* Vector reg. starting at position 12 */
++  { 4, 12, S390_OPERAND_VR },
++#define V_CP16_12   29            /* Vector reg. starting at position 12 */
++  { 4, 12, S390_OPERAND_VR | S390_OPERAND_CP16 }, /* with a copy at pos 16 */
++#define V_16        30            /* Vector reg. starting at position 16 */
++  { 4, 16, S390_OPERAND_VR },
++#define V_32        31            /* Vector reg. starting at position 32 */
++  { 4, 32, S390_OPERAND_VR },
+ 
+ /* Access register operands.  */
+ 
+-#define A_8    31                 /* Access reg. starting at position 8 */
++#define A_8         32            /* Access reg. starting at position 8 */
+   { 4, 8, S390_OPERAND_AR },
+-#define A_12   32                 /* Access reg. starting at position 12 */
++#define A_12        33            /* Access reg. starting at position 12 */
+   { 4, 12, S390_OPERAND_AR },
+-#define A_24   33                 /* Access reg. starting at position 24 */
++#define A_24        34            /* Access reg. starting at position 24 */
+   { 4, 24, S390_OPERAND_AR },
+-#define A_28   34                 /* Access reg. starting at position 28 */
++#define A_28        35            /* Access reg. starting at position 28 */
+   { 4, 28, S390_OPERAND_AR },
+ 
+ /* Control register operands.  */
+ 
+-#define C_8    35                 /* Control reg. starting at position 8 */
++#define C_8         36            /* Control reg. starting at position 8 */
+   { 4, 8, S390_OPERAND_CR },
+-#define C_12   36                 /* Control reg. starting at position 12 */
++#define C_12        37            /* Control reg. starting at position 12 */
+   { 4, 12, S390_OPERAND_CR },
+ 
+ /* Base register operands.  */
+ 
+-#define B_16   37                 /* Base register starting at position 16 */
++#define B_16        38            /* Base register starting at position 16 */
+   { 4, 16, S390_OPERAND_BASE | S390_OPERAND_GPR },
+-#define B_32   38                 /* Base register starting at position 32 */
++#define B_32        39            /* Base register starting at position 32 */
+   { 4, 32, S390_OPERAND_BASE | S390_OPERAND_GPR },
+ 
+-#define X_12   39                 /* Index register starting at position 12 */
++#define X_12        40            /* Index register starting at position 12 */
+   { 4, 12, S390_OPERAND_INDEX | S390_OPERAND_GPR },
+ 
++#define VX_12       41     /* Vector index register starting at position 12 */
++  { 4, 12, S390_OPERAND_INDEX | S390_OPERAND_VR },
++
+ /* Address displacement operands.  */
+ 
+-#define D_20   40                 /* Displacement starting at position 20 */
++#define D_20        42            /* Displacement starting at position 20 */
+   { 12, 20, S390_OPERAND_DISP },
+-#define DO_20  41                 /* optional Displ. starting at position 20 */
+-  { 12, 20, S390_OPERAND_DISP | S390_OPERAND_OPTIONAL },
+-#define D_36   42                 /* Displacement starting at position 36 */
++#define D_36        43            /* Displacement starting at position 36 */
+   { 12, 36, S390_OPERAND_DISP },
+-#define D20_20 43		  /* 20 bit displacement starting at 20 */
++#define D20_20      44		  /* 20 bit displacement starting at 20 */
+   { 20, 20, S390_OPERAND_DISP | S390_OPERAND_SIGNED },
+ 
+ /* Length operands.  */
+ 
+-#define L4_8   44                 /* 4 bit length starting at position 8 */
++#define L4_8        45            /* 4 bit length starting at position 8 */
+   { 4, 8, S390_OPERAND_LENGTH },
+-#define L4_12  45                 /* 4 bit length starting at position 12 */
++#define L4_12       46            /* 4 bit length starting at position 12 */
+   { 4, 12, S390_OPERAND_LENGTH },
+-#define L8_8   46                 /* 8 bit length starting at position 8 */
++#define L8_8        47            /* 8 bit length starting at position 8 */
+   { 8, 8, S390_OPERAND_LENGTH },
+ 
+ /* Signed immediate operands.  */
+ 
+-#define I8_8   47		  /* 8 bit signed value starting at 8 */
++#define I8_8        48		  /* 8 bit signed value starting at 8 */
+   { 8, 8, S390_OPERAND_SIGNED },
+-#define I8_32  48		  /* 8 bit signed value starting at 32 */
++#define I8_32       49		  /* 8 bit signed value starting at 32 */
+   { 8, 32, S390_OPERAND_SIGNED },
+-#define I12_12 49		  /* 12 bit signed value starting at 12 */
++#define I12_12      50		  /* 12 bit signed value starting at 12 */
+   { 12, 12, S390_OPERAND_SIGNED },
+-#define I16_16 50                 /* 16 bit signed value starting at 16 */
++#define I16_16      51            /* 16 bit signed value starting at 16 */
+   { 16, 16, S390_OPERAND_SIGNED },
+-#define I16_32 51                 /* 16 bit signed value starting at 32 */
++#define I16_32      52            /* 16 bit signed value starting at 32 */
+   { 16, 32, S390_OPERAND_SIGNED },
+-#define I24_24 52		  /* 24 bit signed value starting at 24 */
++#define I24_24      53		  /* 24 bit signed value starting at 24 */
+   { 24, 24, S390_OPERAND_SIGNED },
+-#define I32_16 53		  /* 32 bit signed value starting at 16 */
++#define I32_16      54		  /* 32 bit signed value starting at 16 */
+   { 32, 16, S390_OPERAND_SIGNED },
+ 
+ /* Unsigned immediate operands.  */
+ 
+-#define U4_8   54                 /* 4 bit unsigned value starting at 8 */
++#define U4_8        55            /* 4 bit unsigned value starting at 8 */
+   { 4, 8, 0 },
+-#define U4_12  55                 /* 4 bit unsigned value starting at 12 */
++#define U4_12       56            /* 4 bit unsigned value starting at 12 */
+   { 4, 12, 0 },
+-#define U4_16  56                 /* 4 bit unsigned value starting at 16 */
++#define U4_16       57            /* 4 bit unsigned value starting at 16 */
+   { 4, 16, 0 },
+-#define U4_20  57                 /* 4 bit unsigned value starting at 20 */
++#define U4_20       58            /* 4 bit unsigned value starting at 20 */
+   { 4, 20, 0 },
+-#define U4_24  58                 /* 4 bit unsigned value starting at 24 */
++#define U4_24       59            /* 4 bit unsigned value starting at 24 */
+   { 4, 24, 0 },
+-#define U4_28  59                 /* 4 bit unsigned value starting at 28 */
++#define U4_OR1_24   60            /* 4 bit unsigned value ORed with 1 */
++  { 4, 24, S390_OPERAND_OR1 },	  /* starting at 24 */
++#define U4_OR2_24   61            /* 4 bit unsigned value ORed with 2 */
++  { 4, 24, S390_OPERAND_OR2 },    /* starting at 24 */
++#define U4_OR3_24   62            /* 4 bit unsigned value ORed with 3 */
++  { 4, 24, S390_OPERAND_OR1 | S390_OPERAND_OR2 }, /* starting at 24 */
++#define U4_28       63            /* 4 bit unsigned value starting at 28 */
+   { 4, 28, 0 },
+-#define U4_32  60                 /* 4 bit unsigned value starting at 32 */
++#define U4_OR8_28   64            /* 4 bit unsigned value ORed with 8 */
++  { 4, 28, S390_OPERAND_OR8 },    /* starting at 28 */
++#define U4_32       65            /* 4 bit unsigned value starting at 32 */
+   { 4, 32, 0 },
+-#define U4_36  61                 /* 4 bit unsigned value starting at 36 */
++#define U4_36       66            /* 4 bit unsigned value starting at 36 */
+   { 4, 36, 0 },
+-#define U8_8   62                 /* 8 bit unsigned value starting at 8 */
++#define U8_8        67            /* 8 bit unsigned value starting at 8 */
+   { 8, 8, 0 },
+-#define U8_16  63                 /* 8 bit unsigned value starting at 16 */
++#define U8_16       68            /* 8 bit unsigned value starting at 16 */
+   { 8, 16, 0 },
+-#define U8_24  64                 /* 8 bit unsigned value starting at 24 */
++#define U8_24       69            /* 8 bit unsigned value starting at 24 */
+   { 8, 24, 0 },
+-#define U8_32  65                 /* 8 bit unsigned value starting at 32 */
++#define U8_32       70            /* 8 bit unsigned value starting at 32 */
+   { 8, 32, 0 },
+-#define U16_16 66                 /* 16 bit unsigned value starting at 16 */
++#define U12_16      71            /* 12 bit unsigned value starting at 16 */
++  { 12, 16, 0 },
++#define U16_16      72            /* 16 bit unsigned value starting at 16 */
+   { 16, 16, 0 },
+-#define U16_32 67		  /* 16 bit unsigned value starting at 32 */
++#define U16_32      73		  /* 16 bit unsigned value starting at 32 */
+   { 16, 32, 0 },
+-#define U32_16 68		  /* 32 bit unsigned value starting at 16 */
++#define U32_16      74		  /* 32 bit unsigned value starting at 16 */
+   { 32, 16, 0 },
+ 
+ /* PC-relative address operands.  */
+ 
+-#define J12_12 69                 /* 12 bit PC relative offset at 12 */
++#define J12_12      75            /* 12 bit PC relative offset at 12 */
+   { 12, 12, S390_OPERAND_PCREL },
+-#define J16_16 70                 /* 16 bit PC relative offset at 16 */
++#define J16_16      76            /* 16 bit PC relative offset at 16 */
+   { 16, 16, S390_OPERAND_PCREL },
+-#define J16_32 71                 /* 16 bit PC relative offset at 32 */
++#define J16_32      77            /* 16 bit PC relative offset at 32 */
+   { 16, 32, S390_OPERAND_PCREL },
+-#define J24_24 72                 /* 24 bit PC relative offset at 24 */
++#define J24_24      78            /* 24 bit PC relative offset at 24 */
+   { 24, 24, S390_OPERAND_PCREL },
+-#define J32_16 73                 /* 32 bit PC relative offset at 16 */
++#define J32_16      79            /* 32 bit PC relative offset at 16 */
+   { 32, 16, S390_OPERAND_PCREL },
+ 
+-
+-/* Conditional mask operands.  */
+-
+-#define M_16OPT   74              /* 4 bit optional mask starting at 16 */
+-  { 4, 16, S390_OPERAND_OPTIONAL },
+-#define M_20OPT   75              /* 4 bit optional mask starting at 20 */
+-  { 4, 20, S390_OPERAND_OPTIONAL },
+-
+ };
+ 
+ 
+@@ -243,8 +252,10 @@ const struct s390_operand s390_operands[
+ /* 8/16/48 bit opcodes.  */
+ #define OP8(x) { x, 0x00, 0x00, 0x00, 0x00, 0x00 }
+ #define OP16(x) { x >> 8, x & 255, 0x00, 0x00, 0x00, 0x00 }
++#define OP32(x) { x >> 24, (x >> 16) & 255, (x >> 8) & 255, x & 255,	\
++		  0x00, 0x00 }
+ #define OP48(x) { x >> 40, (x >> 32) & 255, (x >> 24) & 255, \
+-                  (x >> 16) & 255, (x >> 8) & 255, x & 255}
++		  (x >> 16) & 255, (x >> 8) & 255, x & 255}
+ 
+ /* The new format of the INSTR_x_y and MASK_x_y defines is based
+    on the following rules:
+@@ -263,7 +274,6 @@ const struct s390_operand s390_operands[
+       l - length, 4 or 8 bit
+       p - pc relative
+       r - general purpose register
+-      ro - optional register operand
+       re - gpr extended operand, a valid general purpose register pair
+       u - unsigned integer, 4, 8, 16 or 32 bit
+       m - mode field, 4 bit
+@@ -274,7 +284,7 @@ const struct s390_operand s390_operands[
+       quite close.
+ 
+       For example the instruction "mvo" is defined in the PoP as follows:
+-      
++
+       MVO  D1(L1,B1),D2(L2,B2)   [SS]
+ 
+       --------------------------------------
+@@ -284,358 +294,447 @@ const struct s390_operand s390_operands[
+ 
+       The instruction format is: INSTR_SS_LLRDRD / MASK_SS_LLRDRD.  */
+ 
+-#define INSTR_E          2, { 0,0,0,0,0,0 }                    /* e.g. pr    */
+-#define INSTR_IE_UU      4, { U4_24,U4_28,0,0,0,0 }            /* e.g. niai  */
+-#define INSTR_MII_UPP    6, { U4_8,J12_12,J24_24 }             /* e.g. bprp  */
+-#define INSTR_RIE_RRP    6, { R_8,R_12,J16_16,0,0,0 }          /* e.g. brxhg */
+-#define INSTR_RIE_RRPU   6, { R_8,R_12,U4_32,J16_16,0,0 }      /* e.g. crj   */
+-#define INSTR_RIE_RRP0   6, { R_8,R_12,J16_16,0,0,0 }          /* e.g. crjne */
+-#define INSTR_RIE_RRI0   6, { R_8,R_12,I16_16,0,0,0 }          /* e.g. ahik  */
+-#define INSTR_RIE_RUPI   6, { R_8,I8_32,U4_12,J16_16,0,0 }     /* e.g. cij   */
+-#define INSTR_RIE_R0PI   6, { R_8,I8_32,J16_16,0,0,0 }         /* e.g. cijne */
+-#define INSTR_RIE_RUPU   6, { R_8,U8_32,U4_12,J16_16,0,0 }     /* e.g. clij  */
+-#define INSTR_RIE_R0PU   6, { R_8,U8_32,J16_16,0,0,0 }         /* e.g. clijne */
+-#define INSTR_RIE_R0IU   6, { R_8,I16_16,U4_32,0,0,0 }         /* e.g. cit   */
+-#define INSTR_RIE_R0I0   6, { R_8,I16_16,0,0,0,0 }             /* e.g. citne */
+-#define INSTR_RIE_R0UU   6, { R_8,U16_16,U4_32,0,0,0 }         /* e.g. clfit */
+-#define INSTR_RIE_R0U0   6, { R_8,U16_16,0,0,0,0 }             /* e.g. clfitne */
+-#define INSTR_RIE_RRUUU  6, { R_8,R_12,U8_16,U8_24,U8_32,0 }   /* e.g. rnsbg */
+-#define INSTR_RIL_0P     6, { J32_16,0,0,0,0 }                 /* e.g. jg    */
+-#define INSTR_RIL_RP     6, { R_8,J32_16,0,0,0,0 }             /* e.g. brasl */
+-#define INSTR_RIL_UP     6, { U4_8,J32_16,0,0,0,0 }            /* e.g. brcl  */
+-#define INSTR_RIL_RI     6, { R_8,I32_16,0,0,0,0 }             /* e.g. afi   */
+-#define INSTR_RIL_RU     6, { R_8,U32_16,0,0,0,0 }             /* e.g. alfi  */
+-#define INSTR_RI_0P      4, { J16_16,0,0,0,0,0 }               /* e.g. j     */
+-#define INSTR_RI_RI      4, { R_8,I16_16,0,0,0,0 }             /* e.g. ahi   */
+-#define INSTR_RI_RP      4, { R_8,J16_16,0,0,0,0 }             /* e.g. brct  */
+-#define INSTR_RI_RU      4, { R_8,U16_16,0,0,0,0 }             /* e.g. tml   */
+-#define INSTR_RI_UP      4, { U4_8,J16_16,0,0,0,0 }            /* e.g. brc   */
+-#define INSTR_RIS_RURDI  6, { R_8,I8_32,U4_12,D_20,B_16,0 }    /* e.g. cib   */
+-#define INSTR_RIS_R0RDI  6, { R_8,I8_32,D_20,B_16,0,0 }        /* e.g. cibne */
+-#define INSTR_RIS_RURDU  6, { R_8,U8_32,U4_12,D_20,B_16,0 }    /* e.g. clib  */
+-#define INSTR_RIS_R0RDU  6, { R_8,U8_32,D_20,B_16,0,0 }        /* e.g. clibne*/
+-#define INSTR_RRE_00     4, { 0,0,0,0,0,0 }                    /* e.g. palb  */
+-#define INSTR_RRE_0R     4, { R_28,0,0,0,0,0 }                 /* e.g. tb    */
+-#define INSTR_RRE_AA     4, { A_24,A_28,0,0,0,0 }              /* e.g. cpya  */
+-#define INSTR_RRE_AR     4, { A_24,R_28,0,0,0,0 }              /* e.g. sar   */
+-#define INSTR_RRE_F0     4, { F_24,0,0,0,0,0 }                 /* e.g. sqer  */
+-#define INSTR_RRE_FE0    4, { FE_24,0,0,0,0,0 }                /* e.g. lzxr  */
+-#define INSTR_RRE_FF     4, { F_24,F_28,0,0,0,0 }              /* e.g. debr  */
+-#define INSTR_RRE_FEF    4, { FE_24,F_28,0,0,0,0 }             /* e.g. lxdbr */
+-#define INSTR_RRE_FFE    4, { F_24,FE_28,0,0,0,0 }             /* e.g. lexr  */
+-#define INSTR_RRE_FEFE   4, { FE_24,FE_28,0,0,0,0 }            /* e.g. dxr   */
+-#define INSTR_RRE_R0     4, { R_24,0,0,0,0,0 }                 /* e.g. ipm   */
+-#define INSTR_RRE_RA     4, { R_24,A_28,0,0,0,0 }              /* e.g. ear   */
+-#define INSTR_RRE_RF     4, { R_24,F_28,0,0,0,0 }              /* e.g. cefbr */
+-#define INSTR_RRE_RFE    4, { R_24,FE_28,0,0,0,0 }             /* e.g. csxtr */
+-#define INSTR_RRE_RR     4, { R_24,R_28,0,0,0,0 }              /* e.g. lura  */
+-#define INSTR_RRE_RER    4, { RE_24,R_28,0,0,0,0 }             /* e.g. tre   */
+-#define INSTR_RRE_RERE   4, { RE_24,RE_28,0,0,0,0 }            /* e.g. cuse  */
+-#define INSTR_RRE_FR     4, { F_24,R_28,0,0,0,0 }              /* e.g. ldgr  */
+-#define INSTR_RRE_FER    4, { FE_24,R_28,0,0,0,0 }             /* e.g. cxfbr */
+-/* Actually efpc and sfpc do not take an optional operand.
+-   This is just a workaround for existing code e.g. glibc.  */
+-#define INSTR_RRE_RR_OPT 4, { R_24,RO_28,0,0,0,0 }             /* efpc, sfpc */
+-#define INSTR_RRF_F0FF   4, { F_16,F_24,F_28,0,0,0 }           /* e.g. madbr */
+-#define INSTR_RRF_FE0FF  4, { F_16,F_24,F_28,0,0,0 }           /* e.g. myr */
+-#define INSTR_RRF_F0FF2  4, { F_24,F_16,F_28,0,0,0 }           /* e.g. cpsdr */
+-#define INSTR_RRF_F0FR   4, { F_24,F_16,R_28,0,0,0 }           /* e.g. iedtr */
+-#define INSTR_RRF_FE0FER 4, { FE_24,FE_16,R_28,0,0,0 }         /* e.g. iextr */
+-#define INSTR_RRF_FUFF   4, { F_24,F_16,F_28,U4_20,0,0 }       /* e.g. didbr */
+-#define INSTR_RRF_FEUFEFE 4, { FE_24,FE_16,FE_28,U4_20,0,0 }   /* e.g. qaxtr */
+-#define INSTR_RRF_FUFF2  4, { F_24,F_28,F_16,U4_20,0,0 }       /* e.g. adtra */
+-#define INSTR_RRF_FEUFEFE2 4, { FE_24,FE_28,FE_16,U4_20,0,0 }  /* e.g. axtra */
+-#define INSTR_RRF_RURR   4, { R_24,R_28,R_16,U4_20,0,0 }       /* e.g. .insn */
+-#define INSTR_RRF_RURR2  4, { R_24,R_16,R_28,U4_20,0,0 }       /* e.g. lptea */
+-#define INSTR_RRF_R0RR   4, { R_24,R_16,R_28,0,0,0 }           /* e.g. idte  */
+-#define INSTR_RRF_R0RR2  4, { R_24,R_28,R_16,0,0,0 }           /* e.g. ark   */
+-#define INSTR_RRF_RMRR   4, { R_24,R_16,R_28,M_20OPT,0,0 }     /* e.g. crdte */
+-#define INSTR_RRF_U0FF   4, { F_24,U4_16,F_28,0,0,0 }          /* e.g. fixr  */
+-#define INSTR_RRF_U0FEFE 4, { FE_24,U4_16,FE_28,0,0,0 }        /* e.g. fixbr */
+-#define INSTR_RRF_U0RF   4, { R_24,U4_16,F_28,0,0,0 }          /* e.g. cfebr */
+-#define INSTR_RRF_U0RFE  4, { R_24,U4_16,FE_28,0,0,0 }         /* e.g. cfxbr */
+-#define INSTR_RRF_UUFF   4, { F_24,U4_16,F_28,U4_20,0,0 }      /* e.g. fidtr */
+-#define INSTR_RRF_UUFFE  4, { F_24,U4_16,FE_28,U4_20,0,0 }     /* e.g. ldxtr */
+-#define INSTR_RRF_UUFEFE 4, { FE_24,U4_16,FE_28,U4_20,0,0 }    /* e.g. fixtr */
+-#define INSTR_RRF_0UFF   4, { F_24,F_28,U4_20,0,0,0 }          /* e.g. ldetr */
+-#define INSTR_RRF_0UFEF  4, { FE_24,F_28,U4_20,0,0,0 }         /* e.g. lxdtr */
+-#define INSTR_RRF_FFRU   4, { F_24,F_16,R_28,U4_20,0,0 }       /* e.g. rrdtr */
+-#define INSTR_RRF_FEFERU 4, { FE_24,FE_16,R_28,U4_20,0,0 }     /* e.g. rrxtr */
+-#define INSTR_RRF_M0RR   4, { R_24,R_28,M_16OPT,0,0,0 }        /* e.g. sske  */
+-#define INSTR_RRF_M0RER  4, { RE_24,R_28,M_16OPT,0,0,0 }       /* e.g. trte  */
+-#define INSTR_RRF_M0RERE 4, { RE_24,RE_28,M_16OPT,0,0,0 }      /* e.g. troo  */
+-#define INSTR_RRF_U0RR   4, { R_24,R_28,U4_16,0,0,0 }          /* e.g. clrt  */
+-#define INSTR_RRF_00RR   4, { R_24,R_28,0,0,0,0 }              /* e.g. clrtne */
+-#define INSTR_RRF_UUFR   4, { F_24,U4_16,R_28,U4_20,0,0 }      /* e.g. cdgtra */
+-#define INSTR_RRF_UUFER  4, { FE_24,U4_16,R_28,U4_20,0,0 }     /* e.g. cxfbra */
+-#define INSTR_RRF_UURF   4, { R_24,U4_16,F_28,U4_20,0,0 }      /* e.g. cgdtra */
+-#define INSTR_RRF_UURFE  4, { R_24,U4_16,FE_28,U4_20,0,0 }     /* e.g. cfxbra */
+-#define INSTR_RR_0R      2, { R_12, 0,0,0,0,0 }                /* e.g. br    */
+-#define INSTR_RR_0R_OPT  2, { RO_12, 0,0,0,0,0 }               /* e.g. nopr  */
+-#define INSTR_RR_FF      2, { F_8,F_12,0,0,0,0 }               /* e.g. adr   */
+-#define INSTR_RR_FEF     2, { FE_8,F_12,0,0,0,0 }              /* e.g. mxdr  */
+-#define INSTR_RR_FFE     2, { F_8,FE_12,0,0,0,0 }              /* e.g. ldxr  */
+-#define INSTR_RR_FEFE    2, { FE_8,FE_12,0,0,0,0 }             /* e.g. axr   */
+-#define INSTR_RR_R0      2, { R_8, 0,0,0,0,0 }                 /* e.g. spm   */
+-#define INSTR_RR_RR      2, { R_8,R_12,0,0,0,0 }               /* e.g. lr    */
+-#define INSTR_RR_RER     2, { RE_8,R_12,0,0,0,0 }              /* e.g. dr    */
+-#define INSTR_RR_U0      2, { U8_8, 0,0,0,0,0 }                /* e.g. svc   */
+-#define INSTR_RR_UR      2, { U4_8,R_12,0,0,0,0 }              /* e.g. bcr   */
+-#define INSTR_RRR_F0FF   4, { F_24,F_28,F_16,0,0,0 }           /* e.g. ddtr  */
+-#define INSTR_RRR_FE0FEFE 4, { FE_24,FE_28,FE_16,0,0,0 }       /* e.g. axtr  */
+-#define INSTR_RRS_RRRDU  6, { R_8,R_12,U4_32,D_20,B_16 }       /* e.g. crb   */
+-#define INSTR_RRS_RRRD0  6, { R_8,R_12,D_20,B_16,0 }           /* e.g. crbne */
+-#define INSTR_RSE_RRRD   6, { R_8,R_12,D_20,B_16,0,0 }         /* e.g. lmh   */
+-#define INSTR_RSE_RERERD 6, { RE_8,RE_12,D_20,B_16,0,0 }       /* e.g. mvclu */
+-#define INSTR_RSE_CCRD   6, { C_8,C_12,D_20,B_16,0,0 }         /* e.g. lmh   */
+-#define INSTR_RSE_RURD   6, { R_8,U4_12,D_20,B_16,0,0 }        /* e.g. icmh  */
+-#define INSTR_RSL_R0RD   6, { D_20,L4_8,B_16,0,0,0 }           /* e.g. tp    */
+-#define INSTR_RSL_LRDFU  6, { F_32,D_20,L8_8,B_16,U4_36,0 }    /* e.g. cdzt  */
+-#define INSTR_RSL_LRDFEU 6, { FE_32,D_20,L8_8,B_16,U4_36,0 }   /* e.g. cxzt  */
+-#define INSTR_RSI_RRP    4, { R_8,R_12,J16_16,0,0,0 }          /* e.g. brxh  */
+-#define INSTR_RSY_RRRD   6, { R_8,R_12,D20_20,B_16,0,0 }       /* e.g. stmy  */
+-#define INSTR_RSY_RERERD 6, { RE_8,RE_12,D20_20,B_16,0,0 }     /* e.g. cdsy  */
+-#define INSTR_RSY_RURD   6, { R_8,U4_12,D20_20,B_16,0,0 }      /* e.g. icmh  */
+-#define INSTR_RSY_RURD2  6, { R_8,D20_20,B_16,U4_12,0,0 }      /* e.g. loc   */
+-#define INSTR_RSY_R0RD   6, { R_8,D20_20,B_16,0,0,0 }          /* e.g. locgt */
+-#define INSTR_RSY_AARD   6, { A_8,A_12,D20_20,B_16,0,0 }       /* e.g. lamy  */
+-#define INSTR_RSY_CCRD   6, { C_8,C_12,D20_20,B_16,0,0 }       /* e.g. stctg */
+-#define INSTR_RS_AARD    4, { A_8,A_12,D_20,B_16,0,0 }         /* e.g. lam   */
+-#define INSTR_RS_CCRD    4, { C_8,C_12,D_20,B_16,0,0 }         /* e.g. lctl  */
+-#define INSTR_RS_R0RD    4, { R_8,D_20,B_16,0,0,0 }            /* e.g. sll   */
+-#define INSTR_RS_RE0RD   4, { RE_8,D_20,B_16,0,0,0 }           /* e.g. slda  */
+-#define INSTR_RS_RRRD    4, { R_8,R_12,D_20,B_16,0,0 }         /* e.g. cs    */
+-#define INSTR_RS_RERERD  4, { RE_8,RE_12,D_20,B_16,0,0 }       /* e.g. cds   */
+-#define INSTR_RS_RURD    4, { R_8,U4_12,D_20,B_16,0,0 }        /* e.g. icm   */
+-#define INSTR_RXE_FRRD   6, { F_8,D_20,X_12,B_16,0,0 }         /* e.g. axbr  */
+-#define INSTR_RXE_FERRD  6, { FE_8,D_20,X_12,B_16,0,0 }        /* e.g. lxdb  */
+-#define INSTR_RXE_RRRD   6, { R_8,D_20,X_12,B_16,0,0 }         /* e.g. lg    */
+-#define INSTR_RXE_RERRD  6, { RE_8,D_20,X_12,B_16,0,0 }        /* e.g. dsg   */
+-#define INSTR_RXF_FRRDF  6, { F_32,F_8,D_20,X_12,B_16,0 }      /* e.g. madb  */
+-#define INSTR_RXF_FRRDFE 6, { FE_32,F_8,D_20,X_12,B_16,0 }     /* e.g. my    */
+-#define INSTR_RXF_FERRDFE 6, { FE_32,FE_8,D_20,X_12,B_16,0 }   /* e.g. slxt  */
+-#define INSTR_RXF_RRRDR  6, { R_32,R_8,D_20,X_12,B_16,0 }      /* e.g. .insn */
+-#define INSTR_RXY_RRRD   6, { R_8,D20_20,X_12,B_16,0,0 }       /* e.g. ly    */
+-#define INSTR_RXY_RERRD  6, { RE_8,D20_20,X_12,B_16,0,0 }      /* e.g. dsg   */
+-#define INSTR_RXY_FRRD   6, { F_8,D20_20,X_12,B_16,0,0 }       /* e.g. ley   */
+-#define INSTR_RXY_URRD   6, { U4_8,D20_20,X_12,B_16,0,0 }      /* e.g. pfd   */
+-#define INSTR_RX_0RRD    4, { D_20,X_12,B_16,0,0,0 }           /* e.g. be    */
+-#define INSTR_RX_0RRD_OPT 4, { DO_20,X_12,B_16,0,0,0 }         /* e.g. nop   */
+-#define INSTR_RX_FRRD    4, { F_8,D_20,X_12,B_16,0,0 }         /* e.g. ae    */
+-#define INSTR_RX_FERRD   4, { FE_8,D_20,X_12,B_16,0,0 }        /* e.g. mxd   */
+-#define INSTR_RX_RRRD    4, { R_8,D_20,X_12,B_16,0,0 }         /* e.g. l     */
+-#define INSTR_RX_RERRD   4, { RE_8,D_20,X_12,B_16,0,0 }        /* e.g. d     */
+-#define INSTR_RX_URRD    4, { U4_8,D_20,X_12,B_16,0,0 }        /* e.g. bc    */
+-#define INSTR_SI_URD     4, { D_20,B_16,U8_8,0,0,0 }           /* e.g. cli   */
+-#define INSTR_SIY_URD    6, { D20_20,B_16,U8_8,0,0,0 }         /* e.g. tmy   */
+-#define INSTR_SIY_IRD    6, { D20_20,B_16,I8_8,0,0,0 }         /* e.g. asi   */
+-#define INSTR_SIL_RDI    6, { D_20,B_16,I16_32,0,0,0 }         /* e.g. chhsi */
+-#define INSTR_SIL_RDU    6, { D_20,B_16,U16_32,0,0,0 }         /* e.g. clfhsi */
+-#define INSTR_SMI_U0RDP  6, { U4_8,J16_32,D_20,B_16,0,0 }      /* e.g. bpp */
+-#define INSTR_SSE_RDRD   6, { D_20,B_16,D_36,B_32,0,0 }        /* e.g. mvsdk */
+-#define INSTR_SS_L0RDRD  6, { D_20,L8_8,B_16,D_36,B_32,0     } /* e.g. mvc   */
+-#define INSTR_SS_L2RDRD  6, { D_20,B_16,D_36,L8_8,B_32,0     } /* e.g. pka   */
+-#define INSTR_SS_LIRDRD  6, { D_20,L4_8,B_16,D_36,B_32,U4_12 } /* e.g. srp   */
+-#define INSTR_SS_LLRDRD  6, { D_20,L4_8,B_16,D_36,L4_12,B_32 } /* e.g. pack  */
+-#define INSTR_SS_RRRDRD  6, { D_20,R_8,B_16,D_36,B_32,R_12 }   /* e.g. mvck  */
+-#define INSTR_SS_RRRDRD2 6, { R_8,D_20,B_16,R_12,D_36,B_32 }   /* e.g. plo   */
+-#define INSTR_SS_RRRDRD3 6, { R_8,R_12,D_20,B_16,D_36,B_32 }   /* e.g. lmd   */
+-#define INSTR_SSF_RRDRD  6, { D_20,B_16,D_36,B_32,R_8,0 }      /* e.g. mvcos */
+-#define INSTR_SSF_RRDRD2 6, { R_8,D_20,B_16,D_36,B_32,0 }
+-#define INSTR_SSF_RERDRD2 6, { RE_8,D_20,B_16,D_36,B_32,0 }    /* e.g. lpd   */
+-#define INSTR_S_00       4, { 0,0,0,0,0,0 }                    /* e.g. hsch  */
+-#define INSTR_S_RD       4, { D_20,B_16,0,0,0,0 }              /* e.g. lpsw  */
+-
+-#define MASK_E           { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_IE_UU       { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
+-#define MASK_MII_UPP     { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RIE_RRP     { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RIE_RRPU    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RIE_RRP0    { 0xff, 0x00, 0x00, 0x00, 0xf0, 0xff }
+-#define MASK_RIE_RRI0    { 0xff, 0x00, 0x00, 0x00, 0xf0, 0xff }
+-#define MASK_RIE_RUPI    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RIE_R0PI    { 0xff, 0x00, 0x00, 0x00, 0xf0, 0xff }
+-#define MASK_RIE_RUPU    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RIE_R0PU    { 0xff, 0x00, 0x00, 0x00, 0xf0, 0xff }
+-#define MASK_RIE_R0IU    { 0xff, 0x0f, 0x00, 0x00, 0x0f, 0xff }
+-#define MASK_RIE_R0I0    { 0xff, 0x0f, 0x00, 0x00, 0xff, 0xff }
+-#define MASK_RIE_R0UU    { 0xff, 0x0f, 0x00, 0x00, 0x0f, 0xff }
+-#define MASK_RIE_R0U0    { 0xff, 0x0f, 0x00, 0x00, 0xff, 0xff }
+-#define MASK_RIE_RRUUU   { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RIL_0P      { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RIL_RP      { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RIL_UP      { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RIL_RI      { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RIL_RU      { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RI_0P       { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RI_RI       { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RI_RP       { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RI_RU       { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RI_UP       { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RIS_RURDI   { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RIS_R0RDI   { 0xff, 0x0f, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RIS_RURDU   { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RIS_R0RDU   { 0xff, 0x0f, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RRE_00      { 0xff, 0xff, 0xff, 0xff, 0x00, 0x00 }
+-#define MASK_RRE_0R      { 0xff, 0xff, 0xff, 0xf0, 0x00, 0x00 }
+-#define MASK_RRE_AA      { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
+-#define MASK_RRE_AR      { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
+-#define MASK_RRE_F0      { 0xff, 0xff, 0xff, 0x0f, 0x00, 0x00 }
+-#define MASK_RRE_FE0     { 0xff, 0xff, 0xff, 0x0f, 0x00, 0x00 }
+-#define MASK_RRE_FF      { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
+-#define MASK_RRE_FEF     { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
+-#define MASK_RRE_FFE     { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
+-#define MASK_RRE_FEFE    { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
+-#define MASK_RRE_R0      { 0xff, 0xff, 0xff, 0x0f, 0x00, 0x00 }
+-#define MASK_RRE_RA      { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
+-#define MASK_RRE_RF      { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
+-#define MASK_RRE_RFE     { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
+-#define MASK_RRE_RR      { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
+-#define MASK_RRE_RER     { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
+-#define MASK_RRE_RERE    { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
+-#define MASK_RRE_FR      { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
+-#define MASK_RRE_FER     { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
+-#define MASK_RRE_RR_OPT  { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_F0FF    { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_FE0FF   { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_F0FF2   { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_F0FR    { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_FE0FER  { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_FUFF    { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_FEUFEFE { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_FUFF2   { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define INSTR_E            2, { 0,0,0,0,0,0 }                    /* e.g. pr    */
++#define INSTR_IE_UU        4, { U4_24,U4_28,0,0,0,0 }            /* e.g. niai  */
++#define INSTR_MII_UPP      6, { U4_8,J12_12,J24_24 }             /* e.g. bprp  */
++#define INSTR_RIE_RRP      6, { R_8,R_12,J16_16,0,0,0 }          /* e.g. brxhg */
++#define INSTR_RIE_RRPU     6, { R_8,R_12,U4_32,J16_16,0,0 }      /* e.g. crj   */
++#define INSTR_RIE_RRP0     6, { R_8,R_12,J16_16,0,0,0 }          /* e.g. cgrjne */
++#define INSTR_RIE_RRI0     6, { R_8,R_12,I16_16,0,0,0 }          /* e.g. ahik  */
++#define INSTR_RIE_RUPI     6, { R_8,I8_32,U4_12,J16_16,0,0 }     /* e.g. cij   */
++#define INSTR_RIE_R0PI     6, { R_8,I8_32,J16_16,0,0,0 }         /* e.g. cijne */
++#define INSTR_RIE_RUPU     6, { R_8,U8_32,U4_12,J16_16,0,0 }     /* e.g. clij  */
++#define INSTR_RIE_R0PU     6, { R_8,U8_32,J16_16,0,0,0 }         /* e.g. clijne */
++#define INSTR_RIE_R0IU     6, { R_8,I16_16,U4_32,0,0,0 }         /* e.g. cit   */
++#define INSTR_RIE_R0I0     6, { R_8,I16_16,0,0,0,0 }             /* e.g. citne */
++#define INSTR_RIE_R0UU     6, { R_8,U16_16,U4_32,0,0,0 }         /* e.g. clfit */
++#define INSTR_RIE_R0U0     6, { R_8,U16_16,0,0,0,0 }             /* e.g. clfitne */
++#define INSTR_RIE_RUI0     6, { R_8,I16_16,U4_12,0,0,0 }         /* e.g. lochi */
++#define INSTR_RIE_RRUUU    6, { R_8,R_12,U8_16,U8_24,U8_32,0 }   /* e.g. rnsbg */
++#define INSTR_RIL_0P       6, { J32_16,0,0,0,0 }                 /* e.g. jg    */
++#define INSTR_RIL_RP       6, { R_8,J32_16,0,0,0,0 }             /* e.g. brasl */
++#define INSTR_RIL_UP       6, { U4_8,J32_16,0,0,0,0 }            /* e.g. brcl  */
++#define INSTR_RIL_RI       6, { R_8,I32_16,0,0,0,0 }             /* e.g. afi   */
++#define INSTR_RIL_RU       6, { R_8,U32_16,0,0,0,0 }             /* e.g. alfi  */
++#define INSTR_RI_0P        4, { J16_16,0,0,0,0,0 }               /* e.g. j     */
++#define INSTR_RI_RI        4, { R_8,I16_16,0,0,0,0 }             /* e.g. ahi   */
++#define INSTR_RI_RP        4, { R_8,J16_16,0,0,0,0 }             /* e.g. brct  */
++#define INSTR_RI_RU        4, { R_8,U16_16,0,0,0,0 }             /* e.g. tml   */
++#define INSTR_RI_UP        4, { U4_8,J16_16,0,0,0,0 }            /* e.g. brc   */
++#define INSTR_RIS_RURDI    6, { R_8,I8_32,U4_12,D_20,B_16,0 }    /* e.g. cib   */
++#define INSTR_RIS_R0RDI    6, { R_8,I8_32,D_20,B_16,0,0 }        /* e.g. cibne */
++#define INSTR_RIS_RURDU    6, { R_8,U8_32,U4_12,D_20,B_16,0 }    /* e.g. clib  */
++#define INSTR_RIS_R0RDU    6, { R_8,U8_32,D_20,B_16,0,0 }        /* e.g. clibne*/
++#define INSTR_RRE_00       4, { 0,0,0,0,0,0 }                    /* e.g. palb  */
++#define INSTR_RRE_0R       4, { R_28,0,0,0,0,0 }                 /* e.g. tb    */
++#define INSTR_RRE_AA       4, { A_24,A_28,0,0,0,0 }              /* e.g. cpya  */
++#define INSTR_RRE_AR       4, { A_24,R_28,0,0,0,0 }              /* e.g. sar   */
++#define INSTR_RRE_F0       4, { F_24,0,0,0,0,0 }                 /* e.g. lzer  */
++#define INSTR_RRE_FE0      4, { FE_24,0,0,0,0,0 }                /* e.g. lzxr  */
++#define INSTR_RRE_FF       4, { F_24,F_28,0,0,0,0 }              /* e.g. debr  */
++#define INSTR_RRE_FEF      4, { FE_24,F_28,0,0,0,0 }             /* e.g. lxdbr */
++#define INSTR_RRE_FFE      4, { F_24,FE_28,0,0,0,0 }             /* e.g. lexr  */
++#define INSTR_RRE_FEFE     4, { FE_24,FE_28,0,0,0,0 }            /* e.g. dxr   */
++#define INSTR_RRE_R0       4, { R_24,0,0,0,0,0 }                 /* e.g. ipm   */
++#define INSTR_RRE_RA       4, { R_24,A_28,0,0,0,0 }              /* e.g. ear   */
++#define INSTR_RRE_RF       4, { R_24,F_28,0,0,0,0 }              /* e.g. lgdr  */
++#define INSTR_RRE_RFE      4, { R_24,FE_28,0,0,0,0 }             /* e.g. csxtr */
++#define INSTR_RRE_RR       4, { R_24,R_28,0,0,0,0 }              /* e.g. lura  */
++#define INSTR_RRE_RER      4, { RE_24,R_28,0,0,0,0 }             /* e.g. tre   */
++#define INSTR_RRE_RERE     4, { RE_24,RE_28,0,0,0,0 }            /* e.g. cuse  */
++#define INSTR_RRE_FR       4, { F_24,R_28,0,0,0,0 }              /* e.g. ldgr  */
++#define INSTR_RRE_FER      4, { FE_24,R_28,0,0,0,0 }             /* e.g. cxfbr */
++#define INSTR_RRF_F0FF     4, { F_16,F_24,F_28,0,0,0 }           /* e.g. madbr */
++#define INSTR_RRF_FE0FF    4, { F_16,F_24,F_28,0,0,0 }           /* e.g. myr   */
++#define INSTR_RRF_F0FF2    4, { F_24,F_16,F_28,0,0,0 }           /* e.g. cpsdr */
++#define INSTR_RRF_F0FR     4, { F_24,F_16,R_28,0,0,0 }           /* e.g. iedtr */
++#define INSTR_RRF_FE0FER   4, { FE_24,FE_16,R_28,0,0,0 }         /* e.g. iextr */
++#define INSTR_RRF_FUFF     4, { F_24,F_16,F_28,U4_20,0,0 }       /* e.g. didbr */
++#define INSTR_RRF_FEUFEFE  4, { FE_24,FE_16,FE_28,U4_20,0,0 }    /* e.g. qaxtr */
++#define INSTR_RRF_FUFF2    4, { F_24,F_28,F_16,U4_20,0,0 }       /* e.g. adtra */
++#define INSTR_RRF_FEUFEFE2 4, { FE_24,FE_28,FE_16,U4_20,0,0 }    /* e.g. axtra */
++#define INSTR_RRF_RURR     4, { R_24,R_28,R_16,U4_20,0,0 }       /* e.g. .insn */
++#define INSTR_RRF_RURR2    4, { R_24,R_16,R_28,U4_20,0,0 }       /* e.g. lptea */
++#define INSTR_RRF_R0RR     4, { R_24,R_16,R_28,0,0,0 }           /* e.g. idte  */
++#define INSTR_RRF_R0RR2    4, { R_24,R_28,R_16,0,0,0 }           /* e.g. ark   */
++#define INSTR_RRF_U0FF     4, { F_24,U4_16,F_28,0,0,0 }          /* e.g. fidbr */
++#define INSTR_RRF_U0FEFE   4, { FE_24,U4_16,FE_28,0,0,0 }        /* e.g. fixbr */
++#define INSTR_RRF_U0RF     4, { R_24,U4_16,F_28,0,0,0 }          /* e.g. cfebr */
++#define INSTR_RRF_U0RFE    4, { R_24,U4_16,FE_28,0,0,0 }         /* e.g. cfxbr */
++#define INSTR_RRF_UUFF     4, { F_24,U4_16,F_28,U4_20,0,0 }      /* e.g. fidtr */
++#define INSTR_RRF_UUFFE    4, { F_24,U4_16,FE_28,U4_20,0,0 }     /* e.g. ldxtr */
++#define INSTR_RRF_UUFEFE   4, { FE_24,U4_16,FE_28,U4_20,0,0 }    /* e.g. fixtr */
++#define INSTR_RRF_0UFF     4, { F_24,F_28,U4_20,0,0,0 }          /* e.g. ldetr */
++#define INSTR_RRF_0UFEF    4, { FE_24,F_28,U4_20,0,0,0 }         /* e.g. lxdtr */
++#define INSTR_RRF_FFRU     4, { F_24,F_16,R_28,U4_20,0,0 }       /* e.g. rrdtr */
++#define INSTR_RRF_FEFERU   4, { FE_24,FE_16,R_28,U4_20,0,0 }     /* e.g. rrxtr */
++#define INSTR_RRF_U0RR     4, { R_24,R_28,U4_16,0,0,0 }          /* e.g. sske  */
++#define INSTR_RRF_U0RER    4, { RE_24,R_28,U4_16,0,0,0 }         /* e.g. trte  */
++#define INSTR_RRF_U0RERE   4, { RE_24,RE_28,U4_16,0,0,0 }        /* e.g. cu24  */
++#define INSTR_RRF_00RR     4, { R_24,R_28,0,0,0,0 }              /* e.g. clrtne */
++#define INSTR_RRF_UUFR     4, { F_24,U4_16,R_28,U4_20,0,0 }      /* e.g. cdgtra */
++#define INSTR_RRF_UUFER    4, { FE_24,U4_16,R_28,U4_20,0,0 }     /* e.g. cxfbra */
++#define INSTR_RRF_UURF     4, { R_24,U4_16,F_28,U4_20,0,0 }      /* e.g. cgdtra */
++#define INSTR_RRF_UURFE    4, { R_24,U4_16,FE_28,U4_20,0,0 }     /* e.g. cfxbra */
++#define INSTR_RR_0R        2, { R_12, 0,0,0,0,0 }                /* e.g. br    */
++#define INSTR_RR_FF        2, { F_8,F_12,0,0,0,0 }               /* e.g. adr   */
++#define INSTR_RR_FEF       2, { FE_8,F_12,0,0,0,0 }              /* e.g. mxdr  */
++#define INSTR_RR_FFE       2, { F_8,FE_12,0,0,0,0 }              /* e.g. ldxr  */
++#define INSTR_RR_FEFE      2, { FE_8,FE_12,0,0,0,0 }             /* e.g. axr   */
++#define INSTR_RR_R0        2, { R_8, 0,0,0,0,0 }                 /* e.g. spm   */
++#define INSTR_RR_RR        2, { R_8,R_12,0,0,0,0 }               /* e.g. lr    */
++#define INSTR_RR_RER       2, { RE_8,R_12,0,0,0,0 }              /* e.g. dr    */
++#define INSTR_RR_U0        2, { U8_8, 0,0,0,0,0 }                /* e.g. svc   */
++#define INSTR_RR_UR        2, { U4_8,R_12,0,0,0,0 }              /* e.g. bcr   */
++#define INSTR_RRR_F0FF     4, { F_24,F_28,F_16,0,0,0 }           /* e.g. ddtr  */
++#define INSTR_RRR_FE0FEFE  4, { FE_24,FE_28,FE_16,0,0,0 }        /* e.g. axtr  */
++#define INSTR_RRS_RRRDU    6, { R_8,R_12,U4_32,D_20,B_16 }       /* e.g. crb   */
++#define INSTR_RRS_RRRD0    6, { R_8,R_12,D_20,B_16,0 }           /* e.g. crbne */
++#define INSTR_RSE_RRRD     6, { R_8,R_12,D_20,B_16,0,0 }         /* e.g. lmh   */
++#define INSTR_RSE_RERERD   6, { RE_8,RE_12,D_20,B_16,0,0 }       /* e.g. mvclu */
++#define INSTR_RSE_CCRD     6, { C_8,C_12,D_20,B_16,0,0 }         /* e.g. stctg */
++#define INSTR_RSE_RURD     6, { R_8,U4_12,D_20,B_16,0,0 }        /* e.g. icmh  */
++#define INSTR_RSL_R0RD     6, { D_20,L4_8,B_16,0,0,0 }           /* e.g. tp    */
++#define INSTR_RSL_LRDFU    6, { F_32,D_20,L8_8,B_16,U4_36,0 }    /* e.g. cdzt  */
++#define INSTR_RSL_LRDFEU   6, { FE_32,D_20,L8_8,B_16,U4_36,0 }   /* e.g. cxzt  */
++#define INSTR_RSI_RRP      4, { R_8,R_12,J16_16,0,0,0 }          /* e.g. brxh  */
++#define INSTR_RSY_RRRD     6, { R_8,R_12,D20_20,B_16,0,0 }       /* e.g. stmy  */
++#define INSTR_RSY_RERERD   6, { RE_8,RE_12,D20_20,B_16,0,0 }     /* e.g. cdsy  */
++#define INSTR_RSY_RURD     6, { R_8,U4_12,D20_20,B_16,0,0 }      /* e.g. icmh  */
++#define INSTR_RSY_RURD2    6, { R_8,D20_20,B_16,U4_12,0,0 }      /* e.g. loc   */
++#define INSTR_RSY_R0RD     6, { R_8,D20_20,B_16,0,0,0 }          /* e.g. locne */
++#define INSTR_RSY_AARD     6, { A_8,A_12,D20_20,B_16,0,0 }       /* e.g. lamy  */
++#define INSTR_RSY_CCRD     6, { C_8,C_12,D20_20,B_16,0,0 }       /* e.g. stctg */
++#define INSTR_RS_AARD      4, { A_8,A_12,D_20,B_16,0,0 }         /* e.g. lam   */
++#define INSTR_RS_CCRD      4, { C_8,C_12,D_20,B_16,0,0 }         /* e.g. lctl  */
++#define INSTR_RS_R0RD      4, { R_8,D_20,B_16,0,0,0 }            /* e.g. sll   */
++#define INSTR_RS_RE0RD     4, { RE_8,D_20,B_16,0,0,0 }           /* e.g. slda  */
++#define INSTR_RS_RRRD      4, { R_8,R_12,D_20,B_16,0,0 }         /* e.g. cs    */
++#define INSTR_RS_RERERD    4, { RE_8,RE_12,D_20,B_16,0,0 }       /* e.g. cds   */
++#define INSTR_RS_RURD      4, { R_8,U4_12,D_20,B_16,0,0 }        /* e.g. icm   */
++#define INSTR_RXE_FRRD     6, { F_8,D_20,X_12,B_16,0,0 }         /* e.g. adb   */
++#define INSTR_RXE_FERRD    6, { FE_8,D_20,X_12,B_16,0,0 }        /* e.g. lxdb  */
++#define INSTR_RXE_RRRD     6, { R_8,D_20,X_12,B_16,0,0 }         /* e.g. lg    */
++#define INSTR_RXE_RRRDU    6, { R_8,D_20,X_12,B_16,U4_32,0 }     /* e.g. lcbb  */
++#define INSTR_RXE_RERRD    6, { RE_8,D_20,X_12,B_16,0,0 }        /* e.g. dsg   */
++#define INSTR_RXF_FRRDF    6, { F_32,F_8,D_20,X_12,B_16,0 }      /* e.g. madb  */
++#define INSTR_RXF_FRRDFE   6, { FE_32,F_8,D_20,X_12,B_16,0 }     /* e.g. my    */
++#define INSTR_RXF_FERRDFE  6, { FE_32,FE_8,D_20,X_12,B_16,0 }    /* e.g. slxt  */
++#define INSTR_RXF_RRRDR    6, { R_32,R_8,D_20,X_12,B_16,0 }      /* e.g. .insn */
++#define INSTR_RXY_RRRD     6, { R_8,D20_20,X_12,B_16,0,0 }       /* e.g. ly    */
++#define INSTR_RXY_RERRD    6, { RE_8,D20_20,X_12,B_16,0,0 }      /* e.g. dsg   */
++#define INSTR_RXY_FRRD     6, { F_8,D20_20,X_12,B_16,0,0 }       /* e.g. ley   */
++#define INSTR_RXY_URRD     6, { U4_8,D20_20,X_12,B_16,0,0 }      /* e.g. pfd   */
++#define INSTR_RX_0RRD      4, { D_20,X_12,B_16,0,0,0 }           /* e.g. be    */
++#define INSTR_RX_FRRD      4, { F_8,D_20,X_12,B_16,0,0 }         /* e.g. ae    */
++#define INSTR_RX_FERRD     4, { FE_8,D_20,X_12,B_16,0,0 }        /* e.g. mxd   */
++#define INSTR_RX_RRRD      4, { R_8,D_20,X_12,B_16,0,0 }         /* e.g. l     */
++#define INSTR_RX_RERRD     4, { RE_8,D_20,X_12,B_16,0,0 }        /* e.g. d     */
++#define INSTR_RX_URRD      4, { U4_8,D_20,X_12,B_16,0,0 }        /* e.g. bc    */
++#define INSTR_SI_URD       4, { D_20,B_16,U8_8,0,0,0 }           /* e.g. cli   */
++#define INSTR_SIY_URD      6, { D20_20,B_16,U8_8,0,0,0 }         /* e.g. tmy   */
++#define INSTR_SIY_IRD      6, { D20_20,B_16,I8_8,0,0,0 }         /* e.g. asi   */
++#define INSTR_SIL_RDI      6, { D_20,B_16,I16_32,0,0,0 }         /* e.g. chhsi */
++#define INSTR_SIL_RDU      6, { D_20,B_16,U16_32,0,0,0 }         /* e.g. clfhsi */
++#define INSTR_SMI_U0RDP    6, { U4_8,J16_32,D_20,B_16,0,0 }      /* e.g. bpp   */
++#define INSTR_SSE_RDRD     6, { D_20,B_16,D_36,B_32,0,0 }        /* e.g. mvcdk */
++#define INSTR_SS_L0RDRD    6, { D_20,L8_8,B_16,D_36,B_32,0     } /* e.g. mvc   */
++#define INSTR_SS_L2RDRD    6, { D_20,B_16,D_36,L8_8,B_32,0     } /* e.g. pka   */
++#define INSTR_SS_LIRDRD    6, { D_20,L4_8,B_16,D_36,B_32,U4_12 } /* e.g. srp   */
++#define INSTR_SS_LLRDRD    6, { D_20,L4_8,B_16,D_36,L4_12,B_32 } /* e.g. pack  */
++#define INSTR_SS_RRRDRD    6, { D_20,R_8,B_16,D_36,B_32,R_12 }   /* e.g. mvck  */
++#define INSTR_SS_RRRDRD2   6, { R_8,D_20,B_16,R_12,D_36,B_32 }   /* e.g. plo   */
++#define INSTR_SS_RRRDRD3   6, { R_8,R_12,D_20,B_16,D_36,B_32 }   /* e.g. lmd   */
++#define INSTR_SSF_RRDRD    6, { D_20,B_16,D_36,B_32,R_8,0 }      /* e.g. mvcos */
++#define INSTR_SSF_RERDRD2  6, { RE_8,D_20,B_16,D_36,B_32,0 }     /* e.g. lpd   */
++#define INSTR_S_00         4, { 0,0,0,0,0,0 }                    /* e.g. hsch  */
++#define INSTR_S_RD         4, { D_20,B_16,0,0,0,0 }              /* e.g. lpsw  */
++#define INSTR_VRV_VVXRDU   6, { V_8,D_20,VX_12,B_16,U4_32,0 }    /* e.g. vgef  */
++#define INSTR_VRI_V0U      6, { V_8,U16_16,0,0,0,0 }             /* e.g. vgbm  */
++#define INSTR_VRI_V        6, { V_8,0,0,0,0,0 }                  /* e.g. vzero */
++#define INSTR_VRI_V0UUU    6, { V_8,U8_16,U8_24,U4_32,0,0 }      /* e.g. vgm   */
++#define INSTR_VRI_V0UU     6, { V_8,U8_16,U8_24,0,0,0 }          /* e.g. vgmb  */
++#define INSTR_VRI_VVUU     6, { V_8,V_12,U16_16,U4_32,0,0 }      /* e.g. vrep  */
++#define INSTR_VRI_VVU      6, { V_8,V_12,U16_16,0,0,0 }          /* e.g. vrepb */
++#define INSTR_VRI_VVU2     6, { V_8,V_12,U12_16,0,0,0 }          /* e.g. vftcidb */
++#define INSTR_VRI_V0IU     6, { V_8,I16_16,U4_32,0,0,0 }         /* e.g. vrepi */
++#define INSTR_VRI_V0I      6, { V_8,I16_16,0,0,0,0 }             /* e.g. vrepib */
++#define INSTR_VRI_VVV0UU   6, { V_8,V_12,V_16,U8_24,U4_32,0 }    /* e.g. verim */
++#define INSTR_VRI_VVV0U    6, { V_8,V_12,V_16,U8_24,0,0 }        /* e.g. verimb*/
++#define INSTR_VRI_VVUUU    6, { V_8,V_12,U12_16,U4_32,U4_28,0 }  /* e.g. vftci */
++#define INSTR_VRX_VRRD     6, { V_8,D_20,X_12,B_16,0,0 }         /* e.g. vl    */
++#define INSTR_VRX_VV       6, { V_8,V_12,0,0,0,0 }               /* e.g. vlr   */
++#define INSTR_VRX_VRRDU    6, { V_8,D_20,X_12,B_16,U4_32,0 }     /* e.g. vlrp  */
++#define INSTR_VRS_RVRDU    6, { R_8,V_12,D_20,B_16,U4_32,0 }     /* e.g. vlgv  */
++#define INSTR_VRS_RVRD     6, { R_8,V_12,D_20,B_16,0,0 }         /* e.g. vlgvb */
++#define INSTR_VRS_VVRDU    6, { V_8,V_12,D_20,B_16,U4_32,0 }     /* e.g. verll */
++#define INSTR_VRS_VVRD     6, { V_8,V_12,D_20,B_16,0,0 }         /* e.g. vlm   */
++#define INSTR_VRS_VRRDU    6, { V_8,R_12,D_20,B_16,U4_32,0 }     /* e.g. vlvg  */
++#define INSTR_VRS_VRRD     6, { V_8,R_12,D_20,B_16,0,0 }         /* e.g. vlvgb */
++#define INSTR_VRR_VRR      6, { V_8,R_12,R_16,0,0,0 }            /* e.g. vlvgp */
++#define INSTR_VRR_VVV0U    6, { V_8,V_12,V_16,U4_32,0,0 }        /* e.g. vmrh  */
++#define INSTR_VRR_VVV0U0   6, { V_8,V_12,V_16,U4_24,0,0 }        /* e.g. vfaeb */
++#define INSTR_VRR_VVV0U1   6, { V_8,V_12,V_16,U4_OR1_24,0,0 }    /* e.g. vfaebs*/
++#define INSTR_VRR_VVV0U2   6, { V_8,V_12,V_16,U4_OR2_24,0,0 }    /* e.g. vfaezb*/
++#define INSTR_VRR_VVV0U3   6, { V_8,V_12,V_16,U4_OR3_24,0,0 }    /* e.g. vfaezbs*/
++#define INSTR_VRR_VVV      6, { V_8,V_12,V_16,0,0,0 }            /* e.g. vmrhb */
++#define INSTR_VRR_VVV2     6, { V_8,V_CP16_12,0,0,0,0 }          /* e.g. vnot  */
++#define INSTR_VRR_VV0U     6, { V_8,V_12,U4_32,0,0,0 }           /* e.g. vseg  */
++#define INSTR_VRR_VV0U2    6, { V_8,V_12,U4_24,0,0,0 }           /* e.g. vistrb*/
++#define INSTR_VRR_VV0UU    6, { V_8,V_12,U4_28,U4_24,0,0 }       /* e.g. vcdgb */
++#define INSTR_VRR_VV0UU2   6, { V_8,V_12,U4_32,U4_28,0,0 }       /* e.g. wfc */
++#define INSTR_VRR_VV0UU8   6, { V_8,V_12,U4_OR8_28,U4_24,0,0 }   /* e.g. wcdgb */
++#define INSTR_VRR_VV       6, { V_8,V_12,0,0,0,0 }               /* e.g. vsegb */
++#define INSTR_VRR_VVVUU0V  6, { V_8,V_12,V_16,V_32,U4_20,U4_24 } /* e.g. vstrc */
++#define INSTR_VRR_VVVU0V   6, { V_8,V_12,V_16,V_32,U4_20,0 }     /* e.g. vac   */
++#define INSTR_VRR_VVVU0VB  6, { V_8,V_12,V_16,V_32,U4_24,0 }     /* e.g. vstrcb*/
++#define INSTR_VRR_VVVU0VB1 6, { V_8,V_12,V_16,V_32,U4_OR1_24,0 } /* e.g. vstrcbs*/
++#define INSTR_VRR_VVVU0VB2 6, { V_8,V_12,V_16,V_32,U4_OR2_24,0 } /* e.g. vstrczb*/
++#define INSTR_VRR_VVVU0VB3 6, { V_8,V_12,V_16,V_32,U4_OR3_24,0 } /* e.g. vstrczbs*/
++#define INSTR_VRR_VVV0V    6, { V_8,V_12,V_16,V_32,0,0 }         /* e.g. vacq  */
++#define INSTR_VRR_VVV0U0U  6, { V_8,V_12,V_16,U4_32,U4_24,0 }    /* e.g. vfae  */
++#define INSTR_VRR_VVVV     6, { V_8,V_12,V_16,V_32,0,0 }         /* e.g. vfmadb*/
++#define INSTR_VRR_VVV0UUU  6, { V_8,V_12,V_16,U4_32,U4_28,U4_24 }/* e.g. vfch  */
++#define INSTR_VRR_VVV0UU   6, { V_8,V_12,V_16,U4_32,U4_28,0 }    /* e.g. vfa   */
++#define INSTR_VRR_VV0UUU   6, { V_8,V_12,U4_32,U4_28,U4_24,0 }   /* e.g. vcdg  */
++#define INSTR_VRR_VVVU0UV  6, { V_8,V_12,V_16,V_32,U4_28,U4_20 } /* e.g. vfma  */
++#define INSTR_VRR_VV0U0U   6, { V_8,V_12,U4_32,U4_24,0,0 }       /* e.g. vistr */
++
++#define MASK_E            { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_IE_UU        { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
++#define MASK_MII_UPP      { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RIE_RRP      { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RIE_RRPU     { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RIE_RRP0     { 0xff, 0x00, 0x00, 0x00, 0xf0, 0xff }
++#define MASK_RIE_RRI0     { 0xff, 0x00, 0x00, 0x00, 0xf0, 0xff }
++#define MASK_RIE_RUPI     { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RIE_R0PI     { 0xff, 0x0f, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RIE_RUPU     { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RIE_R0PU     { 0xff, 0x0f, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RIE_R0IU     { 0xff, 0x0f, 0x00, 0x00, 0x0f, 0xff }
++#define MASK_RIE_R0I0     { 0xff, 0x0f, 0x00, 0x00, 0xff, 0xff }
++#define MASK_RIE_R0UU     { 0xff, 0x0f, 0x00, 0x00, 0x0f, 0xff }
++#define MASK_RIE_R0U0     { 0xff, 0x0f, 0x00, 0x00, 0xff, 0xff }
++#define MASK_RIE_RUI0     { 0xff, 0x00, 0x00, 0x00, 0xff, 0xff }
++#define MASK_RIE_RRUUU    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RIL_0P       { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RIL_RP       { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RIL_UP       { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RIL_RI       { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RIL_RU       { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RI_0P        { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RI_RI        { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RI_RP        { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RI_RU        { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RI_UP        { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RIS_RURDI    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RIS_R0RDI    { 0xff, 0x0f, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RIS_RURDU    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RIS_R0RDU    { 0xff, 0x0f, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RRE_00       { 0xff, 0xff, 0xff, 0xff, 0x00, 0x00 }
++#define MASK_RRE_0R       { 0xff, 0xff, 0xff, 0xf0, 0x00, 0x00 }
++#define MASK_RRE_AA       { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
++#define MASK_RRE_AR       { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
++#define MASK_RRE_F0       { 0xff, 0xff, 0xff, 0x0f, 0x00, 0x00 }
++#define MASK_RRE_FE0      { 0xff, 0xff, 0xff, 0x0f, 0x00, 0x00 }
++#define MASK_RRE_FF       { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
++#define MASK_RRE_FEF      { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
++#define MASK_RRE_FFE      { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
++#define MASK_RRE_FEFE     { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
++#define MASK_RRE_R0       { 0xff, 0xff, 0xff, 0x0f, 0x00, 0x00 }
++#define MASK_RRE_RA       { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
++#define MASK_RRE_RF       { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
++#define MASK_RRE_RFE      { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
++#define MASK_RRE_RR       { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
++#define MASK_RRE_RER      { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
++#define MASK_RRE_RERE     { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
++#define MASK_RRE_FR       { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
++#define MASK_RRE_FER      { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
++#define MASK_RRF_F0FF     { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
++#define MASK_RRF_FE0FF    { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
++#define MASK_RRF_F0FF2    { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
++#define MASK_RRF_F0FR     { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
++#define MASK_RRF_FE0FER   { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
++#define MASK_RRF_FUFF     { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RRF_FEUFEFE  { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RRF_FUFF2    { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+ #define MASK_RRF_FEUFEFE2 { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_RURR    { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_RURR2   { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_R0RR    { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_R0RR2   { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_RMRR    { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_U0FF    { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_U0FEFE  { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_U0RF    { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_U0RFE   { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_UUFF    { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_UUFFE   { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_UUFEFE  { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_0UFF    { 0xff, 0xff, 0xf0, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_0UFEF   { 0xff, 0xff, 0xf0, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_FFRU    { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_FEFERU  { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_M0RR    { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_M0RER   { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_M0RERE  { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_U0RR    { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_00RR    { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_UUFR    { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_UUFER   { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_UURF    { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RRF_UURFE   { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RR_0R       { 0xff, 0xf0, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RR_0R_OPT   { 0xff, 0xf0, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RR_FF       { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RR_FEF      { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RR_FFE      { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RR_FEFE     { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RR_R0       { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RR_RR       { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RR_RER      { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RR_U0       { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RR_UR       { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RRR_F0FF    { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
+-#define MASK_RRR_FE0FEFE { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
+-#define MASK_RRS_RRRDU   { 0xff, 0x00, 0x00, 0x00, 0x0f, 0xff }
+-#define MASK_RRS_RRRD0   { 0xff, 0x00, 0x00, 0x00, 0xff, 0xff }
+-#define MASK_RSE_RRRD    { 0xff, 0x00, 0x00, 0x00, 0xff, 0xff }
+-#define MASK_RSE_RERERD  { 0xff, 0x00, 0x00, 0x00, 0xff, 0xff }
+-#define MASK_RSE_CCRD    { 0xff, 0x00, 0x00, 0x00, 0xff, 0xff }
+-#define MASK_RSE_RURD    { 0xff, 0x00, 0x00, 0x00, 0xff, 0xff }
+-#define MASK_RSL_R0RD    { 0xff, 0x0f, 0x00, 0x00, 0xff, 0xff }
+-#define MASK_RSL_LRDFU   { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RSL_LRDFEU  { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RSI_RRP     { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RS_AARD     { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RS_CCRD     { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RS_R0RD     { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RS_RE0RD    { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RS_RRRD     { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RS_RERERD   { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RS_RURD     { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RSY_RRRD    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RSY_RERERD  { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RSY_RURD    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RSY_RURD2   { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RSY_R0RD    { 0xff, 0x0f, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RSY_AARD    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RSY_CCRD    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RXE_FRRD    { 0xff, 0x00, 0x00, 0x00, 0xff, 0xff }
+-#define MASK_RXE_FERRD   { 0xff, 0x00, 0x00, 0x00, 0xff, 0xff }
+-#define MASK_RXE_RRRD    { 0xff, 0x00, 0x00, 0x00, 0xff, 0xff }
+-#define MASK_RXE_RERRD   { 0xff, 0x00, 0x00, 0x00, 0xff, 0xff }
+-#define MASK_RXF_FRRDF   { 0xff, 0x00, 0x00, 0x00, 0x0f, 0xff }
+-#define MASK_RXF_FRRDFE  { 0xff, 0x00, 0x00, 0x00, 0x0f, 0xff }
+-#define MASK_RXF_FERRDFE { 0xff, 0x00, 0x00, 0x00, 0x0f, 0xff }
+-#define MASK_RXF_RRRDR   { 0xff, 0x00, 0x00, 0x00, 0x0f, 0xff }
+-#define MASK_RXY_RRRD    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RXY_RERRD   { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RXY_FRRD    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RXY_URRD    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_RX_0RRD     { 0xff, 0xf0, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RX_0RRD_OPT { 0xff, 0xf0, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RX_FRRD     { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RX_FERRD    { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RX_RRRD     { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RX_RERRD    { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_RX_URRD     { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_SI_URD      { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_SIY_URD     { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_SIY_IRD     { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
+-#define MASK_SIL_RDI     { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_SIL_RDU     { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_SMI_U0RDP   { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_SSE_RDRD    { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_SS_L0RDRD   { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_SS_L2RDRD   { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_SS_LIRDRD   { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_SS_LLRDRD   { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_SS_RRRDRD   { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_SS_RRRDRD2  { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_SS_RRRDRD3  { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_SSF_RRDRD   { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_SSF_RRDRD2  { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_SSF_RERDRD2 { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
+-#define MASK_S_00        { 0xff, 0xff, 0xff, 0xff, 0x00, 0x00 }
+-#define MASK_S_RD        { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
+-
++#define MASK_RRF_RURR     { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RRF_RURR2    { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RRF_R0RR     { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RRF_R0RR2    { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RRF_U0FF     { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
++#define MASK_RRF_U0FEFE   { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
++#define MASK_RRF_U0RF     { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
++#define MASK_RRF_U0RFE    { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
++#define MASK_RRF_UUFF     { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RRF_UUFFE    { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RRF_UUFEFE   { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RRF_0UFF     { 0xff, 0xff, 0xf0, 0x00, 0x00, 0x00 }
++#define MASK_RRF_0UFEF    { 0xff, 0xff, 0xf0, 0x00, 0x00, 0x00 }
++#define MASK_RRF_FFRU     { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RRF_FEFERU   { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RRF_U0RR     { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
++#define MASK_RRF_U0RER    { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
++#define MASK_RRF_U0RERE   { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
++#define MASK_RRF_00RR     { 0xff, 0xff, 0xff, 0x00, 0x00, 0x00 }
++#define MASK_RRF_UUFR     { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RRF_UUFER    { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RRF_UURF     { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RRF_UURFE    { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RR_0R        { 0xff, 0xf0, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RR_FF        { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RR_FEF       { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RR_FFE       { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RR_FEFE      { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RR_R0        { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RR_RR        { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RR_RER       { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RR_U0        { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RR_UR        { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RRR_F0FF     { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
++#define MASK_RRR_FE0FEFE  { 0xff, 0xff, 0x0f, 0x00, 0x00, 0x00 }
++#define MASK_RRS_RRRDU    { 0xff, 0x00, 0x00, 0x00, 0x0f, 0xff }
++#define MASK_RRS_RRRD0    { 0xff, 0x00, 0x00, 0x00, 0xff, 0xff }
++#define MASK_RSE_RRRD     { 0xff, 0x00, 0x00, 0x00, 0xff, 0xff }
++#define MASK_RSE_RERERD   { 0xff, 0x00, 0x00, 0x00, 0xff, 0xff }
++#define MASK_RSE_CCRD     { 0xff, 0x00, 0x00, 0x00, 0xff, 0xff }
++#define MASK_RSE_RURD     { 0xff, 0x00, 0x00, 0x00, 0xff, 0xff }
++#define MASK_RSL_R0RD     { 0xff, 0x0f, 0x00, 0x00, 0xff, 0xff }
++#define MASK_RSL_LRDFU    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RSL_LRDFEU   { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RSI_RRP      { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RS_AARD      { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RS_CCRD      { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RS_R0RD      { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RS_RE0RD     { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RS_RRRD      { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RS_RERERD    { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RS_RURD      { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RSY_RRRD     { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RSY_RERERD   { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RSY_RURD     { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RSY_RURD2    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RSY_R0RD     { 0xff, 0x0f, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RSY_AARD     { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RSY_CCRD     { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RXE_FRRD     { 0xff, 0x00, 0x00, 0x00, 0xff, 0xff }
++#define MASK_RXE_FERRD    { 0xff, 0x00, 0x00, 0x00, 0xff, 0xff }
++#define MASK_RXE_RRRD     { 0xff, 0x00, 0x00, 0x00, 0xff, 0xff }
++#define MASK_RXE_RRRDU    { 0xff, 0x00, 0x00, 0x00, 0x0f, 0xff }
++#define MASK_RXE_RERRD    { 0xff, 0x00, 0x00, 0x00, 0xff, 0xff }
++#define MASK_RXF_FRRDF    { 0xff, 0x00, 0x00, 0x00, 0x0f, 0xff }
++#define MASK_RXF_FRRDFE   { 0xff, 0x00, 0x00, 0x00, 0x0f, 0xff }
++#define MASK_RXF_FERRDFE  { 0xff, 0x00, 0x00, 0x00, 0x0f, 0xff }
++#define MASK_RXF_RRRDR    { 0xff, 0x00, 0x00, 0x00, 0x0f, 0xff }
++#define MASK_RXY_RRRD     { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RXY_RERRD    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RXY_FRRD     { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RXY_URRD     { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_RX_0RRD      { 0xff, 0xf0, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RX_FRRD      { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RX_FERRD     { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RX_RRRD      { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RX_RERRD     { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_RX_URRD      { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_SI_URD       { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_SIY_URD      { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_SIY_IRD      { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_SIL_RDI      { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_SIL_RDU      { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_SMI_U0RDP    { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_SSE_RDRD     { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_SS_L0RDRD    { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_SS_L2RDRD    { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_SS_LIRDRD    { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_SS_LLRDRD    { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_SS_RRRDRD    { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_SS_RRRDRD2   { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_SS_RRRDRD3   { 0xff, 0x00, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_SSF_RRDRD    { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_SSF_RERDRD2  { 0xff, 0x0f, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_S_00         { 0xff, 0xff, 0xff, 0xff, 0x00, 0x00 }
++#define MASK_S_RD         { 0xff, 0xff, 0x00, 0x00, 0x00, 0x00 }
++#define MASK_VRV_VVXRDU   { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_VRI_V0U      { 0xff, 0x0f, 0x00, 0x00, 0xf0, 0xff }
++#define MASK_VRI_V        { 0xff, 0x0f, 0xff, 0xff, 0xf0, 0xff }
++#define MASK_VRI_V0UUU    { 0xff, 0x0f, 0x00, 0x00, 0x00, 0xff }
++#define MASK_VRI_V0UU     { 0xff, 0x0f, 0x00, 0x00, 0xf0, 0xff }
++#define MASK_VRI_VVUU     { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_VRI_VVU      { 0xff, 0x00, 0x00, 0x00, 0xf0, 0xff }
++#define MASK_VRI_VVU2     { 0xff, 0x00, 0x00, 0x0f, 0xf0, 0xff }
++#define MASK_VRI_V0IU     { 0xff, 0x0f, 0x00, 0x00, 0x00, 0xff }
++#define MASK_VRI_V0I      { 0xff, 0x0f, 0x00, 0x00, 0xf0, 0xff }
++#define MASK_VRI_VVV0UU   { 0xff, 0x00, 0x0f, 0x00, 0x00, 0xff }
++#define MASK_VRI_VVV0U    { 0xff, 0x00, 0x0f, 0x00, 0xf0, 0xff }
++#define MASK_VRI_VVUUU    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_VRX_VRRD     { 0xff, 0x00, 0x00, 0x00, 0xf0, 0xff }
++#define MASK_VRX_VV       { 0xff, 0x00, 0xff, 0xff, 0xf0, 0xff }
++#define MASK_VRX_VRRDU    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_VRS_RVRDU    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_VRS_RVRD     { 0xff, 0x00, 0x00, 0x00, 0xf0, 0xff }
++#define MASK_VRS_VVRDU    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_VRS_VVRD     { 0xff, 0x00, 0x00, 0x00, 0xf0, 0xff }
++#define MASK_VRS_VRRDU    { 0xff, 0x00, 0x00, 0x00, 0x00, 0xff }
++#define MASK_VRS_VRRD     { 0xff, 0x00, 0x00, 0x00, 0xf0, 0xff }
++#define MASK_VRR_VRR      { 0xff, 0x00, 0x0f, 0xff, 0xf0, 0xff }
++#define MASK_VRR_VVV0U    { 0xff, 0x00, 0x0f, 0xff, 0x00, 0xff }
++#define MASK_VRR_VVV0U0   { 0xff, 0x00, 0x0f, 0x0f, 0xf0, 0xff }
++#define MASK_VRR_VVV0U1   { 0xff, 0x00, 0x0f, 0x1f, 0xf0, 0xff }
++#define MASK_VRR_VVV0U2   { 0xff, 0x00, 0x0f, 0x2f, 0xf0, 0xff }
++#define MASK_VRR_VVV0U3   { 0xff, 0x00, 0x0f, 0x3f, 0xf0, 0xff }
++#define MASK_VRR_VVV      { 0xff, 0x00, 0x0f, 0xff, 0xf0, 0xff }
++#define MASK_VRR_VVV2     { 0xff, 0x00, 0x0f, 0xff, 0xf0, 0xff }
++#define MASK_VRR_VVV0V    { 0xff, 0x00, 0x0f, 0xff, 0x00, 0xff }
++#define MASK_VRR_VV0U     { 0xff, 0x00, 0xff, 0xff, 0x00, 0xff }
++#define MASK_VRR_VV0U2    { 0xff, 0x00, 0xff, 0x0f, 0xf0, 0xff }
++#define MASK_VRR_VV0UU    { 0xff, 0x00, 0xff, 0x00, 0xf0, 0xff }
++#define MASK_VRR_VV0UU2   { 0xff, 0x00, 0xff, 0xf0, 0x00, 0xff }
++#define MASK_VRR_VV0UU8   { 0xff, 0x00, 0xff, 0x08, 0xf0, 0xff }
++#define MASK_VRR_VV       { 0xff, 0x00, 0xff, 0xff, 0xf0, 0xff }
++#define MASK_VRR_VVVUU0V  { 0xff, 0x00, 0x00, 0x0f, 0x00, 0xff }
++#define MASK_VRR_VVVU0V   { 0xff, 0x00, 0x00, 0xff, 0x00, 0xff }
++#define MASK_VRR_VVVU0VB  { 0xff, 0x00, 0x0f, 0x0f, 0x00, 0xff }
++#define MASK_VRR_VVVU0VB1 { 0xff, 0x00, 0x0f, 0x1f, 0x00, 0xff }
++#define MASK_VRR_VVVU0VB2 { 0xff, 0x00, 0x0f, 0x2f, 0x00, 0xff }
++#define MASK_VRR_VVVU0VB3 { 0xff, 0x00, 0x0f, 0x3f, 0x00, 0xff }
++#define MASK_VRR_VVV0U0U  { 0xff, 0x00, 0x0f, 0x0f, 0x00, 0xff }
++#define MASK_VRR_VVVV     { 0xff, 0x00, 0x0f, 0xff, 0x00, 0xff }
++#define MASK_VRR_VVV0UUU  { 0xff, 0x00, 0x0f, 0x00, 0x00, 0xff }
++#define MASK_VRR_VVV0UU   { 0xff, 0x00, 0x0f, 0xf0, 0x00, 0xff }
++#define MASK_VRR_VV0UUU   { 0xff, 0x00, 0xff, 0x00, 0x00, 0xff }
++#define MASK_VRR_VVVU0UV  { 0xff, 0x00, 0x00, 0xf0, 0x00, 0xff }
++#define MASK_VRR_VV0U0U   { 0xff, 0x00, 0xff, 0x0f, 0x00, 0xff }
+ 
+ /* The opcode formats table (blueprints for .insn pseudo mnemonic).  */
+ 
+ const struct s390_opcode s390_opformats[] =
+   {
+-  { "e",	OP8(0x00LL),	MASK_E,		INSTR_E,	3, 0 },
+-  { "ri",	OP8(0x00LL),	MASK_RI_RI,	INSTR_RI_RI,	3, 0 },
+-  { "rie",	OP8(0x00LL),	MASK_RIE_RRP,	INSTR_RIE_RRP,	3, 0 },
+-  { "ril",	OP8(0x00LL),	MASK_RIL_RP,	INSTR_RIL_RP,	3, 0 },
+-  { "rilu",	OP8(0x00LL),	MASK_RIL_RU,	INSTR_RIL_RU,	3, 0 },
+-  { "ris",	OP8(0x00LL),	MASK_RIS_RURDI,	INSTR_RIS_RURDI,3, 6 },
+-  { "rr",	OP8(0x00LL),	MASK_RR_RR,	INSTR_RR_RR,	3, 0 },
+-  { "rre",	OP8(0x00LL),	MASK_RRE_RR,	INSTR_RRE_RR,	3, 0 },
+-  { "rrf",	OP8(0x00LL),	MASK_RRF_RURR,	INSTR_RRF_RURR,	3, 0 },
+-  { "rrs",	OP8(0x00LL),	MASK_RRS_RRRDU,	INSTR_RRS_RRRDU,3, 6 },
+-  { "rs",	OP8(0x00LL),	MASK_RS_RRRD,	INSTR_RS_RRRD,	3, 0 },
+-  { "rse",	OP8(0x00LL),	MASK_RSE_RRRD,	INSTR_RSE_RRRD,	3, 0 },
+-  { "rsi",	OP8(0x00LL),	MASK_RSI_RRP,	INSTR_RSI_RRP,	3, 0 },
+-  { "rsy",	OP8(0x00LL),	MASK_RSY_RRRD,	INSTR_RSY_RRRD,	3, 3 },
+-  { "rx",	OP8(0x00LL),	MASK_RX_RRRD,	INSTR_RX_RRRD,	3, 0 },
+-  { "rxe",	OP8(0x00LL),	MASK_RXE_RRRD,	INSTR_RXE_RRRD,	3, 0 },
+-  { "rxf",	OP8(0x00LL),	MASK_RXF_RRRDR,	INSTR_RXF_RRRDR,3, 0 },
+-  { "rxy",	OP8(0x00LL),	MASK_RXY_RRRD,	INSTR_RXY_RRRD,	3, 3 },
+-  { "s",	OP8(0x00LL),	MASK_S_RD,	INSTR_S_RD,	3, 0 },
+-  { "si",	OP8(0x00LL),	MASK_SI_URD,	INSTR_SI_URD,	3, 0 },
+-  { "siy",	OP8(0x00LL),	MASK_SIY_URD,	INSTR_SIY_URD,	3, 3 },
+-  { "sil",	OP8(0x00LL),    MASK_SIL_RDI,   INSTR_SIL_RDI,  3, 6 },
+-  { "ss",	OP8(0x00LL),	MASK_SS_RRRDRD,	INSTR_SS_RRRDRD,3, 0 },
+-  { "sse",	OP8(0x00LL),	MASK_SSE_RDRD,	INSTR_SSE_RDRD,	3, 0 },
+-  { "ssf",	OP8(0x00LL),	MASK_SSF_RRDRD,	INSTR_SSF_RRDRD,3, 0 },
++  { "e",	OP8(0x00LL),	MASK_E,		INSTR_E,	3, 0 ,0 },
++  { "ri",	OP8(0x00LL),	MASK_RI_RI,	INSTR_RI_RI,	3, 0 ,0 },
++  { "rie",	OP8(0x00LL),	MASK_RIE_RRP,	INSTR_RIE_RRP,	3, 0 ,0 },
++  { "ril",	OP8(0x00LL),	MASK_RIL_RP,	INSTR_RIL_RP,	3, 0 ,0 },
++  { "rilu",	OP8(0x00LL),	MASK_RIL_RU,	INSTR_RIL_RU,	3, 0 ,0 },
++  { "ris",	OP8(0x00LL),	MASK_RIS_RURDI,	INSTR_RIS_RURDI,3, 6 ,0 },
++  { "rr",	OP8(0x00LL),	MASK_RR_RR,	INSTR_RR_RR,	3, 0 ,0 },
++  { "rre",	OP8(0x00LL),	MASK_RRE_RR,	INSTR_RRE_RR,	3, 0 ,0 },
++  { "rrf",	OP8(0x00LL),	MASK_RRF_RURR,	INSTR_RRF_RURR,	3, 0 ,0 },
++  { "rrs",	OP8(0x00LL),	MASK_RRS_RRRDU,	INSTR_RRS_RRRDU,3, 6 ,0 },
++  { "rs",	OP8(0x00LL),	MASK_RS_RRRD,	INSTR_RS_RRRD,	3, 0 ,0 },
++  { "rse",	OP8(0x00LL),	MASK_RSE_RRRD,	INSTR_RSE_RRRD,	3, 0 ,0 },
++  { "rsi",	OP8(0x00LL),	MASK_RSI_RRP,	INSTR_RSI_RRP,	3, 0 ,0 },
++  { "rsy",	OP8(0x00LL),	MASK_RSY_RRRD,	INSTR_RSY_RRRD,	3, 3 ,0 },
++  { "rx",	OP8(0x00LL),	MASK_RX_RRRD,	INSTR_RX_RRRD,	3, 0 ,0 },
++  { "rxe",	OP8(0x00LL),	MASK_RXE_RRRD,	INSTR_RXE_RRRD,	3, 0 ,0 },
++  { "rxf",	OP8(0x00LL),	MASK_RXF_RRRDR,	INSTR_RXF_RRRDR,3, 0 ,0 },
++  { "rxy",	OP8(0x00LL),	MASK_RXY_RRRD,	INSTR_RXY_RRRD,	3, 3 ,0 },
++  { "s",	OP8(0x00LL),	MASK_S_RD,	INSTR_S_RD,	3, 0 ,0 },
++  { "si",	OP8(0x00LL),	MASK_SI_URD,	INSTR_SI_URD,	3, 0 ,0 },
++  { "siy",	OP8(0x00LL),	MASK_SIY_URD,	INSTR_SIY_URD,	3, 3 ,0 },
++  { "sil",	OP8(0x00LL),    MASK_SIL_RDI,   INSTR_SIL_RDI,  3, 6 ,0 },
++  { "ss",	OP8(0x00LL),	MASK_SS_RRRDRD,	INSTR_SS_RRRDRD,3, 0 ,0 },
++  { "sse",	OP8(0x00LL),	MASK_SSE_RDRD,	INSTR_SSE_RDRD,	3, 0 ,0 },
++  { "ssf",	OP8(0x00LL),	MASK_SSF_RRDRD,	INSTR_SSF_RRDRD,3, 0 ,0 },
+ };
+ 
+ const int s390_num_opformats =
+diff -rup binutils-2.25.1.orig/opcodes/s390-opc.txt binutils-2.25.1/opcodes/s390-opc.txt
+--- binutils-2.25.1.orig/opcodes/s390-opc.txt	2016-08-08 14:06:28.334073924 +0100
++++ binutils-2.25.1/opcodes/s390-opc.txt	2016-08-08 14:08:17.710777643 +0100
+@@ -262,10 +262,10 @@ a700 tmlh RI_RU "test under mask low hig
+ a700 tmh RI_RU "test under mask high" g5 esa,zarch
+ a701 tmll RI_RU "test under mask low low" g5 esa,zarch
+ a701 tml RI_RU "test under mask low" g5 esa,zarch
+-0700 nopr RR_0R_OPT "no operation" g5 esa,zarch
++0700 nopr RR_0R "no operation" g5 esa,zarch optparm
+ 0700 b*8r RR_0R "conditional branch" g5 esa,zarch
+ 07f0 br RR_0R "unconditional branch" g5 esa,zarch
+-4700 nop RX_0RRD_OPT "no operation" g5 esa,zarch
++4700 nop RX_0RRD "no operation" g5 esa,zarch optparm
+ 4700 b*8 RX_0RRD "conditional branch" g5 esa,zarch
+ 47f0 b RX_0RRD "unconditional branch" g5 esa,zarch
+ a704 j*8 RI_0P "conditional jump" g5 esa,zarch
+@@ -298,7 +298,7 @@ b30d debr RRE_FF "divide short bfp" g5 e
+ ed000000000d deb RXE_FRRD "divide short bfp" g5 esa,zarch
+ b35b didbr RRF_FUFF "divide to integer long bfp" g5 esa,zarch
+ b353 diebr RRF_FUFF "divide to integer short bfp" g5 esa,zarch
+-b38c efpc RRE_RR_OPT "extract fpc" g5 esa,zarch
++b38c efpc RRE_RR "extract fpc" g5 esa,zarch optparm
+ b342 ltxbr RRE_FEFE "load and test extended bfp" g5 esa,zarch
+ b312 ltdbr RRE_FF "load and test long bfp" g5 esa,zarch
+ b302 ltebr RRE_FF "load and test short bfp" g5 esa,zarch
+@@ -341,7 +341,7 @@ b31f msdbr RRF_F0FF "multiply and subtra
+ ed000000001f msdb RXF_FRRDF "multiply and subtract long bfp" g5 esa,zarch
+ b30f msebr RRF_F0FF "multiply and subtract short bfp" g5 esa,zarch
+ ed000000000f mseb RXF_FRRDF "multiply and subtract short bfp" g5 esa,zarch
+-b384 sfpc RRE_RR_OPT "set fpc" g5 esa,zarch
++b384 sfpc RRE_RR "set fpc" g5 esa,zarch optparm
+ b299 srnm S_RD "set rounding mode" g5 esa,zarch
+ b316 sqxbr RRE_FEFE "square root extended bfp" g5 esa,zarch
+ b315 sqdbr RRE_FF "square root long bfp" g5 esa,zarch
+@@ -765,21 +765,21 @@ c800 mvcos SSF_RRDRD "move with optional
+ # z9-109 load page-table-entry address instruction
+ b9aa lptea RRF_RURR2 "load page-table-entry address" z9-109 zarch
+ # z9-109 conditional sske facility, sske instruction entered twice
+-b22b sske RRF_M0RR "set storage key extended" z9-109 zarch
++b22b sske RRF_U0RR "set storage key extended" z9-109 zarch optparm
+ # z9-109 etf2-enhancement facility, instructions entered twice
+-b993 troo RRF_M0RERE "translate one to one" z9-109 esa,zarch
+-b992 trot RRF_M0RERE "translate one to two" z9-109 esa,zarch
+-b991 trto RRF_M0RERE "translate two to one" z9-109 esa,zarch
+-b990 trtt RRF_M0RERE "translate two to two" z9-109 esa,zarch
++b993 troo RRF_U0RER "translate one to one" z9-109 esa,zarch optparm
++b992 trot RRF_U0RER "translate one to two" z9-109 esa,zarch optparm
++b991 trto RRF_U0RER "translate two to one" z9-109 esa,zarch optparm
++b990 trtt RRF_U0RER "translate two to two" z9-109 esa,zarch optparm
+ # z9-109 etf3-enhancement facility, some instructions entered twice
+-b9b1 cu24 RRF_M0RERE "convert utf-16 to utf-32" z9-109 zarch
+-b2a6 cu21 RRF_M0RERE "convert utf-16 to utf-8" z9-109 zarch
+-b2a6 cuutf RRF_M0RERE "convert unicode to utf-8" z9-109 zarch
++b9b1 cu24 RRF_U0RERE "convert utf-16 to utf-32" z9-109 zarch optparm
++b2a6 cu21 RRF_U0RERE "convert utf-16 to utf-8" z9-109 zarch optparm
++b2a6 cuutf RRF_U0RERE "convert unicode to utf-8" z9-109 zarch optparm
+ b9b3 cu42 RRE_RERE "convert utf-32 to utf-16" z9-109 zarch
+ b9b2 cu41 RRE_RERE "convert utf-32 to utf-8" z9-109 zarch
+-b2a7 cu12 RRF_M0RERE "convert utf-8 to utf-16" z9-109 zarch
+-b2a7 cutfu RRF_M0RERE "convert utf-8 to unicode" z9-109 zarch
+-b9b0 cu14 RRF_M0RERE "convert utf-8 to utf-32" z9-109 zarch
++b2a7 cu12 RRF_U0RERE "convert utf-8 to utf-16" z9-109 zarch optparm
++b2a7 cutfu RRF_U0RERE "convert utf-8 to unicode" z9-109 zarch optparm
++b9b0 cu14 RRF_U0RERE "convert utf-8 to utf-32" z9-109 zarch optparm
+ b9be srstu RRE_RR "search string unicode" z9-109 zarch
+ d0 trtr SS_L0RDRD "tranlate and test reverse" z9-109 zarch
+ # z9-109 unnormalized hfp multiply & multiply and add
+@@ -874,7 +874,7 @@ ec00000000f6 crb$32 RRS_RRRD0 "compare a
+ ec00000000f6 crb RRS_RRRDU "compare and branch (32)" z10 zarch
+ ec00000000e4 cgrb$32 RRS_RRRD0 "compare and branch (64)" z10 zarch
+ ec00000000e4 cgrb RRS_RRRDU "compare and branch (64)" z10 zarch
+-ec0000000076 crj$32 RIE_RRP "compare and branch relative (32)" z10 zarch
++ec0000000076 crj$32 RIE_RRP0 "compare and branch relative (32)" z10 zarch
+ ec0000000076 crj RIE_RRPU "compare and branch relative (32)" z10 zarch
+ ec0000000064 cgrj$32 RIE_RRP0 "compare and branch relative (64)" z10 zarch
+ ec0000000064 cgrj RIE_RRPU "compare and branch relative (64)" z10 zarch
+@@ -886,9 +886,9 @@ ec000000007e cij$12 RIE_R0PI "compare im
+ ec000000007e cij RIE_RUPI "compare immediate and branch relative (32<8)" z10 zarch
+ ec000000007c cgij$12 RIE_R0PI "compare immediate and branch relative (64<8)" z10 zarch
+ ec000000007c cgij RIE_RUPI "compare immediate and branch relative (64<8)" z10 zarch
+-b97200000000 crt$16 RRF_00RR "compare and trap" z10 zarch
++b9720000 crt$16 RRF_00RR "compare and trap" z10 zarch
+ b972 crt RRF_U0RR "compare and trap" z10 zarch
+-b96000000000 cgrt$16 RRF_00RR "compare and trap 64" z10 zarch
++b9600000 cgrt$16 RRF_00RR "compare and trap 64" z10 zarch
+ b960 cgrt RRF_U0RR "compare and trap 64" z10 zarch
+ ec0000000072 cit$32 RIE_R0I0 "compare immediate and trap (32<16)" z10 zarch
+ ec0000000072 cit RIE_R0IU "compare immediate and trap (32<16)" z10 zarch
+@@ -912,9 +912,9 @@ ec00000000f7 clrb$32 RRS_RRRD0 "compare
+ ec00000000f7 clrb RRS_RRRDU "compare logical and branch (32)" z10 zarch
+ ec00000000e5 clgrb$32 RRS_RRRD0 "compare logical and branch (64)" z10 zarch
+ ec00000000e5 clgrb RRS_RRRDU "compare logical and branch (64)" z10 zarch
+-ec0000000077 clrj$32 RIE_RRP "compare logical and branch relative (32)" z10 zarch
++ec0000000077 clrj$32 RIE_RRP0 "compare logical and branch relative (32)" z10 zarch
+ ec0000000077 clrj RIE_RRPU "compare logical and branch relative (32)" z10 zarch
+-ec0000000065 clgrj$32 RIE_RRP "compare logical and branch relative (64)" z10 zarch
++ec0000000065 clgrj$32 RIE_RRP0 "compare logical and branch relative (64)" z10 zarch
+ ec0000000065 clgrj RIE_RRPU "compare logical and branch relative (64)" z10 zarch
+ ec00000000ff clib$12 RIS_R0RDU "compare logical immediate and branch (32<8)" z10 zarch
+ ec00000000ff clib RIS_RURDU "compare logical immediate and branch (32<8)" z10 zarch
+@@ -924,9 +924,9 @@ ec000000007f clij$12 RIE_R0PU "compare l
+ ec000000007f clij RIE_RUPU "compare logical immediate and branch relative (32<8)" z10 zarch
+ ec000000007d clgij$12 RIE_R0PU "compare logical immediate and branch relative (64<8)" z10 zarch
+ ec000000007d clgij RIE_RUPU "compare logical immediate and branch relative (64<8)" z10 zarch
+-b97300000000 clrt$16 RRF_00RR "compare logical and trap (32)" z10 zarch
++b9730000 clrt$16 RRF_00RR "compare logical and trap (32)" z10 zarch
+ b973 clrt RRF_U0RR "compare logical and trap (32)" z10 zarch
+-b96100000000 clgrt$16 RRF_00RR "compare logical and trap (64)" z10 zarch
++b9610000 clgrt$16 RRF_00RR "compare logical and trap (64)" z10 zarch
+ b961 clgrt RRF_U0RR "compare logical and trap (64)" z10 zarch
+ ec0000000073 clfit$32 RIE_R0U0 "compare logical and trap (32<16)" z10 zarch
+ ec0000000073 clfit RIE_R0UU "compare logical and trap (32<16)" z10 zarch
+@@ -963,8 +963,8 @@ c600 exrl RIL_RP "execute relative long"
+ af00 mc SI_URD "monitor call" z10 zarch
+ b9a2 ptf RRE_R0 "perform topology function" z10 zarch
+ b9af pfmf RRE_RR "perform frame management function" z10 zarch
+-b9bf trte RRF_M0RER "translate and test extended" z10 zarch
+-b9bd trtre RRF_M0RER "translate and test reverse extended" z10 zarch
++b9bf trte RRF_U0RER "translate and test extended" z10 zarch optparm
++b9bd trtre RRF_U0RER "translate and test reverse extended" z10 zarch optparm
+ b2ed ecpga RRE_RR "extract coprocessor-group address" z10 zarch
+ b2e4 ecctr RRE_RR "extract cpu counter" z10 zarch
+ b2e5 epctr RRE_RR "extract peripheral counter" z10 zarch
+@@ -1022,9 +1022,9 @@ eb00000000e6 laog RSY_RRRD "load and or
+ c804 lpd SSF_RERDRD2 "load pair disjoint 32 bit" z196 zarch
+ c805 lpdg SSF_RERDRD2 "load pair disjoint 64 bit" z196 zarch
+ b9f2 locr RRF_U0RR "load on condition 32 bit" z196 zarch
+-b9f200000000 locr*16 RRF_00RR "load on condition 32 bit" z196 zarch
++b9f20000 locr*16 RRF_00RR "load on condition 32 bit" z196 zarch
+ b9e2 locgr RRF_U0RR "load on condition 64  bit" z196 zarch
+-b9e200000000 locgr*16 RRF_00RR "load on condition 64  bit" z196 zarch
++b9e20000 locgr*16 RRF_00RR "load on condition 64  bit" z196 zarch
+ eb00000000f2 loc RSY_RURD2 "load on condition 32 bit" z196 zarch
+ eb00000000f2 loc*12 RSY_R0RD "load on condition 32 bit" z196 zarch
+ eb00000000e2 locg RSY_RURD2 "load on condition 64 bit" z196 zarch
+@@ -1128,7 +1128,7 @@ c7 bpp SMI_U0RDP "branch prediction prel
+ c5 bprp MII_UPP "branch prediction relative preload" zEC12 zarch
+ b2e8 ppa RRF_U0RR "perform processor assist" zEC12 zarch
+ b2fa niai IE_UU "next instruction access intent" zEC12 zarch
+-b98f crdte RRF_RMRR "compare and replace DAT table entry" zEC12 zarch
++b98f crdte RRF_RURR2 "compare and replace DAT table entry" zEC12 zarch optparm
+ e3000000009f lat RXY_RRRD "load and trap 32 bit" zEC12 zarch
+ e30000000085 lgat RXY_RRRD "load and trap 64 bit" zEC12 zarch
+ e300000000c8 lfhat RXY_RRRD "load high and trap" zEC12 zarch
+@@ -1143,3 +1143,539 @@ ed00000000aa cdzt RSL_LRDFU "convert fro
+ ed00000000ab cxzt RSL_LRDFEU "convert from zoned extended" zEC12 zarch
+ ed00000000a8 czdt RSL_LRDFU "convert to zoned long" zEC12 zarch
+ ed00000000a9 czxt RSL_LRDFEU "convert to zoned extended" zEC12 zarch
++
++# The new instructions of IBM z13
++
++e70000000027 lcbb RXE_RRRDU "load count to block boundary" z13 zarch
++
++# Chapter 21
++e70000000013 vgef VRV_VVXRDU "vector gather element 4 byte elements" z13 zarch
++e70000000012 vgeg VRV_VVXRDU "vector gather element 8 byte elements" z13 zarch
++e70000000044 vgbm VRI_V0U "vector generate byte mask" z13 zarch
++e70000000044 vzero VRI_V "vector set to zero" z13 zarch
++e700ffff0044 vone VRI_V "vector set to ones" z13 zarch
++e70000000046 vgm VRI_V0UUU "vector generate mask" z13 zarch
++e70000000046 vgmb VRI_V0UU "vector generate mask byte" z13 zarch
++e70000001046 vgmh VRI_V0UU "vector generate mask halfword" z13 zarch
++e70000002046 vgmf VRI_V0UU "vector generate mask word" z13 zarch
++e70000003046 vgmg VRI_V0UU "vector generate mask double word" z13 zarch
++e70000000006 vl VRX_VRRD "vector memory load" z13 zarch
++e70000000056 vlr VRX_VV "vector register load" z13 zarch
++e70000000005 vlrep VRX_VRRDU "vector load and replicate" z13 zarch
++e70000000005 vlrepb VRX_VRRD "vector load and replicate byte elements" z13 zarch
++e70000001005 vlreph VRX_VRRD "vector load and replicate halfword elements" z13 zarch
++e70000002005 vlrepf VRX_VRRD "vector load and replicate word elements" z13 zarch
++e70000003005 vlrepg VRX_VRRD "vector load and replicate double word elements" z13 zarch
++e70000000000 vleb VRX_VRRDU "vector load byte element" z13 zarch
++e70000000001 vleh VRX_VRRDU "vector load halfword element" z13 zarch
++e70000000003 vlef VRX_VRRDU "vector load word element" z13 zarch
++e70000000002 vleg VRX_VRRDU "vector load double word element" z13 zarch
++e70000000040 vleib VRI_V0IU "vector load byte element immediate" z13 zarch
++e70000000041 vleih VRI_V0IU "vector load halfword element immediate" z13 zarch
++e70000000043 vleif VRI_V0IU "vector load word element immediate" z13 zarch
++e70000000042 vleig VRI_V0IU "vector load double word element immediate" z13 zarch
++e70000000021 vlgv VRS_RVRDU "vector load gr from vr element" z13 zarch
++e70000000021 vlgvb VRS_RVRD "vector load gr from vr byte element" z13 zarch
++e70000001021 vlgvh VRS_RVRD "vector load gr from vr halfword element" z13 zarch
++e70000002021 vlgvf VRS_RVRD "vector load gr from vr word element" z13 zarch
++e70000003021 vlgvg VRS_RVRD "vector load gr from vr double word element" z13 zarch
++e70000000004 vllez VRX_VRRDU "vector load logical element and zero" z13 zarch
++e70000000004 vllezb VRX_VRRD "vector load logical byte element and zero" z13 zarch
++e70000001004 vllezh VRX_VRRD "vector load logical halfword element and zero" z13 zarch
++e70000002004 vllezf VRX_VRRD "vector load logical word element and zero" z13 zarch
++e70000003004 vllezg VRX_VRRD "vector load logical double word element and zero" z13 zarch
++e70000000036 vlm VRS_VVRD "vector load multiple" z13 zarch
++e70000000007 vlbb VRX_VRRDU "vector load to block boundary" z13 zarch
++e70000000022 vlvg VRS_VRRDU "vector load VR element from GR" z13 zarch
++e70000000022 vlvgb VRS_VRRD "vector load VR byte element from GR" z13 zarch
++e70000001022 vlvgh VRS_VRRD "vector load VR halfword element from GR" z13 zarch
++e70000002022 vlvgf VRS_VRRD "vector load VR word element from GR" z13 zarch
++e70000003022 vlvgg VRS_VRRD "vector load VR double word element from GR" z13 zarch
++e70000000062 vlvgp VRR_VRR "vector load VR from GRs disjoint" z13 zarch
++e70000000037 vll VRS_VRRD "vector load with length" z13 zarch
++e70000000061 vmrh VRR_VVV0U "vector merge high" z13 zarch
++e70000000061 vmrhb VRR_VVV "vector merge high byte" z13 zarch
++e70000001061 vmrhh VRR_VVV "vector merge high halfword" z13 zarch
++e70000002061 vmrhf VRR_VVV "vector merge high word" z13 zarch
++e70000003061 vmrhg VRR_VVV "vector merge high double word" z13 zarch
++e70000000060 vmrl VRR_VVV0U "vector merge low" z13 zarch
++e70000000060 vmrlb VRR_VVV "vector merge low byte" z13 zarch
++e70000001060 vmrlh VRR_VVV "vector merge low halfword" z13 zarch
++e70000002060 vmrlf VRR_VVV "vector merge low word" z13 zarch
++e70000003060 vmrlg VRR_VVV "vector merge low double word" z13 zarch
++e70000000094 vpk VRR_VVV0U "vector pack" z13 zarch
++e70000001094 vpkh VRR_VVV "vector pack halfword" z13 zarch
++e70000002094 vpkf VRR_VVV "vector pack word" z13 zarch
++e70000003094 vpkg VRR_VVV "vector pack double word" z13 zarch
++e70000000097 vpks VRR_VVV0U0U "vector pack saturate" z13 zarch
++e70000001097 vpksh VRR_VVV "vector pack saturate halfword" z13 zarch
++e70000002097 vpksf VRR_VVV "vector pack saturate word" z13 zarch
++e70000003097 vpksg VRR_VVV "vector pack saturate double word" z13 zarch
++e70000101097 vpkshs VRR_VVV "vector pack saturate halfword" z13 zarch
++e70000102097 vpksfs VRR_VVV "vector pack saturate word" z13 zarch
++e70000103097 vpksgs VRR_VVV "vector pack saturate double word" z13 zarch
++e70000000095 vpkls VRR_VVV0U0U "vector pack logical saturate" z13 zarch
++e70000001095 vpklsh VRR_VVV "vector pack logical saturate halfword" z13 zarch
++e70000002095 vpklsf VRR_VVV "vector pack logical saturate word" z13 zarch
++e70000003095 vpklsg VRR_VVV "vector pack logical saturate double word" z13 zarch
++e70000101095 vpklshs VRR_VVV "vector pack logical saturate halfword" z13 zarch
++e70000102095 vpklsfs VRR_VVV "vector pack logical saturate word" z13 zarch
++e70000103095 vpklsgs VRR_VVV "vector pack logical saturate double word" z13 zarch
++e7000000008c vperm VRR_VVV0V "vector permute" z13 zarch
++e70000000084 vpdi VRR_VVV0U "vector permute double word immediate" z13 zarch
++e7000000004d vrep VRI_VVUU "vector replicate" z13 zarch
++e7000000004d vrepb VRI_VVU "vector replicate byte" z13 zarch
++e7000000104d vreph VRI_VVU "vector replicate halfword" z13 zarch
++e7000000204d vrepf VRI_VVU "vector replicate word" z13 zarch
++e7000000304d vrepg VRI_VVU "vector replicate double word" z13 zarch
++e70000000045 vrepi VRI_V0IU "vector replicate immediate" z13 zarch
++e70000000045 vrepib VRI_V0I "vector replicate immediate byte" z13 zarch
++e70000001045 vrepih VRI_V0I "vector replicate immediate halfword" z13 zarch
++e70000002045 vrepif VRI_V0I "vector replicate immediate word" z13 zarch
++e70000003045 vrepig VRI_V0I "vector replicate immediate double word" z13 zarch
++e7000000001b vscef VRV_VVXRDU "vector scatter element 4 byte" z13 zarch
++e7000000001a vsceg VRV_VVXRDU "vector scatter element 8 byte" z13 zarch
++e7000000008d vsel VRR_VVV0V "vector select" z13 zarch
++e7000000005f vseg VRR_VV0U "vector sign extend to double word" z13 zarch
++e7000000005f vsegb VRR_VV "vector sign extend byte to double word" z13 zarch
++e7000000105f vsegh VRR_VV "vector sign extend halfword to double word" z13 zarch
++e7000000205f vsegf VRR_VV "vector sign extend word to double word" z13 zarch
++e7000000000e vst VRX_VRRD "vector store" z13 zarch
++e70000000008 vsteb VRX_VRRDU "vector store byte element" z13 zarch
++e70000000009 vsteh VRX_VRRDU "vector store halfword element" z13 zarch
++e7000000000b vstef VRX_VRRDU "vector store word element" z13 zarch
++e7000000000a vsteg VRX_VRRDU "vector store double word element" z13 zarch
++e7000000003e vstm VRS_VVRD "vector store multiple" z13 zarch
++e7000000003f vstl VRS_VRRD "vector store with length" z13 zarch
++e700000000d7 vuph VRR_VV0U "vector unpack high" z13 zarch
++e700000000d7 vuphb VRR_VV "vector unpack high byte" z13 zarch
++e700000010d7 vuphh VRR_VV "vector unpack high halfword" z13 zarch
++e700000020d7 vuphf VRR_VV "vector unpack high word" z13 zarch
++e700000000d5 vuplh VRR_VV0U "vector unpack logical high" z13 zarch
++e700000000d5 vuplhb VRR_VV "vector unpack logical high byte" z13 zarch
++e700000010d5 vuplhh VRR_VV "vector unpack logical high halfword" z13 zarch
++e700000020d5 vuplhf VRR_VV "vector unpack logical high word" z13 zarch
++e700000000d6 vupl VRR_VV0U "vector unpack low" z13 zarch
++e700000000d6 vuplb VRR_VV "vector unpack low byte" z13 zarch
++e700000010d6 vuplhw VRR_VV "vector unpack low halfword" z13 zarch
++e700000020d6 vuplf VRR_VV "vector unpack low word" z13 zarch
++e700000000d4 vupll VRR_VV0U "vector unpack logical low" z13 zarch
++e700000000d4 vupllb VRR_VV "vector unpack logical low byte" z13 zarch
++e700000010d4 vupllh VRR_VV "vector unpack logical low halfword" z13 zarch
++e700000020d4 vupllf VRR_VV "vector unpack logical low word" z13 zarch
++
++# Chapter 22
++e700000000f3 va VRR_VVV0U "vector add" z13 zarch
++e700000000f3 vab VRR_VVV "vector add byte" z13 zarch
++e700000010f3 vah VRR_VVV "vector add halfword" z13 zarch
++e700000020f3 vaf VRR_VVV "vector add word" z13 zarch
++e700000030f3 vag VRR_VVV "vector add double word" z13 zarch
++e700000040f3 vaq VRR_VVV "vector add quad word" z13 zarch
++e700000000f1 vacc VRR_VVV0U "vector add compute carry" z13 zarch
++e700000000f1 vaccb VRR_VVV "vector add compute carry byte" z13 zarch
++e700000010f1 vacch VRR_VVV "vector add compute carry halfword" z13 zarch
++e700000020f1 vaccf VRR_VVV "vector add compute carry word" z13 zarch
++e700000030f1 vaccg VRR_VVV "vector add compute carry doubleword" z13 zarch
++e700000040f1 vaccq VRR_VVV "vector add compute carry quadword" z13 zarch
++e700000000bb vac VRR_VVVU0V "vector add with carry" z13 zarch
++e700040000bb vacq VRR_VVV0V "vector add with carry quadword" z13 zarch
++e700000000b9 vaccc VRR_VVVU0V "vector add with carry compute carry" z13 zarch
++e700040000b9 vacccq VRR_VVV0V "vector add with carry compute carry quadword" z13 zarch
++e70000000068 vn VRR_VVV "vector and" z13 zarch
++e70000000069 vnc VRR_VVV "vector and with complement" z13 zarch
++e700000000f2 vavg VRR_VVV0U "vector average" z13 zarch
++e700000000f2 vavgb VRR_VVV "vector average byte" z13 zarch
++e700000010f2 vavgh VRR_VVV "vector average half word" z13 zarch
++e700000020f2 vavgf VRR_VVV "vector average word" z13 zarch
++e700000030f2 vavgg VRR_VVV "vector average double word" z13 zarch
++e700000000f0 vavgl VRR_VVV0U "vector average logical" z13 zarch
++e700000000f0 vavglb VRR_VVV "vector average logical byte" z13 zarch
++e700000010f0 vavglh VRR_VVV "vector average logical half word" z13 zarch
++e700000020f0 vavglf VRR_VVV "vector average logical word" z13 zarch
++e700000030f0 vavglg VRR_VVV "vector average logical double word" z13 zarch
++e70000000066 vcksm VRR_VVV "vector checksum" z13 zarch
++e700000000db vec VRR_VV0U "vector element compare" z13 zarch
++e700000000db vecb VRR_VV "vector element compare byte" z13 zarch
++e700000010db vech VRR_VV "vector element compare half word" z13 zarch
++e700000020db vecf VRR_VV "vector element compare word" z13 zarch
++e700000030db vecg VRR_VV "vector element compare double word" z13 zarch
++e700000000d9 vecl VRR_VV0U "vector element compare logical" z13 zarch
++e700000000d9 veclb VRR_VV "vector element compare logical byte" z13 zarch
++e700000010d9 veclh VRR_VV "vector element compare logical half word" z13 zarch
++e700000020d9 veclf VRR_VV "vector element compare logical word" z13 zarch
++e700000030d9 veclg VRR_VV "vector element compare logical double word" z13 zarch
++e700000000f8 vceq VRR_VVV0U0U "vector compare equal" z13 zarch
++e700000000f8 vceqb VRR_VVV "vector compare equal byte" z13 zarch
++e700000010f8 vceqh VRR_VVV "vector compare equal half word" z13 zarch
++e700000020f8 vceqf VRR_VVV "vector compare equal word" z13 zarch
++e700000030f8 vceqg VRR_VVV "vector compare equal double word" z13 zarch
++e700001000f8 vceqbs VRR_VVV "vector compare equal byte" z13 zarch
++e700001010f8 vceqhs VRR_VVV "vector compare equal half word" z13 zarch
++e700001020f8 vceqfs VRR_VVV "vector compare equal word" z13 zarch
++e700001030f8 vceqgs VRR_VVV "vector compare equal double word" z13 zarch
++e700000000fb vch VRR_VVV0U0U "vector compare high" z13 zarch
++e700000000fb vchb VRR_VVV "vector compare high byte" z13 zarch
++e700000010fb vchh VRR_VVV "vector compare high half word" z13 zarch
++e700000020fb vchf VRR_VVV "vector compare high word" z13 zarch
++e700000030fb vchg VRR_VVV "vector compare high double word" z13 zarch
++e700001000fb vchbs VRR_VVV "vector compare high byte" z13 zarch
++e700001010fb vchhs VRR_VVV "vector compare high half word" z13 zarch
++e700001020fb vchfs VRR_VVV "vector compare high word" z13 zarch
++e700001030fb vchgs VRR_VVV "vector compare high double word" z13 zarch
++e700000000f9 vchl VRR_VVV0U0U "vector compare high logical" z13 zarch
++e700000000f9 vchlb VRR_VVV "vector compare high logical byte" z13 zarch
++e700000010f9 vchlh VRR_VVV "vector compare high logical half word" z13 zarch
++e700000020f9 vchlf VRR_VVV "vector compare high logical word" z13 zarch
++e700000030f9 vchlg VRR_VVV "vector compare high logical double word" z13 zarch
++e700001000f9 vchlbs VRR_VVV "vector compare high logical byte" z13 zarch
++e700001010f9 vchlhs VRR_VVV "vector compare high logical half word" z13 zarch
++e700001020f9 vchlfs VRR_VVV "vector compare high logical word" z13 zarch
++e700001030f9 vchlgs VRR_VVV "vector compare high logical double word" z13 zarch
++e70000000053 vclz VRR_VV0U "vector count leading zeros" z13 zarch
++e70000000053 vclzb VRR_VV "vector count leading zeros byte" z13 zarch
++e70000001053 vclzh VRR_VV "vector count leading zeros halfword" z13 zarch
++e70000002053 vclzf VRR_VV "vector count leading zeros word" z13 zarch
++e70000003053 vclzg VRR_VV "vector count leading zeros doubleword" z13 zarch
++e70000000052 vctz VRR_VV0U "vector count trailing zeros" z13 zarch
++e70000000052 vctzb VRR_VV "vector count trailing zeros byte" z13 zarch
++e70000001052 vctzh VRR_VV "vector count trailing zeros halfword" z13 zarch
++e70000002052 vctzf VRR_VV "vector count trailing zeros word" z13 zarch
++e70000003052 vctzg VRR_VV "vector count trailing zeros doubleword" z13 zarch
++e7000000006d vx VRR_VVV "vector exclusive or" z13 zarch
++e700000000b4 vgfm VRR_VVV0U "vector galois field multiply sum" z13 zarch
++e700000000b4 vgfmb VRR_VVV "vector galois field multiply sum byte" z13 zarch
++e700000010b4 vgfmh VRR_VVV "vector galois field multiply sum halfword" z13 zarch
++e700000020b4 vgfmf VRR_VVV "vector galois field multiply sum word" z13 zarch
++e700000030b4 vgfmg VRR_VVV "vector galois field multiply sum doubleword" z13 zarch
++e700000000bc vgfma VRR_VVVU0V "vector galois field multiply sum and accumulate" z13 zarch
++e700000000bc vgfmab VRR_VVV0V "vector galois field multiply sum and accumulate byte" z13 zarch
++e700010000bc vgfmah VRR_VVV0V "vector galois field multiply sum and accumulate halfword" z13 zarch
++e700020000bc vgfmaf VRR_VVV0V "vector galois field multiply sum and accumulate word" z13 zarch
++e700030000bc vgfmag VRR_VVV0V "vector galois field multiply sum and accumulate doubleword" z13 zarch
++e700000000de vlc VRR_VV0U "vector load complement" z13 zarch
++e700000000de vlcb VRR_VV "vector load complement byte" z13 zarch
++e700000010de vlch VRR_VV "vector load complement halfword" z13 zarch
++e700000020de vlcf VRR_VV "vector load complement word" z13 zarch
++e700000030de vlcg VRR_VV "vector load complement doubleword" z13 zarch
++e700000000df vlp VRR_VV0U "vector load positive" z13 zarch
++e700000000df vlpb VRR_VV "vector load positive byte" z13 zarch
++e700000010df vlph VRR_VV "vector load positive halfword" z13 zarch
++e700000020df vlpf VRR_VV "vector load positive word" z13 zarch
++e700000030df vlpg VRR_VV "vector load positive doubleword" z13 zarch
++e700000000ff vmx VRR_VVV0U "vector maximum" z13 zarch
++e700000000ff vmxb VRR_VVV "vector maximum byte" z13 zarch
++e700000010ff vmxh VRR_VVV "vector maximum halfword" z13 zarch
++e700000020ff vmxf VRR_VVV "vector maximum word" z13 zarch
++e700000030ff vmxg VRR_VVV "vector maximum doubleword" z13 zarch
++e700000000fd vmxl VRR_VVV0U "vector maximum logical" z13 zarch
++e700000000fd vmxlb VRR_VVV "vector maximum logical byte" z13 zarch
++e700000010fd vmxlh VRR_VVV "vector maximum logical halfword" z13 zarch
++e700000020fd vmxlf VRR_VVV "vector maximum logical word" z13 zarch
++e700000030fd vmxlg VRR_VVV "vector maximum logical doubleword" z13 zarch
++e700000000fe vmn VRR_VVV0U "vector minimum" z13 zarch
++e700000000fe vmnb VRR_VVV "vector minimum byte" z13 zarch
++e700000010fe vmnh VRR_VVV "vector minimum halfword" z13 zarch
++e700000020fe vmnf VRR_VVV "vector minimum word" z13 zarch
++e700000030fe vmng VRR_VVV "vector minimum doubleword" z13 zarch
++e700000000fc vmnl VRR_VVV0U "vector minimum logical" z13 zarch
++e700000000fc vmnlb VRR_VVV "vector minimum logical byte" z13 zarch
++e700000010fc vmnlh VRR_VVV "vector minimum logical halfword" z13 zarch
++e700000020fc vmnlf VRR_VVV "vector minimum logical word" z13 zarch
++e700000030fc vmnlg VRR_VVV "vector minimum logical doubleword" z13 zarch
++e700000000aa vmal VRR_VVVU0V "vector multiply and add low" z13 zarch
++e700000000aa vmalb VRR_VVV0V "vector multiply and add low byte" z13 zarch
++e700010000aa vmalhw VRR_VVV0V "vector multiply and add low halfword" z13 zarch
++e700020000aa vmalf VRR_VVV0V "vector multiply and add low word" z13 zarch
++e700000000ab vmah VRR_VVVU0V "vector multiply and add high" z13 zarch
++e700000000ab vmahb VRR_VVV0V "vector multiply and add high byte" z13 zarch
++e700010000ab vmahh VRR_VVV0V "vector multiply and add high halfword" z13 zarch
++e700020000ab vmahf VRR_VVV0V "vector multiply and add high word" z13 zarch
++e700000000a9 vmalh VRR_VVVU0V "vector multiply and add logical high" z13 zarch
++e700000000a9 vmalhb VRR_VVV0V "vector multiply and add logical high byte" z13 zarch
++e700010000a9 vmalhh VRR_VVV0V "vector multiply and add logical high halfword" z13 zarch
++e700020000a9 vmalhf VRR_VVV0V "vector multiply and add logical high word" z13 zarch
++e700000000ae vmae VRR_VVVU0V "vector multiply and add even" z13 zarch
++e700000000ae vmaeb VRR_VVV0V "vector multiply and add even byte" z13 zarch
++e700010000ae vmaeh VRR_VVV0V "vector multiply and add even halfword" z13 zarch
++e700020000ae vmaef VRR_VVV0V "vector multiply and add even word" z13 zarch
++e700000000ac vmale VRR_VVVU0V "vector multiply and add logical even" z13 zarch
++e700000000ac vmaleb VRR_VVV0V "vector multiply and add logical even byte" z13 zarch
++e700010000ac vmaleh VRR_VVV0V "vector multiply and add logical even halfword" z13 zarch
++e700020000ac vmalef VRR_VVV0V "vector multiply and add logical even word" z13 zarch
++e700000000af vmao VRR_VVVU0V "vector multiply and add odd" z13 zarch
++e700000000af vmaob VRR_VVV0V "vector multiply and add odd byte" z13 zarch
++e700010000af vmaoh VRR_VVV0V "vector multiply and add odd halfword" z13 zarch
++e700020000af vmaof VRR_VVV0V "vector multiply and add odd word" z13 zarch
++e700000000ad vmalo VRR_VVVU0V "vector multiply and add logical odd" z13 zarch
++e700000000ad vmalob VRR_VVV0V "vector multiply and add logical odd byte" z13 zarch
++e700010000ad vmaloh VRR_VVV0V "vector multiply and add logical odd halfword" z13 zarch
++e700020000ad vmalof VRR_VVV0V "vector multiply and add logical odd word" z13 zarch
++e700000000a3 vmh VRR_VVV0U "vector multiply high" z13 zarch
++e700000000a3 vmhb VRR_VVV "vector multiply high byte" z13 zarch
++e700000010a3 vmhh VRR_VVV "vector multiply high halfword" z13 zarch
++e700000020a3 vmhf VRR_VVV "vector multiply high word" z13 zarch
++e700000000a1 vmlh VRR_VVV0U "vector multiply logical high" z13 zarch
++e700000000a1 vmlhb VRR_VVV "vector multiply logical high byte" z13 zarch
++e700000010a1 vmlhh VRR_VVV "vector multiply logical high halfword" z13 zarch
++e700000020a1 vmlhf VRR_VVV "vector multiply logical high word" z13 zarch
++e700000000a2 vml VRR_VVV0U "vector multiply low" z13 zarch
++e700000000a2 vmlb VRR_VVV "vector multiply low byte" z13 zarch
++e700000010a2 vmlhw VRR_VVV "vector multiply low halfword" z13 zarch
++e700000020a2 vmlf VRR_VVV "vector multiply low word" z13 zarch
++e700000000a6 vme VRR_VVV0U "vector multiply even" z13 zarch
++e700000000a6 vmeb VRR_VVV "vector multiply even byte" z13 zarch
++e700000010a6 vmeh VRR_VVV "vector multiply even halfword" z13 zarch
++e700000020a6 vmef VRR_VVV "vector multiply even word" z13 zarch
++e700000000a4 vmle VRR_VVV0U "vector multiply logical even" z13 zarch
++e700000000a4 vmleb VRR_VVV "vector multiply logical even byte" z13 zarch
++e700000010a4 vmleh VRR_VVV "vector multiply logical even halfword" z13 zarch
++e700000020a4 vmlef VRR_VVV "vector multiply logical even word" z13 zarch
++e700000000a7 vmo VRR_VVV0U "vector multiply odd" z13 zarch
++e700000000a7 vmob VRR_VVV "vector multiply odd byte" z13 zarch
++e700000010a7 vmoh VRR_VVV "vector multiply odd halfword" z13 zarch
++e700000020a7 vmof VRR_VVV "vector multiply odd word" z13 zarch
++e700000000a5 vmlo VRR_VVV0U "vector multiply logical odd" z13 zarch
++e700000000a5 vmlob VRR_VVV "vector multiply logical odd byte" z13 zarch
++e700000010a5 vmloh VRR_VVV "vector multiply logical odd halfword" z13 zarch
++e700000020a5 vmlof VRR_VVV "vector multiply logical odd word" z13 zarch
++e7000000006b vno VRR_VVV "vector nor" z13 zarch
++e7000000006b vnot VRR_VVV2 "vector not" z13 zarch
++e7000000006a vo VRR_VVV "vector or" z13 zarch
++e70000000050 vpopct VRR_VV0U "vector population count" z13 zarch
++e70000000073 verllv VRR_VVV0U "vector element rotate left logical reg" z13 zarch
++e70000000073 verllvb VRR_VVV "vector element rotate left logical reg byte" z13 zarch
++e70000001073 verllvh VRR_VVV "vector element rotate left logical reg halfword" z13 zarch
++e70000002073 verllvf VRR_VVV "vector element rotate left logical reg word" z13 zarch
++e70000003073 verllvg VRR_VVV "vector element rotate left logical reg doubleword" z13 zarch
++e70000000033 verll VRS_VVRDU "vector element rotate left logical mem" z13 zarch
++e70000000033 verllb VRS_VVRD "vector element rotate left logical mem byte" z13 zarch
++e70000001033 verllh VRS_VVRD "vector element rotate left logical mem halfword" z13 zarch
++e70000002033 verllf VRS_VVRD "vector element rotate left logical mem word" z13 zarch
++e70000003033 verllg VRS_VVRD "vector element rotate left logical mem doubleword" z13 zarch
++e70000000072 verim VRI_VVV0UU "vector element rotate and insert under mask" z13 zarch
++e70000000072 verimb VRI_VVV0U "vector element rotate and insert under mask byte" z13 zarch
++e70000001072 verimh VRI_VVV0U "vector element rotate and insert under mask halfword" z13 zarch
++e70000002072 verimf VRI_VVV0U "vector element rotate and insert under mask word" z13 zarch
++e70000003072 verimg VRI_VVV0U "vector element rotate and insert under mask doubleword" z13 zarch
++e70000000070 veslv VRR_VVV0U "vector element shift left reg" z13 zarch
++e70000000070 veslvb VRR_VVV "vector element shift left reg byte" z13 zarch
++e70000001070 veslvh VRR_VVV "vector element shift left reg halfword" z13 zarch
++e70000002070 veslvf VRR_VVV "vector element shift left reg word" z13 zarch
++e70000003070 veslvg VRR_VVV "vector element shift left reg doubleword" z13 zarch
++e70000000030 vesl VRS_VVRDU "vector element shift left mem" z13 zarch
++e70000000030 veslb VRS_VVRD "vector element shift left mem byte" z13 zarch
++e70000001030 veslh VRS_VVRD "vector element shift left mem halfword" z13 zarch
++e70000002030 veslf VRS_VVRD "vector element shift left mem word" z13 zarch
++e70000003030 veslg VRS_VVRD "vector element shift left mem doubleword" z13 zarch
++e7000000007a vesrav VRR_VVV0U "vector element shift right arithmetic reg" z13 zarch
++e7000000007a vesravb VRR_VVV "vector element shift right arithmetic reg byte" z13 zarch
++e7000000107a vesravh VRR_VVV "vector element shift right arithmetic reg halfword" z13 zarch
++e7000000207a vesravf VRR_VVV "vector element shift right arithmetic reg word" z13 zarch
++e7000000307a vesravg VRR_VVV "vector element shift right arithmetic reg doubleword" z13 zarch
++e7000000003a vesra VRS_VVRDU "vector element shift right arithmetic mem" z13 zarch
++e7000000003a vesrab VRS_VVRD "vector element shift right arithmetic mem byte" z13 zarch
++e7000000103a vesrah VRS_VVRD "vector element shift right arithmetic mem halfword" z13 zarch
++e7000000203a vesraf VRS_VVRD "vector element shift right arithmetic mem word" z13 zarch
++e7000000303a vesrag VRS_VVRD "vector element shift right arithmetic mem doubleword" z13 zarch
++e70000000078 vesrlv VRR_VVV0U "vector element shift right logical reg" z13 zarch
++e70000000078 vesrlvb VRR_VVV "vector element shift right logical reg byte" z13 zarch
++e70000001078 vesrlvh VRR_VVV "vector element shift right logical reg halfword" z13 zarch
++e70000002078 vesrlvf VRR_VVV "vector element shift right logical reg word" z13 zarch
++e70000003078 vesrlvg VRR_VVV "vector element shift right logical reg doubleword" z13 zarch
++e70000000038 vesrl VRS_VVRDU "vector element shift right logical mem" z13 zarch
++e70000000038 vesrlb VRS_VVRD "vector element shift right logical mem byte" z13 zarch
++e70000001038 vesrlh VRS_VVRD "vector element shift right logical mem halfword" z13 zarch
++e70000002038 vesrlf VRS_VVRD "vector element shift right logical mem word" z13 zarch
++e70000003038 vesrlg VRS_VVRD "vector element shift right logical mem doubleword" z13 zarch
++e70000000074 vsl VRR_VVV "vector shift left" z13 zarch
++e70000000075 vslb VRR_VVV "vector shift left by byte" z13 zarch
++e70000000077 vsldb VRI_VVV0U "vector shift left double by byte" z13 zarch
++e7000000007e vsra VRR_VVV "vector shift right arithmetic" z13 zarch
++e7000000007f vsrab VRR_VVV "vector shift right arithmetic by byte" z13 zarch
++e7000000007c vsrl VRR_VVV "vector shift right logical" z13 zarch
++e7000000007d vsrlb VRR_VVV "vector shift right logical by byte" z13 zarch
++e700000000f7 vs VRR_VVV0U "vector subtract" z13 zarch
++e700000000f7 vsb VRR_VVV "vector subtract byte" z13 zarch
++e700000010f7 vsh VRR_VVV "vector subtract halfword" z13 zarch
++e700000020f7 vsf VRR_VVV "vector subtract word" z13 zarch
++e700000030f7 vsg VRR_VVV "vector subtract doubleword" z13 zarch
++e700000040f7 vsq VRR_VVV "vector subtract quadword" z13 zarch
++e700000000f5 vscbi VRR_VVV0U "vector subtract compute borrow indication" z13 zarch
++e700000000f5 vscbib VRR_VVV "vector subtract compute borrow indication byte" z13 zarch
++e700000010f5 vscbih VRR_VVV "vector subtract compute borrow indication halfword" z13 zarch
++e700000020f5 vscbif VRR_VVV "vector subtract compute borrow indication word" z13 zarch
++e700000030f5 vscbig VRR_VVV "vector subtract compute borrow indication doubleword" z13 zarch
++e700000040f5 vscbiq VRR_VVV "vector subtract compute borrow indication quadword" z13 zarch
++e700000000bf vsbi VRR_VVVU0V "vector subtract with borrow indication" z13 zarch
++e700040000bf vsbiq VRR_VVV0V "vector subtract with borrow indication quadword" z13 zarch
++e700000000bd vsbcbi VRR_VVVU0V "vector subtract with borrow compute borrow indication" z13 zarch
++e700040000bd vsbcbiq VRR_VVV0V "vector subtract with borrow compute borrow indication quadword" z13 zarch
++e70000000065 vsumg VRR_VVV0U "vector sum across doubleword" z13 zarch
++e70000001065 vsumgh VRR_VVV "vector sum across doubleword - halfword" z13 zarch
++e70000002065 vsumgf VRR_VVV "vector sum across doubleword - word" z13 zarch
++e70000000067 vsumq VRR_VVV0U "vector sum across quadword" z13 zarch
++e70000002067 vsumqf VRR_VVV "vector sum across quadword - word elements" z13 zarch
++e70000003067 vsumqg VRR_VVV "vector sum across quadword - doubleword elements" z13 zarch
++e70000000064 vsum VRR_VVV0U "vector sum across word" z13 zarch
++e70000000064 vsumb VRR_VVV "vector sum across word - byte elements" z13 zarch
++e70000001064 vsumh VRR_VVV "vector sum across word - halfword elements" z13 zarch
++e700000000d8 vtm VRR_VV "vector test under mask" z13 zarch
++
++# Chapter 23 - Vector String Instructions
++e70000000082 vfae VRR_VVV0U0U "vector find any element equal" z13 zarch optparm
++e70000000082 vfaeb VRR_VVV0U0 "vector find any element equal byte" z13 zarch optparm
++e70000001082 vfaeh VRR_VVV0U0 "vector find any element equal halfword" z13 zarch optparm
++e70000002082 vfaef VRR_VVV0U0 "vector find any element equal word" z13 zarch optparm
++e70000100082 vfaebs VRR_VVV0U1 "vector find any element equal" z13 zarch optparm
++e70000101082 vfaehs VRR_VVV0U1 "vector find any element equal" z13 zarch optparm
++e70000102082 vfaefs VRR_VVV0U1 "vector find any element equal" z13 zarch optparm
++e70000200082 vfaezb VRR_VVV0U2 "vector find any element equal" z13 zarch optparm
++e70000201082 vfaezh VRR_VVV0U2 "vector find any element equal" z13 zarch optparm
++e70000202082 vfaezf VRR_VVV0U2 "vector find any element equal" z13 zarch optparm
++e70000300082 vfaezbs VRR_VVV0U3 "vector find any element equal" z13 zarch optparm
++e70000301082 vfaezhs VRR_VVV0U3 "vector find any element equal" z13 zarch optparm
++e70000302082 vfaezfs VRR_VVV0U3 "vector find any element equal" z13 zarch optparm
++e70000000080 vfee VRR_VVV0U0U "vector find element equal" z13 zarch optparm
++e70000000080 vfeeb VRR_VVV0U0 "vector find element equal byte" z13 zarch optparm
++e70000001080 vfeeh VRR_VVV0U0 "vector find element equal halfword" z13 zarch optparm
++e70000002080 vfeef VRR_VVV0U0 "vector find element equal word" z13 zarch optparm
++e70000100080 vfeebs VRR_VVV "vector find element equal byte" z13 zarch
++e70000101080 vfeehs VRR_VVV "vector find element equal halfword" z13 zarch
++e70000102080 vfeefs VRR_VVV "vector find element equal word" z13 zarch
++e70000200080 vfeezb VRR_VVV "vector find element equal byte" z13 zarch
++e70000201080 vfeezh VRR_VVV "vector find element equal halfword" z13 zarch
++e70000202080 vfeezf VRR_VVV "vector find element equal word" z13 zarch
++e70000300080 vfeezbs VRR_VVV "vector find element equal byte" z13 zarch
++e70000301080 vfeezhs VRR_VVV "vector find element equal halfword" z13 zarch
++e70000302080 vfeezfs VRR_VVV "vector find element equal word" z13 zarch
++e70000000081 vfene VRR_VVV0U0U "vector find element not equal" z13 zarch optparm
++e70000000081 vfeneb VRR_VVV0U0 "vector find element not equal byte" z13 zarch optparm
++e70000001081 vfeneh VRR_VVV0U0 "vector find element not equal halfword" z13 zarch optparm
++e70000002081 vfenef VRR_VVV0U0 "vector find element not equal word" z13 zarch optparm
++e70000100081 vfenebs VRR_VVV "vector find element not equal byte" z13 zarch
++e70000101081 vfenehs VRR_VVV "vector find element not equal halfword" z13 zarch
++e70000102081 vfenefs VRR_VVV "vector find element not equal word" z13 zarch
++e70000200081 vfenezb VRR_VVV "vector find element not equal byte" z13 zarch
++e70000201081 vfenezh VRR_VVV "vector find element not equal halfword" z13 zarch
++e70000202081 vfenezf VRR_VVV "vector find element not equal word" z13 zarch
++e70000300081 vfenezbs VRR_VVV "vector find element not equal byte" z13 zarch
++e70000301081 vfenezhs VRR_VVV "vector find element not equal halfword" z13 zarch
++e70000302081 vfenezfs VRR_VVV "vector find element not equal word" z13 zarch
++e7000000005c vistr VRR_VV0U0U "vector isolate string" z13 zarch optparm
++e7000000005c vistrb VRR_VV0U2 "vector isolate string byte" z13 zarch optparm
++e7000000105c vistrh VRR_VV0U2 "vector isolate string halfword" z13 zarch optparm
++e7000000205c vistrf VRR_VV0U2 "vector isolate string word" z13 zarch optparm
++e7000010005c vistrbs VRR_VV "vector isolate string byte" z13 zarch
++e7000010105c vistrhs VRR_VV "vector isolate string halfword" z13 zarch
++e7000010205c vistrfs VRR_VV "vector isolate string word" z13 zarch
++e7000000008a vstrc VRR_VVVUU0V "vector string range compare" z13 zarch optparm
++e7000000008a vstrcb VRR_VVVU0VB "vector string range compare byte" z13 zarch optparm
++e7000100008a vstrch VRR_VVVU0VB "vector string range compare halfword" z13 zarch optparm
++e7000200008a vstrcf VRR_VVVU0VB "vector string range compare word" z13 zarch optparm
++e7000010008a vstrcbs VRR_VVVU0VB1 "vector string range compare byte" z13 zarch optparm
++e7000110008a vstrchs VRR_VVVU0VB1 "vector string range compare halfword" z13 zarch optparm
++e7000210008a vstrcfs VRR_VVVU0VB1 "vector string range compare word" z13 zarch optparm
++e7000020008a vstrczb VRR_VVVU0VB2 "vector string range compare byte" z13 zarch optparm
++e7000120008a vstrczh VRR_VVVU0VB2 "vector string range compare halfword" z13 zarch optparm
++e7000220008a vstrczf VRR_VVVU0VB2 "vector string range compare word" z13 zarch optparm
++e7000030008a vstrczbs VRR_VVVU0VB3 "vector string range compare byte" z13 zarch optparm
++e7000130008a vstrczhs VRR_VVVU0VB3 "vector string range compare halfword" z13 zarch optparm
++e7000230008a vstrczfs VRR_VVVU0VB3 "vector string range compare word" z13 zarch optparm
++
++# Chapter 24
++e700000000e3 vfa VRR_VVV0UU "vector fp add" z13 zarch
++e700000030e3 vfadb VRR_VVV "vector fp add" z13 zarch
++e700000830e3 wfadb VRR_VVV "vector fp add" z13 zarch
++e700000000cb wfc VRR_VV0UU2 "vector fp compare scalar" z13 zarch
++e700000030cb wfcdb VRR_VV "vector fp compare scalar" z13 zarch
++e700000000ca wfk VRR_VV0UU2 "vector fp compare and signal scalar" z13 zarch
++e700000030ca wfkdb VRR_VV "vector fp compare and signal scalar" z13 zarch
++e700000000e8 vfce VRR_VVV0UUU "vector fp compare equal" z13 zarch
++e700000030e8 vfcedb VRR_VVV "vector fp compare equal" z13 zarch
++e700001030e8 vfcedbs VRR_VVV "vector fp compare equal" z13 zarch
++e700000830e8 wfcedb VRR_VVV "vector fp compare equal" z13 zarch
++e700001830e8 wfcedbs VRR_VVV "vector fp compare equal" z13 zarch
++e700000000eb vfch VRR_VVV0UUU "vector fp compare high" z13 zarch
++e700000030eb vfchdb VRR_VVV "vector fp compare high" z13 zarch
++e700001030eb vfchdbs VRR_VVV "vector fp compare high" z13 zarch
++e700000830eb wfchdb VRR_VVV "vector fp compare high" z13 zarch
++e700001830eb wfchdbs VRR_VVV "vector fp compare high" z13 zarch
++e700000000ea vfche VRR_VVV0UUU "vector fp compare high or equal" z13 zarch
++e700000030ea vfchedb VRR_VVV "vector fp compare high or equal" z13 zarch
++e700001030ea vfchedbs VRR_VVV "vector fp compare high or equal" z13 zarch
++e700000830ea wfchedb VRR_VVV "vector fp compare high or equal" z13 zarch
++e700001830ea wfchedbs VRR_VVV "vector fp compare high or equal" z13 zarch
++e700000000c3 vcdg VRR_VV0UUU "vector fp convert from fixed 64 bit" z13 zarch
++e700000030c3 vcdgb VRR_VV0UU "vector fp convert from fixed 64 bit" z13 zarch
++e700000830c3 wcdgb VRR_VV0UU8 "vector fp convert from fixed 64 bit" z13 zarch
++e700000000c1 vcdlg VRR_VV0UUU "vector fp convert from logical 64 bit" z13 zarch
++e700000030c1 vcdlgb VRR_VV0UU "vector fp convert from logical 64 bit" z13 zarch
++e700000830c1 wcdlgb VRR_VV0UU8 "vector fp convert from logical 64 bit" z13 zarch
++e700000000c2 vcgd VRR_VV0UUU "vector fp convert to fixed 64 bit" z13 zarch
++e700000030c2 vcgdb VRR_VV0UU "vector fp convert to fixed 64 bit" z13 zarch
++e700000830c2 wcgdb VRR_VV0UU8 "vector fp convert to fixed 64 bit" z13 zarch
++e700000000c0 vclgd VRR_VV0UUU "vector fp convert to logical 64 bit" z13 zarch
++e700000030c0 vclgdb VRR_VV0UU "vector fp convert to logical 64 bit" z13 zarch
++e700000830c0 wclgdb VRR_VV0UU8 "vector fp convert to logical 64 bit" z13 zarch
++e700000000e5 vfd VRR_VVV0UU "vector fp divide" z13 zarch
++e700000030e5 vfddb VRR_VVV "vector fp divide" z13 zarch
++e700000830e5 wfddb VRR_VVV "vector fp divide" z13 zarch
++e700000000c7 vfi VRR_VV0UUU "vector load fp integer" z13 zarch
++e700000030c7 vfidb VRR_VV0UU "vector load fp integer" z13 zarch
++e700000830c7 wfidb VRR_VV0UU8 "vector load fp integer" z13 zarch
++e700000000c4 vlde VRR_VV0UU2 "vector fp load lengthened" z13 zarch
++e700000020c4 vldeb VRR_VV "vector fp load lengthened" z13 zarch
++e700000820c4 wldeb VRR_VV "vector fp load lengthened" z13 zarch
++e700000000c5 vled VRR_VV0UUU "vector fp load rounded" z13 zarch
++e700000030c5 vledb VRR_VV0UU "vector fp load rounded" z13 zarch
++e700000830c5 wledb VRR_VV0UU8 "vector fp load rounded" z13 zarch
++e700000000e7 vfm VRR_VVV0UU "vector fp multiply" z13 zarch
++e700000030e7 vfmdb VRR_VVV "vector fp multiply" z13 zarch
++e700000830e7 wfmdb VRR_VVV "vector fp multiply" z13 zarch
++e7000000008f vfma VRR_VVVU0UV "vector fp multiply and add" z13 zarch
++e7000300008f vfmadb VRR_VVVV "vector fp multiply and add" z13 zarch
++e7000308008f wfmadb VRR_VVVV "vector fp multiply and add" z13 zarch
++e7000000008e vfms VRR_VVVU0UV "vector fp multiply and subtract" z13 zarch
++e7000300008e vfmsdb VRR_VVVV "vector fp multiply and subtract" z13 zarch
++e7000308008e wfmsdb VRR_VVVV "vector fp multiply and subtract" z13 zarch
++e700000000cc vfpso VRR_VV0UUU "vector fp perform sign operation" z13 zarch
++e700000030cc vfpsodb VRR_VV0U2 "vector fp perform sign operation" z13 zarch
++e700000830cc wfpsodb VRR_VV0U2 "vector fp perform sign operation" z13 zarch
++e700000030cc vflcdb VRR_VV "vector fp perform sign operation" z13 zarch
++e700000830cc wflcdb VRR_VV "vector fp perform sign operation" z13 zarch
++e700001030cc vflndb VRR_VV "vector fp perform sign operation" z13 zarch
++e700001830cc wflndb VRR_VV "vector fp perform sign operation" z13 zarch
++e700002030cc vflpdb VRR_VV "vector fp perform sign operation" z13 zarch
++e700002830cc wflpdb VRR_VV "vector fp perform sign operation" z13 zarch
++e700000000ce vfsq VRR_VV0UU2 "vector fp square root" z13 zarch
++e700000030ce vfsqdb VRR_VV "vector fp square root" z13 zarch
++e700000830ce wfsqdb VRR_VV "vector fp square root" z13 zarch
++e700000000e2 vfs VRR_VVV0UU "vector fp subtract" z13 zarch
++e700000030e2 vfsdb VRR_VVV "vector fp subtract" z13 zarch
++e700000830e2 wfsdb VRR_VVV "vector fp subtract" z13 zarch
++e7000000004a vftci VRI_VVUUU "vector fp test data class immediate" z13 zarch
++e7000000304a vftcidb VRI_VVU2 "vector fp test data class immediate" z13 zarch
++e7000008304a wftcidb VRI_VVU2 "vector fp test data class immediate" z13 zarch
++
++ed00000000ae cdpt RSL_LRDFU "convert from packed to long dfp" z13 zarch
++ed00000000af cxpt RSL_LRDFEU "convert from packed to extended dfp" z13 zarch
++ed00000000ac cpdt RSL_LRDFU "convert from long dfp to packed" z13 zarch
++ed00000000ad cpxt RSL_LRDFEU "convert from extended dfp to packed" z13 zarch
++
++b9e0 locfhr RRF_U0RR "load high on condition from gpr" z13 zarch
++b9e00000 locfhr*16 RRF_00RR "load high on condition from gpr" z13 zarch
++eb00000000e0 locfh RSY_RURD2 "load high on condition from memory" z13 zarch
++eb00000000e0 locfh*12 RSY_R0RD "load high on condition from memory" z13 zarch
++ec0000000042 lochi RIE_RUI0 "load halfword immediate on condition into 32 bit gpr" z13 zarch
++ec0000000042 lochi*12 RIE_R0I0 "load halfword immediate on condition into 32 bit gpr" z13 zarch
++ec0000000046 locghi RIE_RUI0 "load halfword immediate on condition into 64 bit gpr" z13 zarch
++ec0000000046 locghi*12 RIE_R0I0 "load halfword immediate on condition into 64 bit gpr" z13 zarch
++ec000000004e lochhi RIE_RUI0 "load halfword high immediate on condition" z13 zarch
++ec000000004e lochhi*12 RIE_R0I0 "load halfword high immediate on condition" z13 zarch
++eb00000000e1 stocfh RSY_RURD2 "store high on condition" z13 zarch
++eb00000000e1 stocfh*12 RSY_R0RD "store high on condition" z13 zarch
++
++e3000000003a llzrgf RXY_RRRD "load logical and zero rightmost bytes 32->64" z13 zarch
++e3000000003b lzrf RXY_RRRD "load and zero rightmost byte 32->32" z13 zarch
++e3000000002a lzrg RXY_RRRD "load and zero rightmost byte 64->64" z13 zarch
++b93c ppno RRE_RR "perform pseudorandom number operation" z13 zarch

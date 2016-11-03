@@ -1,0 +1,20 @@
+--- binutils-2.25.1.orig/ld/testsuite/ld-s390/gotreloc_31-1.dd	2016-01-29 09:54:35.486855743 +0000
++++ binutils-2.25.1/ld/testsuite/ld-s390/gotreloc_31-1.dd	2016-01-29 10:18:18.119301430 +0000
+@@ -4,11 +4,10 @@ tmpdir/gotreloc_31-1:     file format el
+ Disassembly of section .text:
+ 
+ .* <foo>:
+-.*:	c4 18 00 00       	.long	0xc4180000
+-.*:	08 4e e3 10       	.long	0x084ee310
+-.*:	c0 0c 00 04       	.long	0xc00c0004
+-.*:	c0 10 00 00 00 08 [	 ]*larl	%r1,168 <bar>
+-.*:	58 10 c0 0c [	 ]*l	%r1,12\(%r12\)
+-.*:	c0 10 00 00 00 03 [	 ]*larl	%r1,168 <bar>
++.*:	c4 18 00 00 08 4e[	 ]*lgrl	%r1,11e8 <_GLOBAL_OFFSET_TABLE_\+0xc>
++.*:	e3 10 c0 0c 00 04[	 ]*lg	%r1,12\(%r12\)
++.*:	c0 10 00 00 00 08[	 ]*larl	%r1,168 <bar>
++.*:	58 10 c0 0c[	 ]*l	%r1,12\(%r12\)
++.*:	c0 10 00 00 00 03[	 ]*larl	%r1,168 <bar>
+ .* <bar>:
+-.*:	00 00 01 23       	.long	0x00000123
++.*:	00 00 01 23[	 ]*.long[	 ]*0x00000123

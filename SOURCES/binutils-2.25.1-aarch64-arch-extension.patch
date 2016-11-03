@@ -1,0 +1,229 @@
+diff -rup binutils-2.25.1.orig/gas/doc/c-aarch64.texi binutils-2.25.1/gas/doc/c-aarch64.texi
+--- binutils-2.25.1.orig/gas/doc/c-aarch64.texi	2016-06-15 16:35:49.887888595 +0100
++++ binutils-2.25.1/gas/doc/c-aarch64.texi	2016-06-15 16:44:41.276361877 +0100
+@@ -55,11 +55,13 @@ file in ELF32 and ELF64 format respectiv
+ This option specifies the target processor.  The assembler will issue an error
+ message if an attempt is made to assemble an instruction which will not execute
+ on the target processor.  The following processor names are recognized:
++@code{cortex-a35},
+ @code{cortex-a53},
+ @code{cortex-a57},
+ @code{cortex-a72},
++@code{cortex-a73},
+ @code{exynos-m1},
+-@code{xgene1},
++@code{xgene1}
+ and
+ @code{xgene2}.
+ The special name @code{all} may be used to allow the assembler to accept
+@@ -233,6 +235,24 @@ The AArch64 architecture uses @sc{ieee}
+ @table @code
+ 
+ @c AAAAAAAAAAAAAAAAAAAAAAAAA
++
++@cindex @code{.arch} directive, AArch64
++@item .arch @var{name}
++Select the target architecture.  Valid values for @var{name} are the same as
++for the @option{-march} commandline option.
++
++Specifying @code{.arch} clears any previously selected architecture
++extensions.
++
++@cindex @code{.arch_extension} directive, AArch64
++@item .arch_extension @var{name}
++Add or remove an architecture extension to the target architecture.  Valid
++values for @var{name} are the same as those accepted as architectural
++extensions by the @option{-mcpu} commandline option.
++
++@code{.arch_extension} may be used multiple times to add or remove extensions
++incrementally to the architecture being compiled for.
++
+ @c BBBBBBBBBBBBBBBBBBBBBBBBBB
+ 
+ @cindex @code{.bss} directive, AArch64
+@@ -240,12 +260,35 @@ The AArch64 architecture uses @sc{ieee}
+ This directive switches to the @code{.bss} section.
+ 
+ @c CCCCCCCCCCCCCCCCCCCCCCCCCC
++
++@cindex @code{.cpu} directive, AArch64
++@item .cpu @var{name}
++Set the target processor.  Valid values for @var{name} are the same as
++those accepted by the @option{-mcpu=} command line option.
++
+ @c DDDDDDDDDDDDDDDDDDDDDDDDDD
++
++@cindex @code{.dword} directive, AArch64
++@item .dword @var{expressions}
++The @code{.dword} directive produces 64 bit values.
++
+ @c EEEEEEEEEEEEEEEEEEEEEEEEEE
++
++@cindex @code{.even} directive, AArch64
++@item .even
++The @code{.even} directive aligns the output on the next even byte
++boundary.
++
+ @c FFFFFFFFFFFFFFFFFFFFFFFFFF
+ @c GGGGGGGGGGGGGGGGGGGGGGGGGG
+ @c HHHHHHHHHHHHHHHHHHHHHHHHHH
+ @c IIIIIIIIIIIIIIIIIIIIIIIIII
++
++@cindex @code{.inst} directive, AArch64
++@item .inst @var{expressions}
++Inserts the expressions into the output as if they were instructions,
++rather than data.
++
+ @c JJJJJJJJJJJJJJJJJJJJJJJJJJ
+ @c KKKKKKKKKKKKKKKKKKKKKKKKKK
+ @c LLLLLLLLLLLLLLLLLLLLLLLLLL
+@@ -311,6 +354,12 @@ should only be done if it is really nece
+ 
+ @c WWWWWWWWWWWWWWWWWWWWWWWWWW
+ @c XXXXXXXXXXXXXXXXXXXXXXXXXX
++
++@cindex @code{.xword} directive, AArch64
++@item .xword @var{expressions}
++The @code{.xword} directive produces 64 bit values.  This is the same
++as the @code{.dword} directive.
++
+ @c YYYYYYYYYYYYYYYYYYYYYYYYYY
+ @c ZZZZZZZZZZZZZZZZZZZZZZZZZZ
+ 
+--- binutils-2.25.1.orig/gas/config/tc-aarch64.c	2016-06-15 16:35:49.779887881 +0100
++++ binutils-2.25.1/gas/config/tc-aarch64.c	2016-06-15 17:09:40.077963780 +0100
+@@ -1930,6 +1930,7 @@ s_tlsdesccall (int ignored ATTRIBUTE_UNU
+ 
+ static void s_aarch64_arch (int);
+ static void s_aarch64_cpu (int);
++static void s_aarch64_arch_extension (int);
+ 
+ /* This table describes all the machine specific pseudo-ops the assembler
+    has to support.  The fields are:
+@@ -1947,6 +1948,7 @@ const pseudo_typeS md_pseudo_table[] = {
+   {"pool", s_ltorg, 0},
+   {"cpu", s_aarch64_cpu, 0},
+   {"arch", s_aarch64_arch, 0},
++  {"arch_extension", s_aarch64_arch_extension, 0},
+   {"inst", s_aarch64_inst, 0},
+ #ifdef OBJ_ELF
+   {"tlsdesccall", s_tlsdesccall, 0},
+@@ -7200,12 +7202,16 @@ struct aarch64_cpu_option_table
+    recognized by GCC.  */
+ static const struct aarch64_cpu_option_table aarch64_cpus[] = {
+   {"all", AARCH64_ANY, NULL},
++  {"cortex-a35", AARCH64_FEATURE (AARCH64_ARCH_V8,
++				  AARCH64_FEATURE_CRC), "Cortex-A35"},
+   {"cortex-a53", AARCH64_FEATURE(AARCH64_ARCH_V8,
+ 				 AARCH64_FEATURE_CRC), "Cortex-A53"},
+   {"cortex-a57", AARCH64_FEATURE(AARCH64_ARCH_V8,
+ 				 AARCH64_FEATURE_CRC), "Cortex-A57"},
+   {"cortex-a72", AARCH64_FEATURE (AARCH64_ARCH_V8,
+ 				  AARCH64_FEATURE_CRC), "Cortex-A72"},
++  {"cortex-a73", AARCH64_FEATURE (AARCH64_ARCH_V8,
++				  AARCH64_FEATURE_CRC), "Cortex-A73"},
+   {"exynos-m1", AARCH64_FEATURE (AARCH64_ARCH_V8,
+ 				 AARCH64_FEATURE_CRC | AARCH64_FEATURE_CRYPTO),
+ 				 "Samsung Exynos M1"},
+@@ -7265,7 +7271,8 @@ struct aarch64_long_option_table
+ };
+ 
+ static int
+-aarch64_parse_features (char *str, const aarch64_feature_set **opt_p)
++aarch64_parse_features (char *str, const aarch64_feature_set **opt_p,
++			bfd_boolean ext_only)
+ {
+   /* We insist on extensions being added before being removed.  We achieve
+      this by using the ADDING_VALUE variable to indicate whether we are
+@@ -7281,17 +7288,19 @@ aarch64_parse_features (char *str, const
+   while (str != NULL && *str != 0)
+     {
+       const struct aarch64_option_cpu_value_table *opt;
+-      char *ext;
++      char *ext = NULL;
+       int optlen;
+ 
+-      if (*str != '+')
++      if (!ext_only)
+ 	{
+-	  as_bad (_("invalid architectural extension"));
+-	  return 0;
+-	}
++	  if (*str != '+')
++	    {
++	      as_bad (_("invalid architectural extension"));
++	      return 0;
++	    }
+ 
+-      str++;
+-      ext = strchr (str, '+');
++	  ext = strchr (++str, '+');
++	}
+ 
+       if (ext != NULL)
+ 	optlen = ext - str;
+@@ -7371,7 +7380,7 @@ aarch64_parse_cpu (char *str)
+       {
+ 	mcpu_cpu_opt = &opt->value;
+ 	if (ext != NULL)
+-	  return aarch64_parse_features (ext, &mcpu_cpu_opt);
++	  return aarch64_parse_features (ext, &mcpu_cpu_opt, FALSE);
+ 
+ 	return 1;
+       }
+@@ -7403,7 +7412,7 @@ aarch64_parse_arch (char *str)
+       {
+ 	march_cpu_opt = &opt->value;
+ 	if (ext != NULL)
+-	  return aarch64_parse_features (ext, &march_cpu_opt);
++	  return aarch64_parse_features (ext, &march_cpu_opt, FALSE);
+ 
+ 	return 1;
+       }
+@@ -7586,7 +7595,7 @@ s_aarch64_cpu (int ignored ATTRIBUTE_UNU
+       {
+ 	mcpu_cpu_opt = &opt->value;
+ 	if (ext != NULL)
+-	  if (!aarch64_parse_features (ext, &mcpu_cpu_opt))
++	  if (!aarch64_parse_features (ext, &mcpu_cpu_opt, FALSE))
+ 	    return;
+ 
+ 	cpu_variant = *mcpu_cpu_opt;
+@@ -7632,7 +7641,7 @@ s_aarch64_arch (int ignored ATTRIBUTE_UN
+       {
+ 	mcpu_cpu_opt = &opt->value;
+ 	if (ext != NULL)
+-	  if (!aarch64_parse_features (ext, &mcpu_cpu_opt))
++	  if (!aarch64_parse_features (ext, &mcpu_cpu_opt, FALSE))
+ 	    return;
+ 
+ 	cpu_variant = *mcpu_cpu_opt;
+@@ -7647,6 +7656,28 @@ s_aarch64_arch (int ignored ATTRIBUTE_UN
+   ignore_rest_of_line ();
+ }
+ 
++/* Parse a .arch_extension directive.  */
++
++static void
++s_aarch64_arch_extension (int ignored ATTRIBUTE_UNUSED)
++{
++  char saved_char;
++  char *ext = input_line_pointer;;
++
++  while (*input_line_pointer && !ISSPACE (*input_line_pointer))
++    input_line_pointer++;
++  saved_char = *input_line_pointer;
++  *input_line_pointer = 0;
++
++  if (!aarch64_parse_features (ext, &mcpu_cpu_opt, TRUE))
++    return;
++
++  cpu_variant = *mcpu_cpu_opt;
++
++  *input_line_pointer = saved_char;
++  demand_empty_rest_of_line ();
++}
++
+ /* Copy symbol information.  */
+ 
+ void

@@ -1,0 +1,101 @@
+--- binutils-2.25.orig/bfd/elfnn-aarch64.c	2015-09-14 12:05:10.010398108 +0100
++++ binutils-2.25/bfd/elfnn-aarch64.c	2015-09-14 12:12:40.730934194 +0100
+@@ -2199,9 +2199,11 @@ aarch64_type_of_stub (struct bfd_link_in
+   globals = elf_aarch64_hash_table (info);
+   via_plt_p = (globals->root.splt != NULL && hash != NULL
+ 	       && hash->root.plt.offset != (bfd_vma) - 1);
+-
++  /* Make sure call to plt stub can fit into the branch range.  */
+   if (via_plt_p)
+-    return stub_type;
++    destination = (globals->root.splt->output_section->vma
++		   + globals->root.splt->output_offset
++		   + hash->root.plt.offset);
+ 
+   /* Determine where the call point is.  */
+   location = (input_sec->output_offset
+--- binutils-2.25.1.orig/bfd/elfnn-aarch64.c	2016-02-09 13:09:06.048284671 +0000
++++ binutils-2.25.1/bfd/elfnn-aarch64.c	2016-02-09 13:11:13.397971718 +0000
+@@ -4394,38 +4394,25 @@ elfNN_aarch64_final_link_relocate (reloc
+ 	/* If the call goes through a PLT entry, make sure to
+ 	   check distance to the right destination address.  */
+ 	if (via_plt_p)
+-	  {
+-	    value = (splt->output_section->vma
+-		     + splt->output_offset + h->plt.offset);
+-	    *unresolved_reloc_p = FALSE;
+-	  }
++	  value = (splt->output_section->vma
++		   + splt->output_offset + h->plt.offset);
+ 
+-	/* If the target symbol is global and marked as a function the
+-	   relocation applies a function call or a tail call.  In this
+-	   situation we can veneer out of range branches.  The veneers
+-	   use IP0 and IP1 hence cannot be used arbitrary out of range
+-	   branches that occur within the body of a function.  */
+-	if (h && h->type == STT_FUNC)
+-	  {
+-	    /* Check if a stub has to be inserted because the destination
+-	       is too far away.  */
+-	    if (! aarch64_valid_branch_p (value, place))
+-	      {
+-		/* The target is out of reach, so redirect the branch to
+-		   the local stub for this function.  */
+-		struct elf_aarch64_stub_hash_entry *stub_entry;
+-		stub_entry = elfNN_aarch64_get_stub_entry (input_section,
+-							   sym_sec, h,
+-							   rel, globals);
+-		if (stub_entry != NULL)
+-		  value = (stub_entry->stub_offset
+-			   + stub_entry->stub_sec->output_offset
+-			   + stub_entry->stub_sec->output_section->vma);
+-	      }
+-	  }
++	/* Check if a stub has to be inserted because the destination
++	   is too far away.  */
++	struct elf_aarch64_stub_hash_entry *stub_entry = NULL;
++	if (! aarch64_valid_branch_p (value, place))
++	  /* The target is out of reach, so redirect the branch to
++	     the local stub for this function.  */
++	stub_entry = elfNN_aarch64_get_stub_entry (input_section, sym_sec, h,
++						   rel, globals);
++	if (stub_entry != NULL)
++	  value = (stub_entry->stub_offset
++		   + stub_entry->stub_sec->output_offset
++		   + stub_entry->stub_sec->output_section->vma);
+       }
+       value = _bfd_aarch64_elf_resolve_relocation (bfd_r_type, place, value,
+ 						   signed_addend, weak_undef_p);
++      *unresolved_reloc_p = FALSE;
+       break;
+ 
+     case BFD_RELOC_AARCH64_ADR_LO21_PCREL:
+--- binutils-2.25.1.orig/bfd/elfnn-aarch64.c	2016-06-13 14:44:40.637034867 +0100
++++ binutils-2.25.1/bfd/elfnn-aarch64.c	2016-06-13 14:50:42.798414611 +0100
+@@ -2190,6 +2190,7 @@ static enum elf_aarch64_stub_type
+ aarch64_type_of_stub (struct bfd_link_info *info,
+ 		      asection *input_sec,
+ 		      const Elf_Internal_Rela *rel,
++		      asection *sym_sec,
+ 		      unsigned char st_type,
+ 		      struct elf_aarch64_link_hash_entry *hash,
+ 		      bfd_vma destination)
+@@ -2201,7 +2202,8 @@ aarch64_type_of_stub (struct bfd_link_in
+   enum elf_aarch64_stub_type stub_type = aarch64_stub_none;
+   bfd_boolean via_plt_p;
+ 
+-  if (st_type != STT_FUNC)
++  if (st_type != STT_FUNC
++      && (sym_sec != bfd_abs_section_ptr))
+     return stub_type;
+ 
+   globals = elf_aarch64_hash_table (info);
+@@ -3373,7 +3375,7 @@ elfNN_aarch64_size_stubs (bfd *output_bf
+ 
+ 		  /* Determine what (if any) linker stub is needed.  */
+ 		  stub_type = aarch64_type_of_stub
+-		    (info, section, irela, st_type, hash, destination);
++		    (info, section, irela, sym_sec, st_type, hash, destination);
+ 		  if (stub_type == aarch64_stub_none)
+ 		    continue;
+ 

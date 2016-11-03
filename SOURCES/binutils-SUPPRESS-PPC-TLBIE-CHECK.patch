@@ -1,0 +1,29 @@
+--- binutils-2.25.1/gas/testsuite/gas/ppc/power7.s	2015-07-21 09:20:58.000000000 +0100
++++ binutils-2.25.1.new/gas/testsuite/gas/ppc/power7.s	2016-03-01 14:08:17.020136029 +0000
+@@ -98,4 +98,4 @@ power7:
+ 	mfppr32	  11
+ 	mtppr	  12
+ 	mtppr32	  13
+-	tlbie     10,11
++	tlbie     10
+--- binutils-2.25.1/gas/testsuite/gas/ppc/power7.d	2015-07-21 09:20:58.000000000 +0100
++++ binutils-2.25.1.new/gas/testsuite/gas/ppc/power7.d	2016-03-01 14:08:17.020136029 +0000
+@@ -107,5 +107,5 @@ Disassembly of section \.text:
+ .*:	(7d 62 e2 a6|a6 e2 62 7d) 	mfppr32 r11
+ .*:	(7d 80 e3 a6|a6 e3 80 7d) 	mtppr   r12
+ .*:	(7d a2 e3 a6|a6 e3 a2 7d) 	mtppr32 r13
+-.*:	(7d 60 52 64|64 52 60 7d) 	tlbie   r10,r11
++.*:	(7c 00 52 64|64 52 00 7c) 	tlbie   r10
+ #pass
+--- binutils-2.25.1.orig/opcodes/ppc-opc.c	2016-05-23 12:32:11.082421725 +0100
++++ binutils-2.25.1/opcodes/ppc-opc.c	2016-05-23 12:32:46.280604646 +0100
+@@ -5142,8 +5142,7 @@ const struct powerpc_opcode powerpc_opco
+ {"mfbhrbe",	X(31,302),	X_MASK,      POWER8,	PPCNONE,	{RT, BHRBE}},
+ 
+ {"tlbie",	X(31,306),	X_MASK|1<<20,POWER9,	TITAN,  	{RB, RS, RIC, PRS, X_R}},
+-{"tlbie",	X(31,306),	XRA_MASK,    POWER7,	POWER9|TITAN,  	{RB, RS}},
+-{"tlbie",	X(31,306),	XRTLRA_MASK, PPC,	E500|POWER7|TITAN,  	{RB, L}},
++{"tlbie",	X(31,306),	XRTLRA_MASK, PPC,	POWER9|TITAN,  	{RB, L}},
+ {"tlbi",	X(31,306),	XRT_MASK,    POWER,	PPCNONE,	{RA0, RB}},
+ 
+ {"mfvsrld",	X(31,307),	XX1RB_MASK,  PPCVSX3,	PPCNONE,	{RA, XS6}},

@@ -1,0 +1,4254 @@
+diff -rup binutils-2.25.1.orig/bfd/bfd-in2.h binutils-2.25.1/bfd/bfd-in2.h
+--- binutils-2.25.1.orig/bfd/bfd-in2.h	2016-05-06 09:56:58.700611803 +0100
++++ binutils-2.25.1/bfd/bfd-in2.h	2016-05-06 12:20:48.501441990 +0100
+@@ -3253,6 +3253,7 @@ instruction.  */
+   BFD_RELOC_PPC_VLE_SDAREL_HI16D,
+   BFD_RELOC_PPC_VLE_SDAREL_HA16A,
+   BFD_RELOC_PPC_VLE_SDAREL_HA16D,
++  BFD_RELOC_PPC_REL16DX_HA,
+   BFD_RELOC_PPC64_HIGHER,
+   BFD_RELOC_PPC64_HIGHER_S,
+   BFD_RELOC_PPC64_HIGHEST,
+Only in binutils-2.25.1/bfd: bfd-in2.h.orig
+diff -rup binutils-2.25.1.orig/bfd/elf32-ppc.c binutils-2.25.1/bfd/elf32-ppc.c
+--- binutils-2.25.1.orig/bfd/elf32-ppc.c	2016-05-06 09:56:58.689611747 +0100
++++ binutils-2.25.1/bfd/elf32-ppc.c	2016-05-06 12:20:48.504442008 +0100
+@@ -1731,6 +1731,21 @@ static reloc_howto_type ppc_elf_howto_ra
+ 	 0xffff,		/* dst_mask */
+ 	 TRUE),			/* pcrel_offset */
+ 
++  /* Like R_PPC_REL16_HA but for split field in addpcis.  */
++  HOWTO (R_PPC_REL16DX_HA,	/* type */
++	 16,			/* rightshift */
++	 2,			/* size (0 = byte, 1 = short, 2 = long) */
++	 16,			/* bitsize */
++	 TRUE,			/* pc_relative */
++	 0,			/* bitpos */
++	 complain_overflow_signed, /* complain_on_overflow */
++	 ppc_elf_addr16_ha_reloc, /* special_function */
++	 "R_PPC_REL16DX_HA",	/* name */
++	 FALSE,			/* partial_inplace */
++	 0,			/* src_mask */
++	 0x1fffc1,		/* dst_mask */
++	 TRUE),			/* pcrel_offset */
++
+   /* GNU extension to record C++ vtable hierarchy.  */
+   HOWTO (R_PPC_GNU_VTINHERIT,	/* type */
+ 	 0,			/* rightshift */
+@@ -1989,6 +2004,7 @@ ppc_elf_reloc_type_lookup (bfd *abfd ATT
+     case BFD_RELOC_LO16_PCREL:		r = R_PPC_REL16_LO;		break;
+     case BFD_RELOC_HI16_PCREL:		r = R_PPC_REL16_HI;		break;
+     case BFD_RELOC_HI16_S_PCREL:	r = R_PPC_REL16_HA;		break;
++    case BFD_RELOC_PPC_REL16DX_HA:	r = R_PPC_REL16DX_HA;		break;
+     case BFD_RELOC_VTABLE_INHERIT:	r = R_PPC_GNU_VTINHERIT;	break;
+     case BFD_RELOC_VTABLE_ENTRY:	r = R_PPC_GNU_VTENTRY;		break;
+     }
+@@ -2058,7 +2074,10 @@ ppc_elf_addr16_ha_reloc (bfd *abfd ATTRI
+ 			 bfd *output_bfd,
+ 			 char **error_message ATTRIBUTE_UNUSED)
+ {
+-  bfd_vma relocation;
++  enum elf_ppc_reloc_type r_type;
++  long insn;
++  bfd_size_type octets;
++  bfd_vma value;
+ 
+   if (output_bfd != NULL)
+     {
+@@ -2066,20 +2085,28 @@ ppc_elf_addr16_ha_reloc (bfd *abfd ATTRI
+       return bfd_reloc_ok;
+     }
+ 
+-  if (bfd_is_com_section (symbol->section))
+-    relocation = 0;
+-  else
+-    relocation = symbol->value;
+-
+-  relocation += symbol->section->output_section->vma;
+-  relocation += symbol->section->output_offset;
+-  relocation += reloc_entry->addend;
+-  if (reloc_entry->howto->pc_relative)
+-    relocation -= reloc_entry->address;
+-
+-  reloc_entry->addend += (relocation & 0x8000) << 1;
+-
+-  return bfd_reloc_continue;
++  reloc_entry->addend += 0x8000;
++  r_type = reloc_entry->howto->type;
++  if (r_type != R_PPC_REL16DX_HA)
++    return bfd_reloc_continue;
++
++  value = 0;
++  if (!bfd_is_com_section (symbol->section))
++    value = symbol->value;
++  value += (reloc_entry->addend
++	    + symbol->section->output_offset
++	    + symbol->section->output_section->vma);
++  value -= (reloc_entry->address
++	    + input_section->output_offset
++	    + input_section->output_section->vma);
++  value >>= 16;
++
++  octets = reloc_entry->address * bfd_octets_per_byte (abfd);
++  insn = bfd_get_32 (abfd, (bfd_byte *) data + octets);
++  insn &= ~0x1fffc1;
++  insn |= (value & 0xffc1) | ((value & 0x3e) << 15);
++  bfd_put_32 (abfd, insn, (bfd_byte *) data + octets);
++  return bfd_reloc_ok;
+ }
+ 
+ static bfd_reloc_status_type
+@@ -4243,6 +4270,7 @@ ppc_elf_check_relocs (bfd *abfd,
+ 	case R_PPC_REL16_LO:
+ 	case R_PPC_REL16_HI:
+ 	case R_PPC_REL16_HA:
++	case R_PPC_REL16DX_HA:
+ 	  ppc_elf_tdata (abfd)->has_rel16 = 1;
+ 	  break;
+ 
+@@ -7543,7 +7571,9 @@ is_insn_ds_form (unsigned int insn)
+ static bfd_boolean
+ is_insn_dq_form (unsigned int insn)
+ {
+-  return (insn & (0x3f << 26)) == 56u << 26; /* lq */
++  return ((insn & (0x3f << 26)) == 56u << 26 /* lq */
++	  || ((insn & (0x3f << 26)) == (61u << 26) /* lxv, stxv */
++	      && (insn & 3) == 1));
+ }
+ 
+ /* The RELOCATE_SECTION function is called by the ELF backend linker
+@@ -8411,6 +8441,7 @@ ppc_elf_relocate_section (bfd *output_bf
+ 	case R_PPC_REL16_LO:
+ 	case R_PPC_REL16_HI:
+ 	case R_PPC_REL16_HA:
++	case R_PPC_REL16DX_HA:
+ 	  break;
+ 
+ 	case R_PPC_REL32:
+@@ -9112,6 +9143,7 @@ ppc_elf_relocate_section (bfd *output_bf
+ 
+ 	case R_PPC_ADDR16_HA:
+ 	case R_PPC_REL16_HA:
++	case R_PPC_REL16DX_HA:
+ 	case R_PPC_SECTOFF_HA:
+ 	case R_PPC_TPREL16_HA:
+ 	case R_PPC_DTPREL16_HA:
+@@ -9169,10 +9201,12 @@ ppc_elf_relocate_section (bfd *output_bf
+ 	      mask = 15;
+ 	    else
+ 	      break;
+-	    lobit = mask & (relocation + addend);
++	    relocation += addend;
++	    addend = insn & mask;
++	    lobit = mask & relocation;
+ 	    if (lobit != 0)
+ 	      {
+-		addend -= lobit;
++		relocation ^= lobit;
+ 		info->callbacks->einfo
+ 		  (_("%P: %H: error: %s against `%s' not a multiple of %u\n"),
+ 		   input_bfd, input_section, rel->r_offset,
+@@ -9180,7 +9214,6 @@ ppc_elf_relocate_section (bfd *output_bf
+ 		bfd_set_error (bfd_error_bad_value);
+ 		ret = FALSE;
+ 	      }
+-	    addend += insn & mask;
+ 	  }
+ 	  break;
+ 	}
+@@ -9239,8 +9272,30 @@ ppc_elf_relocate_section (bfd *output_bf
+ 	    }
+ 	}
+ 
+-      r = _bfd_final_link_relocate (howto, input_bfd, input_section, contents,
+-				    rel->r_offset, relocation, addend);
++      if (r_type == R_PPC_REL16DX_HA)
++	{
++	  /* Split field reloc isn't handled by _bfd_final_link_relocate.  */
++	  if (rel->r_offset + 4 > input_section->size)
++	    r = bfd_reloc_outofrange;
++	  else
++	    {
++	      unsigned int insn;
++
++	      relocation += addend;
++	      relocation -= (rel->r_offset
++			     + input_section->output_offset
++			     + input_section->output_section->vma);
++	      relocation >>= 16;
++	      insn = bfd_get_32 (input_bfd, contents + rel->r_offset);
++	      insn &= ~0x1fffc1;
++	      insn |= (relocation & 0xffc1) | ((relocation & 0x3e) << 15);
++	      bfd_put_32 (input_bfd, insn, contents + rel->r_offset);
++	      r = bfd_reloc_ok;
++	    }
++	}
++      else
++	r = _bfd_final_link_relocate (howto, input_bfd, input_section, contents,
++				      rel->r_offset, relocation, addend);
+ 
+       if (r != bfd_reloc_ok)
+ 	{
+Only in binutils-2.25.1/bfd: elf32-ppc.c.orig
+diff -rup binutils-2.25.1.orig/bfd/elf64-ppc.c binutils-2.25.1/bfd/elf64-ppc.c
+--- binutils-2.25.1.orig/bfd/elf64-ppc.c	2016-05-06 09:56:58.699611798 +0100
++++ binutils-2.25.1/bfd/elf64-ppc.c	2016-05-06 12:20:48.508442032 +0100
+@@ -2018,6 +2018,21 @@ static reloc_howto_type ppc64_elf_howto_
+ 	 0xffff,		/* dst_mask */
+ 	 TRUE),			/* pcrel_offset */
+ 
++  /* Like R_PPC64_REL16_HA but for split field in addpcis.  */
++  HOWTO (R_PPC64_REL16DX_HA,	/* type */
++	 16,			/* rightshift */
++	 2,			/* size (0 = byte, 1 = short, 2 = long) */
++	 16,			/* bitsize */
++	 TRUE,			/* pc_relative */
++	 0,			/* bitpos */
++	 complain_overflow_signed, /* complain_on_overflow */
++	 ppc64_elf_ha_reloc,	/* special_function */
++	 "R_PPC64_REL16DX_HA",	/* name */
++	 FALSE,			/* partial_inplace */
++	 0,			/* src_mask */
++	 0x1fffc1,		/* dst_mask */
++	 TRUE),			/* pcrel_offset */
++
+   /* Like R_PPC64_ADDR16_HI, but no overflow.  */
+   HOWTO (R_PPC64_ADDR16_HIGH,	/* type */
+ 	 16,			/* rightshift */
+@@ -2411,6 +2426,8 @@ ppc64_elf_reloc_type_lookup (bfd *abfd A
+       break;
+     case BFD_RELOC_HI16_S_PCREL:		r = R_PPC64_REL16_HA;
+       break;
++    case BFD_RELOC_PPC_REL16DX_HA:		r = R_PPC64_REL16DX_HA;
++      break;
+     case BFD_RELOC_PPC64_ADDR64_LOCAL:		r = R_PPC64_ADDR64_LOCAL;
+       break;
+     case BFD_RELOC_VTABLE_INHERIT:		r = R_PPC64_GNU_VTINHERIT;
+@@ -2468,6 +2485,11 @@ ppc64_elf_ha_reloc (bfd *abfd, arelent *
+ 		    void *data, asection *input_section,
+ 		    bfd *output_bfd, char **error_message)
+ {
++  enum elf_ppc64_reloc_type r_type;
++  long insn;
++  bfd_size_type octets;
++  bfd_vma value;
++
+   /* If this is a relocatable link (output_bfd test tells us), just
+      call the generic function.  Any adjustment will be done at final
+      link time.  */
+@@ -2479,7 +2501,29 @@ ppc64_elf_ha_reloc (bfd *abfd, arelent *
+      We won't actually be using the low 16 bits, so trashing them
+      doesn't matter.  */
+   reloc_entry->addend += 0x8000;
+-  return bfd_reloc_continue;
++  r_type = reloc_entry->howto->type;
++  if (r_type != R_PPC64_REL16DX_HA)
++    return bfd_reloc_continue;
++
++  value = 0;
++  if (!bfd_is_com_section (symbol->section))
++    value = symbol->value;
++  value += (reloc_entry->addend
++	    + symbol->section->output_offset
++	    + symbol->section->output_section->vma);
++  value -= (reloc_entry->address
++	    + input_section->output_offset
++	    + input_section->output_section->vma);
++  value = (bfd_signed_vma) value >> 16;
++
++  octets = reloc_entry->address * bfd_octets_per_byte (abfd);
++  insn = bfd_get_32 (abfd, (bfd_byte *) data + octets);
++  insn &= ~0x1fffc1;
++  insn |= (value & 0xffc1) | ((value & 0x3e) << 15);
++  bfd_put_32 (abfd, insn, (bfd_byte *) data + octets);
++  if (value + 0x8000 > 0xffff)
++    return bfd_reloc_overflow;
++  return bfd_reloc_ok;
+ }
+ 
+ static bfd_reloc_status_type
+@@ -5481,6 +5525,7 @@ ppc64_elf_check_relocs (bfd *abfd, struc
+ 	case R_PPC64_REL16_LO:
+ 	case R_PPC64_REL16_HI:
+ 	case R_PPC64_REL16_HA:
++	case R_PPC64_REL16DX_HA:
+ 	  break;
+ 
+ 	  /* Not supported as a dynamic relocation.  */
+@@ -14274,6 +14319,7 @@ ppc64_elf_relocate_section (bfd *output_
+ 	case R_PPC64_REL16_LO:
+ 	case R_PPC64_REL16_HI:
+ 	case R_PPC64_REL16_HA:
++	case R_PPC64_REL16DX_HA:
+ 	  break;
+ 
+ 	case R_PPC64_REL14:
+@@ -14689,6 +14732,7 @@ ppc64_elf_relocate_section (bfd *output_
+ 	  break;
+ 
+ 	case R_PPC64_REL16_HA:
++	case R_PPC64_REL16DX_HA:
+ 	case R_PPC64_ADDR16_HA:
+ 	case R_PPC64_ADDR16_HIGHA:
+ 	case R_PPC64_ADDR16_HIGHERA:
+@@ -14744,16 +14788,20 @@ ppc64_elf_relocate_section (bfd *output_
+ 	case R_PPC64_DTPREL16_LO_DS:
+ 	  insn = bfd_get_32 (input_bfd, contents + (rel->r_offset & ~3));
+ 	  mask = 3;
+-	  /* If this reloc is against an lq insn, then the value must be
+-	     a multiple of 16.  This is somewhat of a hack, but the
+-	     "correct" way to do this by defining _DQ forms of all the
+-	     _DS relocs bloats all reloc switches in this file.  It
+-	     doesn't seem to make much sense to use any of these relocs
+-	     in data, so testing the insn should be safe.  */
+-	  if ((insn & (0x3f << 26)) == (56u << 26))
++	  /* If this reloc is against an lq, lxv, or stxv insn, then
++	     the value must be a multiple of 16.  This is somewhat of
++	     a hack, but the "correct" way to do this by defining _DQ
++	     forms of all the _DS relocs bloats all reloc switches in
++	     this file.  It doesn't make much sense to use these
++	     relocs in data, so testing the insn should be safe.  */
++	  if ((insn & (0x3f << 26)) == (56u << 26)
++	      || ((insn & (0x3f << 26)) == (61u << 26) && (insn & 3) == 1))
+ 	    mask = 15;
+-	  if (((relocation + addend) & mask) != 0)
++	  relocation += addend;
++	  addend = insn & (mask ^ 3);
++	  if ((relocation & mask) != 0)
+ 	    {
++	      relocation ^= relocation & mask;
+ 	      info->callbacks->einfo
+ 		(_("%P: %H: error: %s not a multiple of %u\n"),
+ 		 input_bfd, input_section, rel->r_offset,
+@@ -14811,8 +14859,30 @@ ppc64_elf_relocate_section (bfd *output_
+ 	    }
+ 	}
+ 
+-      r = _bfd_final_link_relocate (howto, input_bfd, input_section, contents,
+-				    rel->r_offset, relocation, addend);
++      if (r_type == R_PPC64_REL16DX_HA)
++	{
++	  /* Split field reloc isn't handled by _bfd_final_link_relocate.  */
++	  if (rel->r_offset + 4 > input_section->size)
++	    r = bfd_reloc_outofrange;
++	  else
++	    {
++	      relocation += addend;
++	      relocation -= (rel->r_offset
++			     + input_section->output_offset
++			     + input_section->output_section->vma);
++	      relocation = (bfd_signed_vma) relocation >> 16;
++	      insn = bfd_get_32 (input_bfd, contents + rel->r_offset);
++	      insn &= ~0x1fffc1;
++	      insn |= (relocation & 0xffc1) | ((relocation & 0x3e) << 15);
++	      bfd_put_32 (input_bfd, insn, contents + rel->r_offset);
++	      r = bfd_reloc_ok;
++	      if (relocation + 0x8000 > 0xffff)
++		r = bfd_reloc_overflow;
++	    }
++	}
++      else
++	r = _bfd_final_link_relocate (howto, input_bfd, input_section, contents,
++				      rel->r_offset, relocation, addend);
+ 
+       if (r != bfd_reloc_ok)
+ 	{
+Only in binutils-2.25.1/bfd: elf64-ppc.c.orig
+Only in binutils-2.25.1.orig/bfd: elf64-ppc.c.ppc64-pie~
+diff -rup binutils-2.25.1.orig/bfd/libbfd.h binutils-2.25.1/bfd/libbfd.h
+--- binutils-2.25.1.orig/bfd/libbfd.h	2016-05-06 09:56:58.694611773 +0100
++++ binutils-2.25.1/bfd/libbfd.h	2016-05-06 12:20:48.508442032 +0100
+@@ -1373,6 +1373,7 @@ static const char *const bfd_reloc_code_
+   "BFD_RELOC_PPC_VLE_SDAREL_HI16D",
+   "BFD_RELOC_PPC_VLE_SDAREL_HA16A",
+   "BFD_RELOC_PPC_VLE_SDAREL_HA16D",
++  "BFD_RELOC_PPC_REL16DX_HA",
+   "BFD_RELOC_PPC64_HIGHER",
+   "BFD_RELOC_PPC64_HIGHER_S",
+   "BFD_RELOC_PPC64_HIGHEST",
+diff -rup binutils-2.25.1.orig/bfd/reloc.c binutils-2.25.1/bfd/reloc.c
+--- binutils-2.25.1.orig/bfd/reloc.c	2016-05-06 09:56:58.697611788 +0100
++++ binutils-2.25.1/bfd/reloc.c	2016-05-06 12:20:48.510442044 +0100
+@@ -2872,6 +2872,8 @@ ENUMX
+ ENUMX
+   BFD_RELOC_PPC_VLE_SDAREL_HA16D
+ ENUMX
++  BFD_RELOC_PPC_REL16DX_HA
++ENUMX
+   BFD_RELOC_PPC64_HIGHER
+ ENUMX
+   BFD_RELOC_PPC64_HIGHER_S
+Only in binutils-2.25.1/bfd: reloc.c.orig
+diff -rup binutils-2.25.1.orig/elfcpp/powerpc.h binutils-2.25.1/elfcpp/powerpc.h
+--- binutils-2.25.1.orig/elfcpp/powerpc.h	2016-05-06 09:56:59.278614752 +0100
++++ binutils-2.25.1/elfcpp/powerpc.h	2016-05-06 12:20:48.510442044 +0100
+@@ -197,6 +197,7 @@ enum
+   R_PPC_VLE_SDAREL_HA16A = 231,
+   R_PPC_VLE_SDAREL_HA16D = 232,
+ 
++  R_POWERPC_REL16DX_HA = 246,
+   R_PPC64_JMP_IREL = 247,
+   R_POWERPC_IRELATIVE = 248,
+   R_POWERPC_REL16 = 249,
+diff -rup binutils-2.25.1.orig/gas/config/tc-ppc.c binutils-2.25.1/gas/config/tc-ppc.c
+--- binutils-2.25.1.orig/gas/config/tc-ppc.c	2016-05-06 09:56:59.436615558 +0100
++++ binutils-2.25.1/gas/config/tc-ppc.c	2016-05-06 13:00:37.040798530 +0100
+@@ -1294,6 +1294,7 @@ PowerPC options:\n\
+ -mpower6, -mpwr6        generate code for Power6 architecture\n\
+ -mpower7, -mpwr7        generate code for Power7 architecture\n\
+ -mpower8, -mpwr8        generate code for Power8 architecture\n\
++-mpower9, -mpwr9        generate code for Power9 architecture\n\
+ -mcell                  generate code for Cell Broadband Engine architecture\n\
+ -mcom                   generate code Power/PowerPC common instructions\n\
+ -many                   generate code for any architecture (PWR/PWRX/PPC)\n"));
+@@ -1561,6 +1562,8 @@ ppc_setup_opcodes (void)
+ 		}
+ 	    }
+ 	  bad_insn |= insn_validate (op);
++	  if (bad_insn)
++	    fprintf (stderr, "validate fail for op %s\n", op->name);
+ 	}
+ 
+       if ((ppc_cpu & op->flags) != 0
+@@ -1614,6 +1617,8 @@ ppc_setup_opcodes (void)
+ 	    }
+ 
+ 	  bad_insn |= insn_validate (op);
++	  if (bad_insn)
++	    fprintf (stderr, "val fail 2 for op %s\n", op->name);
+ 	}
+ 
+       if ((ppc_cpu & op->flags) != 0
+@@ -3087,6 +3092,11 @@ md_assemble (char *str)
+ 		  break;
+ 		}
+ 
++	      /* addpcis.  */
++	      if (opcode->opcode == (19 << 26) + (2 << 1)
++		  && reloc == BFD_RELOC_HI16_S)
++		reloc = BFD_RELOC_PPC_REL16DX_HA;
++
+ 	      /* If VLE-mode convert LO/HI/HA relocations.  */
+       	      if (opcode->flags & PPC_OPCODE_VLE)
+ 		{
+@@ -6443,13 +6453,14 @@ ppc_handle_align (struct frag *fragP)
+ 
+       if ((ppc_cpu & PPC_OPCODE_POWER6) != 0
+ 	  || (ppc_cpu & PPC_OPCODE_POWER7) != 0
+-	  || (ppc_cpu & PPC_OPCODE_POWER8) != 0)
++	  || (ppc_cpu & PPC_OPCODE_POWER8) != 0
++	  || (ppc_cpu & PPC_OPCODE_POWER9) != 0)
+ 	{
+-	  /* For power6, power7 and power8, we want the last nop to be a group
+-	     terminating one.  Do this by inserting an rs_fill frag immediately
+-	     after this one, with its address set to the last nop location.
+-	     This will automatically reduce the number of nops in the current
+-	     frag by one.  */
++	  /* For power6, power7, power8 and power9, we want the last nop to be
++	     a group terminating one.  Do this by inserting an rs_fill frag
++	     immediately after this one, with its address set to the last nop
++	     location.  This will automatically reduce the number of nops in
++	     the current frag by one.  */
+ 	  if (count > 4)
+ 	    {
+ 	      struct frag *group_nop = xmalloc (SIZEOF_STRUCT_FRAG + 4);
+@@ -6464,13 +6475,14 @@ ppc_handle_align (struct frag *fragP)
+ 	    }
+ 
+ 	  if ((ppc_cpu & PPC_OPCODE_POWER7) != 0
+-	      || (ppc_cpu & PPC_OPCODE_POWER8) != 0)
++	      || (ppc_cpu & PPC_OPCODE_POWER8) != 0
++	      || (ppc_cpu & PPC_OPCODE_POWER9) != 0)
+ 	    {
+ 	      if (ppc_cpu & PPC_OPCODE_E500MC)
+ 		/* e500mc group terminating nop: "ori 0,0,0".  */
+ 		md_number_to_chars (dest, 0x60000000, 4);
+ 	      else
+-		/* power7/power8 group terminating nop: "ori 2,2,0".  */
++		/* power7/power8/power9 group terminating nop: "ori 2,2,0".  */
+ 		md_number_to_chars (dest, 0x60420000, 4);
+ 	    }
+ 	  else
+@@ -6488,6 +6500,7 @@ md_apply_fix (fixS *fixP, valueT *valP,
+ {
+   valueT value = * valP;
+   offsetT fieldval;
++  unsigned long insn = 0;
+   const struct powerpc_operand *operand;
+ 
+ #ifdef OBJ_ELF
+@@ -6496,6 +6509,9 @@ md_apply_fix (fixS *fixP, valueT *valP,
+       /* Hack around bfd_install_relocation brain damage.  */
+       if (fixP->fx_pcrel)
+ 	value += fixP->fx_frag->fr_address + fixP->fx_where;
++
++      if (fixP->fx_addsy == abs_section_sym)
++	fixP->fx_done = 1;
+     }
+   else
+     fixP->fx_done = 1;
+@@ -6606,6 +6622,7 @@ md_apply_fix (fixS *fixP, valueT *valP,
+ 
+     case BFD_RELOC_HI16_S:
+     case BFD_RELOC_HI16_S_PCREL:
++    case BFD_RELOC_PPC_REL16DX_HA:
+ #ifdef OBJ_ELF
+       if (REPORT_OVERFLOW_HI && ppc_obj64)
+ 	{
+@@ -6652,7 +6669,6 @@ md_apply_fix (fixS *fixP, valueT *valP,
+     {
+       /* Handle relocs in an insn.  */
+       char *where;
+-      unsigned long insn;
+ 
+       switch (fixP->fx_r_type)
+ 	{
+@@ -7065,6 +7081,7 @@ md_apply_fix (fixS *fixP, valueT *valP,
+ 	case BFD_RELOC_LO16_PCREL:
+ 	case BFD_RELOC_HI16_PCREL:
+ 	case BFD_RELOC_HI16_S_PCREL:
++	case BFD_RELOC_PPC_REL16DX_HA:
+ 	case BFD_RELOC_64_PCREL:
+ 	case BFD_RELOC_32_PCREL:
+ 	case BFD_RELOC_16_PCREL:
+Only in binutils-2.25.1/gas/config: tc-ppc.c.orig
+diff -rup binutils-2.25.1.orig/gas/doc/as.texinfo binutils-2.25.1/gas/doc/as.texinfo
+--- binutils-2.25.1.orig/gas/doc/as.texinfo	2016-05-06 09:56:59.444615599 +0100
++++ binutils-2.25.1/gas/doc/as.texinfo	2016-05-06 12:20:48.513442062 +0100
+@@ -473,7 +473,8 @@ gcc(1), ld(1), and the Info entries for
+     @b{-m440}|@b{-m464}|@b{-m476}|@b{-m7400}|@b{-m7410}|@b{-m7450}|@b{-m7455}|@b{-m750cl}|@b{-mppc64}|
+     @b{-m620}|@b{-me500}|@b{-e500x2}|@b{-me500mc}|@b{-me500mc64}|@b{-me5500}|@b{-me6500}|@b{-mppc64bridge}|
+     @b{-mbooke}|@b{-mpower4}|@b{-mpwr4}|@b{-mpower5}|@b{-mpwr5}|@b{-mpwr5x}|@b{-mpower6}|@b{-mpwr6}|
+-    @b{-mpower7}|@b{-mpwr7}|@b{-mpower8}|@b{-mpwr8}|@b{-ma2}|@b{-mcell}|@b{-mspe}|@b{-mtitan}|@b{-me300}|@b{-mcom}]
++    @b{-mpower7}|@b{-mpwr7}|@b{-mpower8}|@b{-mpwr8}|@b{-mpower9}|@b{-mpwr9}@b{-ma2}|
++    @b{-mcell}|@b{-mspe}|@b{-mtitan}|@b{-me300}|@b{-mcom}]
+    [@b{-many}] [@b{-maltivec}|@b{-mvsx}|@b{-mhtm}|@b{-mvle}]
+    [@b{-mregnames}|@b{-mno-regnames}]
+    [@b{-mrelocatable}|@b{-mrelocatable-lib}|@b{-K PIC}] [@b{-memb}]
+Only in binutils-2.25.1/gas/doc: as.texinfo.orig
+diff -rup binutils-2.25.1.orig/gas/doc/c-ppc.texi binutils-2.25.1/gas/doc/c-ppc.texi
+--- binutils-2.25.1.orig/gas/doc/c-ppc.texi	2016-05-06 09:56:59.446615609 +0100
++++ binutils-2.25.1/gas/doc/c-ppc.texi	2016-05-06 12:20:48.514442068 +0100
+@@ -141,6 +141,9 @@ Generate code for Power7 architecture.
+ @item -mpower8, -mpwr8
+ Generate code for Power8 architecture.
+ 
++@item -mpower9, -mpwr9
++Generate code for Power9 architecture.
++
+ @item -mcell
+ @item -mcell
+ Generate code for Cell Broadband Engine architecture.
+Only in binutils-2.25.1/gas/testsuite/gas/ppc: altivec3.d
+Only in binutils-2.25.1/gas/testsuite/gas/ppc: altivec3.s
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/ppc/power8.d binutils-2.25.1/gas/testsuite/gas/ppc/power8.d
+--- binutils-2.25.1.orig/gas/testsuite/gas/ppc/power8.d	2016-05-06 09:57:00.087618880 +0100
++++ binutils-2.25.1/gas/testsuite/gas/ppc/power8.d	2016-05-06 12:20:48.514442068 +0100
+@@ -152,4 +152,12 @@ Disassembly of section \.text:
+  238:	(fe c7 2f 8c|8c 2f c7 fe) 	fmrgew  f22,f7,f5
+  23c:	(7c 00 71 9c|9c 71 00 7c) 	msgsnd  r14
+  240:	(7c 00 b9 dc|dc b9 00 7c) 	msgclr  r23
++.*:	(7d 00 2e 99|99 2e 00 7d) 	lxvd2x  vs40,0,r5
++.*:	(7d 00 2e 99|99 2e 00 7d) 	lxvd2x  vs40,0,r5
++.*:	(7d 54 36 98|98 36 54 7d) 	lxvd2x  vs10,r20,r6
++.*:	(7d 54 36 98|98 36 54 7d) 	lxvd2x  vs10,r20,r6
++.*:	(7d 20 3f 99|99 3f 20 7d) 	stxvd2x vs41,0,r7
++.*:	(7d 20 3f 99|99 3f 20 7d) 	stxvd2x vs41,0,r7
++.*:	(7d 75 47 98|98 47 75 7d) 	stxvd2x vs11,r21,r8
++.*:	(7d 75 47 98|98 47 75 7d) 	stxvd2x vs11,r21,r8
+ #pass
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/ppc/power8.s binutils-2.25.1/gas/testsuite/gas/ppc/power8.s
+--- binutils-2.25.1.orig/gas/testsuite/gas/ppc/power8.s	2016-05-06 09:57:00.087618880 +0100
++++ binutils-2.25.1/gas/testsuite/gas/ppc/power8.s	2016-05-06 12:20:48.514442068 +0100
+@@ -144,3 +144,11 @@ power8:
+ 	fmrgew       22,7,5
+ 	msgsnd       14
+ 	msgclr       23
++	lxvx         40,0,5
++	lxvd2x       40,0,5
++	lxvx         10,20,6
++	lxvd2x       10,20,6
++	stxvx        41,0,7
++	stxvd2x      41,0,7
++	stxvx        11,21,8
++	stxvd2x      11,21,8
+Only in binutils-2.25.1/gas/testsuite/gas/ppc: power9.d
+Only in binutils-2.25.1/gas/testsuite/gas/ppc: power9.s
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/ppc/ppc.exp binutils-2.25.1/gas/testsuite/gas/ppc/ppc.exp
+--- binutils-2.25.1.orig/gas/testsuite/gas/ppc/ppc.exp	2016-05-06 09:57:00.087618880 +0100
++++ binutils-2.25.1/gas/testsuite/gas/ppc/ppc.exp	2016-05-06 12:20:48.515442074 +0100
+@@ -69,6 +69,7 @@ if { [istarget powerpc*-*-*] } then {
+ 	run_dump_test "simpshft"
+ 	run_dump_test "altivec"
+ 	run_dump_test "altivec2"
++	run_dump_test "altivec3"
+ 	run_dump_test "altivec_and_spe"
+ 	run_dump_test "booke"
+ 	run_dump_test "e500"
+@@ -84,8 +85,10 @@ if { [istarget powerpc*-*-*] } then {
+ 	run_dump_test "power6"
+ 	run_dump_test "power7"
+ 	run_dump_test "power8"
++	run_dump_test "power9"
+ 	run_dump_test "vsx"
+ 	run_dump_test "vsx2"
++	run_dump_test "vsx3"
+ 	run_dump_test "htm"
+ 	run_dump_test "titan"
+     }
+Only in binutils-2.25.1/gas/testsuite/gas/ppc: ppc.exp.orig
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/ppc/vsx2.d binutils-2.25.1/gas/testsuite/gas/ppc/vsx2.d
+--- binutils-2.25.1.orig/gas/testsuite/gas/ppc/vsx2.d	2016-05-06 09:57:00.089618890 +0100
++++ binutils-2.25.1/gas/testsuite/gas/ppc/vsx2.d	2016-05-06 12:20:48.516442080 +0100
+@@ -1,5 +1,5 @@
+-#as: -mvsx
+-#objdump: -dr -Mvsx
++#as: -mpower8
++#objdump: -dr -Mpower8
+ #name: VSX ISA 2.07 instructions
+ 
+ .*
+Only in binutils-2.25.1/gas/testsuite/gas/ppc: vsx3.d
+Only in binutils-2.25.1/gas/testsuite/gas/ppc: vsx3.s
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/ppc/vsx.d binutils-2.25.1/gas/testsuite/gas/ppc/vsx.d
+--- binutils-2.25.1.orig/gas/testsuite/gas/ppc/vsx.d	2016-05-06 09:57:00.089618890 +0100
++++ binutils-2.25.1/gas/testsuite/gas/ppc/vsx.d	2016-05-06 12:20:48.516442080 +0100
+@@ -166,8 +166,8 @@ Disassembly of section \.text:
+  26c:	(f1 12 e7 bf|bf e7 12 f1) 	xxsel   vs40,vs50,vs60,vs62
+  270:	(f1 12 e2 17|17 e2 12 f1) 	xxsldwi vs40,vs50,vs60,2
+  274:	(f1 02 e2 93|93 e2 02 f1) 	xxspltw vs40,vs60,2
+- 278:	(7d 00 a6 99|99 a6 00 7d) 	lxvd2x  vs40,0,r20
+- 27c:	(7d 0a a6 99|99 a6 0a 7d) 	lxvd2x  vs40,r10,r20
+- 280:	(7d 00 a7 99|99 a7 00 7d) 	stxvd2x vs40,0,r20
+- 284:	(7d 0a a7 99|99 a7 0a 7d) 	stxvd2x vs40,r10,r20
++.*:	(7d 00 a6 99|99 a6 00 7d) 	lxvd2x  vs40,0,r20
++.*:	(7d 0a a6 99|99 a6 0a 7d) 	lxvd2x  vs40,r10,r20
++.*:	(7d 00 a7 99|99 a7 00 7d) 	stxvd2x vs40,0,r20
++.*:	(7d 0a a7 99|99 a7 0a 7d) 	stxvd2x vs40,r10,r20
+ #pass
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/ppc/vsx.s binutils-2.25.1/gas/testsuite/gas/ppc/vsx.s
+--- binutils-2.25.1.orig/gas/testsuite/gas/ppc/vsx.s	2016-05-06 09:57:00.089618890 +0100
++++ binutils-2.25.1/gas/testsuite/gas/ppc/vsx.s	2016-05-06 12:20:48.516442080 +0100
+@@ -158,7 +158,7 @@ start:
+ 	xxsel      40,50,60,62
+ 	xxsldwi    40,50,60,2
+ 	xxspltw    40,60,2
+-	lxvx       40,0,20
+-	lxvx       40,10,20
+-	stxvx      40,0,20
+-	stxvx      40,10,20
++	lxvd2x     40,0,20
++	lxvd2x     40,10,20
++	stxvd2x    40,0,20
++	stxvd2x    40,10,20
+diff -rup binutils-2.25.1.orig/gold/powerpc.cc binutils-2.25.1/gold/powerpc.cc
+--- binutils-2.25.1.orig/gold/powerpc.cc	2016-05-06 09:57:00.227619594 +0100
++++ binutils-2.25.1/gold/powerpc.cc	2016-05-06 12:20:48.518442092 +0100
+@@ -1478,6 +1478,7 @@ public:
+ private:
+   typedef Powerpc_relocate_functions<size, big_endian> This;
+   typedef typename elfcpp::Elf_types<size>::Elf_Addr Address;
++  typedef typename elfcpp::Elf_types<size>::Elf_Swxword SignedAddress;
+ 
+   template<int valsize>
+   static inline bool
+@@ -1638,6 +1639,16 @@ public:
+     return stat;
+   }
+ 
++  // R_POWERPC_ADDR16_DQ: (Symbol + Addend) & 0xfff0
++  static inline Status
++  addr16_dq(unsigned char* view, Address value, Overflow_check overflow)
++  {
++    Status stat = This::template rela<16,16>(view, 0, 0xfff0, value, overflow);
++    if ((value & 15) != 0)
++      stat = STATUS_OVERFLOW;
++    return stat;
++  }
++
+   // R_POWERPC_ADDR16_HI: ((Symbol + Addend) >> 16) & 0xffff
+   static inline void
+   addr16_hi(unsigned char* view, Address value)
+@@ -1677,6 +1688,20 @@ public:
+       stat = STATUS_OVERFLOW;
+     return stat;
+   }
++
++  // R_POWERPC_REL16DX_HA
++  static inline Status
++  addr16dx_ha(unsigned char *view, Address value, Overflow_check overflow)
++  {
++    typedef typename elfcpp::Swap<32, big_endian>::Valtype Valtype;
++    Valtype* wv = reinterpret_cast<Valtype*>(view);
++    Valtype val = elfcpp::Swap<32, big_endian>::readval(wv);
++    value += 0x8000;
++    value = static_cast<SignedAddress>(value) >> 16;
++    val |= (value & 0xffc1) | ((value & 0x3e) << 15);
++    elfcpp::Swap<32, big_endian>::writeval(wv, val);
++    return overflowed<16>(value, overflow);
++  }
+ };
+ 
+ // Set ABI version for input and output.
+@@ -5544,6 +5569,7 @@ Target_powerpc<size, big_endian>::Scan::
+     case elfcpp::R_POWERPC_REL16_LO:
+     case elfcpp::R_POWERPC_REL16_HI:
+     case elfcpp::R_POWERPC_REL16_HA:
++    case elfcpp::R_POWERPC_REL16DX_HA:
+     case elfcpp::R_POWERPC_SECTOFF:
+     case elfcpp::R_POWERPC_SECTOFF_LO:
+     case elfcpp::R_POWERPC_SECTOFF_HI:
+@@ -5993,6 +6019,7 @@ Target_powerpc<size, big_endian>::Scan::
+     case elfcpp::R_POWERPC_REL16_LO:
+     case elfcpp::R_POWERPC_REL16_HI:
+     case elfcpp::R_POWERPC_REL16_HA:
++    case elfcpp::R_POWERPC_REL16DX_HA:
+     case elfcpp::R_POWERPC_SECTOFF:
+     case elfcpp::R_POWERPC_SECTOFF_LO:
+     case elfcpp::R_POWERPC_SECTOFF_HI:
+@@ -7302,6 +7329,7 @@ Target_powerpc<size, big_endian>::Reloca
+     case elfcpp::R_POWERPC_REL16_LO:
+     case elfcpp::R_POWERPC_REL16_HI:
+     case elfcpp::R_POWERPC_REL16_HA:
++    case elfcpp::R_POWERPC_REL16DX_HA:
+     case elfcpp::R_POWERPC_REL14:
+     case elfcpp::R_POWERPC_REL14_BRTAKEN:
+     case elfcpp::R_POWERPC_REL14_BRNTAKEN:
+@@ -7500,6 +7528,7 @@ Target_powerpc<size, big_endian>::Reloca
+       break;
+ 
+     case elfcpp::R_POWERPC_REL32:
++    case elfcpp::R_POWERPC_REL16DX_HA:
+       if (size == 64)
+ 	overflow = Reloc::CHECK_SIGNED;
+       break;
+@@ -7580,11 +7609,13 @@ Target_powerpc<size, big_endian>::Reloca
+       break;
+     }
+ 
++  Insn* iview = reinterpret_cast<Insn*>(view - 2 * big_endian);
++  Insn insn = 0;
++
+   if (overflow == Reloc::CHECK_LOW_INSN
+       || overflow == Reloc::CHECK_HIGH_INSN)
+     {
+-      Insn* iview = reinterpret_cast<Insn*>(view - 2 * big_endian);
+-      Insn insn = elfcpp::Swap<32, big_endian>::readval(iview);
++      insn = elfcpp::Swap<32, big_endian>::readval(iview);
+ 
+       if ((insn & (0x3f << 26)) == 10u << 26 /* cmpli */)
+ 	overflow = Reloc::CHECK_BITFIELD;
+@@ -7600,6 +7631,7 @@ Target_powerpc<size, big_endian>::Reloca
+ 	overflow = Reloc::CHECK_SIGNED;
+     }
+ 
++  bool maybe_dq_reloc = false;
+   typename Powerpc_relocate_functions<size, big_endian>::Status status
+     = Powerpc_relocate_functions<size, big_endian>::STATUS_OK;
+   switch (r_type)
+@@ -7652,7 +7684,7 @@ Target_powerpc<size, big_endian>::Reloca
+       if (size == 64)
+ 	{
+ 	  // On ppc64 these are all ds form
+-	  status = Reloc::addr16_ds(view, value, overflow);
++	  maybe_dq_reloc = true;
+ 	  break;
+ 	}
+     case elfcpp::R_POWERPC_ADDR16:
+@@ -7673,7 +7705,10 @@ Target_powerpc<size, big_endian>::Reloca
+     case elfcpp::R_POWERPC_DTPREL16_LO:
+     case elfcpp::R_POWERPC_GOT_TLSGD16_LO:
+     case elfcpp::R_POWERPC_GOT_TLSLD16_LO:
+-      status = Reloc::addr16(view, value, overflow);
++      if (size == 64)
++	status = Reloc::addr16(view, value, overflow);
++      else
++	maybe_dq_reloc = true;
+       break;
+ 
+     case elfcpp::R_POWERPC_UADDR16:
+@@ -7720,6 +7755,10 @@ Target_powerpc<size, big_endian>::Reloca
+       Reloc::addr16_ha(view, value);
+       break;
+ 
++    case elfcpp::R_POWERPC_REL16DX_HA:
++      status = Reloc::addr16dx_ha(view, value, overflow);
++      break;
++
+     case elfcpp::R_PPC64_DTPREL16_HIGHER:
+       if (size == 32)
+ 	// R_PPC_EMB_NADDR16_LO
+@@ -7774,7 +7813,7 @@ Target_powerpc<size, big_endian>::Reloca
+     case elfcpp::R_PPC64_GOT16_LO_DS:
+     case elfcpp::R_PPC64_SECTOFF_DS:
+     case elfcpp::R_PPC64_SECTOFF_LO_DS:
+-      status = Reloc::addr16_ds(view, value, overflow);
++      maybe_dq_reloc = true;
+       break;
+ 
+     case elfcpp::R_POWERPC_ADDR14:
+@@ -7839,6 +7878,26 @@ Target_powerpc<size, big_endian>::Reloca
+ 			     r_type);
+       break;
+     }
++
++  if (maybe_dq_reloc)
++    {
++      if (insn == 0)
++	insn = elfcpp::Swap<32, big_endian>::readval(iview);
++
++      if ((insn & (0x3f << 26)) == 56u << 26 /* lq */
++	  || ((insn & (0x3f << 26)) == (61u << 26) /* lxv, stxv */
++	      && (insn & 3) == 1))
++	status = Reloc::addr16_dq(view, value, overflow);
++      else if (size == 64
++	       || (insn & (0x3f << 26)) == 58u << 26 /* ld,ldu,lwa */
++	       || (insn & (0x3f << 26)) == 62u << 26 /* std,stdu,stq */
++	       || (insn & (0x3f << 26)) == 57u << 26 /* lfdp */
++	       || (insn & (0x3f << 26)) == 61u << 26 /* stfdp */)
++	status = Reloc::addr16_ds(view, value, overflow);
++      else
++	status = Reloc::addr16(view, value, overflow);
++    }
++
+   if (status != Powerpc_relocate_functions<size, big_endian>::STATUS_OK
+       && (has_stub_value
+ 	  || !(gsym != NULL
+Only in binutils-2.25.1/gold: powerpc.cc.orig
+diff -rup binutils-2.25.1.orig/include/elf/ppc64.h binutils-2.25.1/include/elf/ppc64.h
+--- binutils-2.25.1.orig/include/elf/ppc64.h	2016-05-06 09:57:00.307620002 +0100
++++ binutils-2.25.1/include/elf/ppc64.h	2016-05-06 12:20:48.519442098 +0100
+@@ -157,6 +157,10 @@ START_RELOC_NUMBERS (elf_ppc64_reloc_typ
+ /* Fake relocation only used internally by ld.  */
+   RELOC_NUMBER (R_PPC64_LO_DS_OPT,	   128)
+ #endif
++
++/* Power9 split rel16 for addpcis.  */
++  RELOC_NUMBER (R_PPC64_REL16DX_HA,	   246)
++
+ /* Support STT_GNU_IFUNC plt calls.  */
+   RELOC_NUMBER (R_PPC64_JMP_IREL,	   247)
+   RELOC_NUMBER (R_PPC64_IRELATIVE,	   248)
+diff -rup binutils-2.25.1.orig/include/elf/ppc.h binutils-2.25.1/include/elf/ppc.h
+--- binutils-2.25.1.orig/include/elf/ppc.h	2016-05-06 09:57:00.306619997 +0100
++++ binutils-2.25.1/include/elf/ppc.h	2016-05-06 12:20:48.519442098 +0100
+@@ -149,6 +149,9 @@ START_RELOC_NUMBERS (elf_ppc_reloc_type)
+   RELOC_NUMBER (R_PPC_VLE_SDAREL_HA16A,	231)
+   RELOC_NUMBER (R_PPC_VLE_SDAREL_HA16D,	232)
+ 
++/* Power9 split rel16 for addpcis.  */
++  RELOC_NUMBER (R_PPC_REL16DX_HA,	246)
++
+ /* Support STT_GNU_IFUNC plt calls.  */
+   RELOC_NUMBER (R_PPC_IRELATIVE,	248)
+ 
+diff -rup binutils-2.25.1.orig/include/opcode/ppc.h binutils-2.25.1/include/opcode/ppc.h
+--- binutils-2.25.1.orig/include/opcode/ppc.h	2016-05-06 09:57:00.309620012 +0100
++++ binutils-2.25.1/include/opcode/ppc.h	2016-05-06 12:20:48.519442098 +0100
+@@ -204,6 +204,12 @@ extern const int vle_num_opcodes;
+ /* Opcode is supported by ppc821/850/860.  */
+ #define PPC_OPCODE_860	      0x10000000000ull
+ 
++/* Opcode is only supported by Power9 architecture.  */
++#define PPC_OPCODE_POWER9     0x20000000000ull
++
++/* Opcode is supported by Vector-Scalar (VSX) Unit from ISA 2.08.  */
++#define PPC_OPCODE_VSX3       0x40000000000ull
++
+ /* A macro to extract the major opcode from an instruction.  */
+ #define PPC_OP(i) (((i) >> 26) & 0x3f)
+ 
+Only in binutils-2.25.1/ld/testsuite/ld-powerpc: addpcis.d
+Only in binutils-2.25.1/ld/testsuite/ld-powerpc: addpcis.s
+diff -rup binutils-2.25.1.orig/ld/testsuite/ld-powerpc/powerpc.exp binutils-2.25.1/ld/testsuite/ld-powerpc/powerpc.exp
+--- binutils-2.25.1.orig/ld/testsuite/ld-powerpc/powerpc.exp	2016-05-06 09:57:00.593621461 +0100
++++ binutils-2.25.1/ld/testsuite/ld-powerpc/powerpc.exp	2016-05-06 12:22:05.329904562 +0100
+@@ -285,6 +285,7 @@ if [ supports_ppc64 ] then {
+     run_dump_test "ambiguousv2b"
+     run_dump_test "defsym"
+     run_dump_test "tlsld"
++    run_dump_test "addpcis"
+ }
+ 
+ run_dump_test "tlsld32"
+Only in binutils-2.25.1/ld/testsuite/ld-powerpc: powerpc.exp.orig
+Only in binutils-2.25.1/ld/testsuite/ld-powerpc: powerpc.exp.rej
+diff -rup binutils-2.25.1.orig/opcodes/ppc-dis.c binutils-2.25.1/opcodes/ppc-dis.c
+--- binutils-2.25.1.orig/opcodes/ppc-dis.c	2016-05-06 09:57:00.706622038 +0100
++++ binutils-2.25.1/opcodes/ppc-dis.c	2016-05-06 12:20:48.520442104 +0100
+@@ -157,6 +157,12 @@ struct ppc_mopt ppc_opts[] = {
+ 		| PPC_OPCODE_POWER7 | PPC_OPCODE_POWER8 | PPC_OPCODE_HTM
+ 		| PPC_OPCODE_ALTIVEC | PPC_OPCODE_ALTIVEC2 | PPC_OPCODE_VSX),
+     0 },
++  { "power9",  (PPC_OPCODE_PPC | PPC_OPCODE_ISEL | PPC_OPCODE_64
++		| PPC_OPCODE_POWER4 | PPC_OPCODE_POWER5 | PPC_OPCODE_POWER6
++		| PPC_OPCODE_POWER7 | PPC_OPCODE_POWER8 | PPC_OPCODE_POWER9
++		| PPC_OPCODE_HTM | PPC_OPCODE_ALTIVEC | PPC_OPCODE_ALTIVEC2
++		| PPC_OPCODE_VSX | PPC_OPCODE_VSX3 ),
++    0 },
+   { "ppc",     (PPC_OPCODE_PPC),
+     0 },
+   { "ppc32",   (PPC_OPCODE_PPC),
+@@ -191,6 +197,12 @@ struct ppc_mopt ppc_opts[] = {
+ 		| PPC_OPCODE_POWER7 | PPC_OPCODE_POWER8 | PPC_OPCODE_HTM
+ 		| PPC_OPCODE_ALTIVEC | PPC_OPCODE_ALTIVEC2 | PPC_OPCODE_VSX),
+     0 },
++  { "pwr9",    (PPC_OPCODE_PPC | PPC_OPCODE_ISEL | PPC_OPCODE_64
++		| PPC_OPCODE_POWER4 | PPC_OPCODE_POWER5 | PPC_OPCODE_POWER6
++		| PPC_OPCODE_POWER7 | PPC_OPCODE_POWER8 | PPC_OPCODE_POWER9
++		| PPC_OPCODE_HTM | PPC_OPCODE_ALTIVEC | PPC_OPCODE_ALTIVEC2
++		| PPC_OPCODE_VSX | PPC_OPCODE_VSX3 ),
++    0 },
+   { "pwrx",    (PPC_OPCODE_POWER | PPC_OPCODE_POWER2),
+     0 },
+   { "spe",     (PPC_OPCODE_PPC | PPC_OPCODE_EFS),
+@@ -201,7 +213,7 @@ struct ppc_mopt ppc_opts[] = {
+   { "vle",     (PPC_OPCODE_PPC | PPC_OPCODE_ISEL | PPC_OPCODE_VLE),
+     PPC_OPCODE_VLE },
+   { "vsx",     (PPC_OPCODE_PPC),
+-    PPC_OPCODE_VSX },
++    PPC_OPCODE_VSX | PPC_OPCODE_VSX3 },
+   { "htm",     (PPC_OPCODE_PPC),
+     PPC_OPCODE_HTM },
+ };
+@@ -303,7 +315,7 @@ powerpc_init_dialect (struct disassemble
+       dialect = ppc_parse_cpu (dialect, &sticky, "vle");
+       break;
+     default:
+-      dialect = ppc_parse_cpu (dialect, &sticky, "power8") | PPC_OPCODE_ANY;
++      dialect = ppc_parse_cpu (dialect, &sticky, "power9") | PPC_OPCODE_ANY;
+     }
+ 
+   arg = info->disassembler_options;
+diff -rup binutils-2.25.1.orig/opcodes/ppc-opc.c binutils-2.25.1/opcodes/ppc-opc.c
+--- binutils-2.25.1.orig/opcodes/ppc-opc.c	2016-05-06 09:57:00.695621982 +0100
++++ binutils-2.25.1/opcodes/ppc-opc.c	2016-05-06 13:08:55.068779737 +0100
+@@ -54,8 +54,18 @@ static long extract_bo (unsigned long, p
+ static unsigned long insert_boe (unsigned long, long, ppc_cpu_t, const char **);
+ static long extract_boe (unsigned long, ppc_cpu_t, int *);
+ static unsigned long insert_esync (unsigned long, long, ppc_cpu_t, const char **);
++static unsigned long insert_dcmxs (unsigned long, long, ppc_cpu_t, const char **);
++static long extract_dcmxs (unsigned long, ppc_cpu_t, int *);
++static unsigned long insert_dxd (unsigned long, long, ppc_cpu_t, const char **);
++static long extract_dxd (unsigned long, ppc_cpu_t, int *);
++static unsigned long insert_dxdn (unsigned long, long, ppc_cpu_t, const char **);
++static long extract_dxdn (unsigned long, ppc_cpu_t, int *);
+ static unsigned long insert_fxm (unsigned long, long, ppc_cpu_t, const char **);
+ static long extract_fxm (unsigned long, ppc_cpu_t, int *);
++static unsigned long insert_l0 (unsigned long, long, ppc_cpu_t, const char **);
++static long extract_l0 (unsigned long, ppc_cpu_t, int *);
++static unsigned long insert_l1 (unsigned long, long, ppc_cpu_t, const char **);
++static long extract_l1 (unsigned long, ppc_cpu_t, int *);
+ static unsigned long insert_li20 (unsigned long, long, ppc_cpu_t, const char **);
+ static long extract_li20 (unsigned long, ppc_cpu_t, int *);
+ static unsigned long insert_ls (unsigned long, long, ppc_cpu_t, const char **);
+@@ -98,6 +108,8 @@ static unsigned long insert_tbr (unsigne
+ static long extract_tbr (unsigned long, ppc_cpu_t, int *);
+ static unsigned long insert_xt6 (unsigned long, long, ppc_cpu_t, const char **);
+ static long extract_xt6 (unsigned long, ppc_cpu_t, int *);
++static unsigned long insert_xtq6 (unsigned long, long, ppc_cpu_t, const char **);
++static long extract_xtq6 (unsigned long, ppc_cpu_t, int *);
+ static unsigned long insert_xa6 (unsigned long, long, ppc_cpu_t, const char **);
+ static long extract_xa6 (unsigned long, ppc_cpu_t, int *);
+ static unsigned long insert_xb6 (unsigned long, long, ppc_cpu_t, const char **);
+@@ -302,9 +314,17 @@ const struct powerpc_operand powerpc_ope
+ #define D8 D + 1
+   { 0xff, 0, NULL, NULL, PPC_OPERAND_PARENS | PPC_OPERAND_SIGNED },
+ 
++  /* The DCMX field in an X form instruction.  */
++#define DCMX D8 + 1
++  { 0x7f, 16, NULL, NULL, 0 },
++
++  /* The split DCMX field in an X form instruction.  */
++#define DCMXS DCMX + 1
++  { 0x7f, PPC_OPSHIFT_INV, insert_dcmxs, extract_dcmxs, 0 },
++
+   /* The DQ field in a DQ form instruction.  This is like D, but the
+      lower four bits are forced to zero. */
+-#define DQ D8 + 1
++#define DQ DCMXS + 1
+   { 0xfff0, 0, NULL, NULL,
+     PPC_OPERAND_PARENS | PPC_OPERAND_SIGNED | PPC_OPERAND_DQ },
+ 
+@@ -320,10 +340,21 @@ const struct powerpc_operand powerpc_ope
+ #define BHRBE DUIS
+   { 0x3ff, 11, NULL, NULL, 0 },
+ 
++  /* The split D field in a DX form instruction.  */
++#define DXD DUIS + 1
++  { 0xffff, PPC_OPSHIFT_INV, insert_dxd, extract_dxd,
++    PPC_OPERAND_SIGNED | PPC_OPERAND_SIGNOPT},
++
++  /* The split ND field in a DX form instruction.
++     This is the same as the DX field, only negated.  */
++#define NDXD DXD + 1
++  { 0xffff, PPC_OPSHIFT_INV, insert_dxdn, extract_dxdn,
++    PPC_OPERAND_NEGATIVE | PPC_OPERAND_SIGNED | PPC_OPERAND_SIGNOPT},
++
+   /* The E field in a wrteei instruction.  */
+   /* And the W bit in the pair singles instructions.  */
+   /* And the ST field in a VX form instruction.  */
+-#define E DUIS + 1
++#define E NDXD + 1
+ #define PSW E
+ #define ST E
+   { 0x1, 15, NULL, NULL, 0 },
+@@ -397,8 +428,16 @@ const struct powerpc_operand powerpc_ope
+ #define HTM_R L
+   { 0x1, 21, NULL, NULL, PPC_OPERAND_OPTIONAL },
+ 
++  /* The L field in an X form instruction which must be zero.  */
++#define L0 L + 1
++  { 0x1, 21, insert_l0, extract_l0, PPC_OPERAND_OPTIONAL },
++
++  /* The L field in an X form instruction which must be one.  */
++#define L1 L0 + 1
++  { 0x1, 21, insert_l1, extract_l1, 0 },
++
+   /* The LEV field in a POWER SVC form instruction.  */
+-#define SVC_LEV L + 1
++#define SVC_LEV L1 + 1
+   { 0x7f, 5, NULL, NULL, 0 },
+ 
+   /* The LEV field in an SC form instruction.  */
+@@ -513,10 +552,14 @@ const struct powerpc_operand powerpc_ope
+ #define RBOPT RBX + 1
+   { 0x1f, 11, NULL, NULL, PPC_OPERAND_GPR | PPC_OPERAND_OPTIONAL },
+ 
++  /* The RC register field in an maddld, maddhd or maddhdu instruction.  */
++#define RC RBOPT + 1
++  { 0x1f, 6, NULL, NULL, PPC_OPERAND_GPR },
++
+   /* The RS field in a D, DS, X, XFX, XS, M, MD or MDS form
+      instruction or the RT field in a D, DS, X, XFX or XO form
+      instruction.  */
+-#define RS RBOPT + 1
++#define RS RC + 1
+ #define RT RS
+ #define RT_MASK (0x1f << 21)
+ #define RD RS
+@@ -577,6 +620,8 @@ const struct powerpc_operand powerpc_ope
+ #define SH_MASK (0x1f << 11)
+   /* The other UIMM field in a EVX form instruction.  */
+ #define EVUIMM SH
++  /* The FC field in an atomic X form instruction.  */
++#define FC SH
+   { 0x1f, 11, NULL, NULL, 0 },
+ 
+   /* The SI field in a HTM X form instruction.  */
+@@ -705,8 +750,12 @@ const struct powerpc_operand powerpc_ope
+ #define UIMM3 UIMM + 1
+   { 0x7, 16, NULL, NULL, 0 },
+ 
++  /* The 6-bit UIM field in a X form instruction.  */
++#define UIM6 UIMM3 + 1
++  { 0x3f, 16, NULL, NULL, 0 },
++
+   /* The SIX field in a VX form instruction.  */
+-#define SIX UIMM3 + 1
++#define SIX UIM6 + 1
+   { 0xf, 11, NULL, NULL, 0 },
+ 
+   /* The PS field in a VX form instruction.  */
+@@ -752,9 +801,10 @@ const struct powerpc_operand powerpc_ope
+ #define PSD PSQM + 1
+   {  0xfff, 0, 0, 0,  PPC_OPERAND_PARENS | PPC_OPERAND_SIGNED },
+ 
+-  /* The L field in an mtmsrd or A form instruction or W in an X form.  */
++  /* The L field in an mtmsrd or A form instruction or R or W in an X form.  */
+ #define A_L PSD + 1
+ #define W A_L
++#define X_R A_L
+   { 0x1, 16, NULL, NULL, PPC_OPERAND_OPTIONAL },
+ 
+ #define RMC A_L + 1
+@@ -763,7 +813,13 @@ const struct powerpc_operand powerpc_ope
+ #define R RMC + 1
+   { 0x1, 16, NULL, NULL, 0 },
+ 
+-#define SP R + 1
++#define RIC R + 1
++  { 0x3, 18, NULL, NULL, PPC_OPERAND_OPTIONAL },
++
++#define PRS RIC + 1
++  { 0x1, 17, NULL, NULL, PPC_OPERAND_OPTIONAL },
++
++#define SP PRS + 1
+   { 0x3, 19, NULL, NULL, 0 },
+ 
+ #define S SP + 1
+@@ -838,8 +894,13 @@ const struct powerpc_operand powerpc_ope
+ #define XT6 XS6
+   { 0x3f, PPC_OPSHIFT_INV, insert_xt6, extract_xt6, PPC_OPERAND_VSR },
+ 
++  /* The XT and XS fields in an DQ form VSX instruction.  This is split.  */
++#define XSQ6 XT6 + 1
++#define XTQ6 XSQ6
++  { 0x3f, PPC_OPSHIFT_INV, insert_xtq6, extract_xtq6, PPC_OPERAND_VSR },
++
+   /* The XA field in an XX3 form instruction.  This is split.  */
+-#define XA6 XT6 + 1
++#define XA6 XTQ6 + 1
+   { 0x3f, PPC_OPSHIFT_INV, insert_xa6, extract_xa6, PPC_OPERAND_VSR },
+ 
+   /* The XB field in an XX2 or XX3 form instruction.  This is split.  */
+@@ -869,6 +930,8 @@ const struct powerpc_operand powerpc_ope
+ #define UIM DMEX + 1
+   /* The 2-bit UIMM field in a VX form instruction.  */
+ #define UIMM2 UIM
++  /* The 2-bit L field in a darn instruction.  */
++#define LRAND UIM
+   { 0x3, 16, NULL, NULL, 0 },
+ 
+ #define ERAT_T UIM + 1
+@@ -876,6 +939,10 @@ const struct powerpc_operand powerpc_ope
+ 
+ #define IH ERAT_T + 1
+   { 0x7, 21, NULL, NULL, PPC_OPERAND_OPTIONAL },
++
++  /* The 8-bit IMM8 field in a XX1 form instruction.  */
++#define IMM8 IH + 1
++  { 0xff, 11, NULL, NULL, 0 },
+ };
+ 
+ const unsigned int num_powerpc_operands = (sizeof (powerpc_operands)
+@@ -1272,6 +1339,64 @@ extract_boe (unsigned long insn,
+   return value & 0x1e;
+ }
+ 
++/* The DCMX field in a X form instruction when the field is split
++   into separate DC, DM and DX fields.  */
++
++static unsigned long
++insert_dcmxs (unsigned long insn,
++	    long value,
++	    ppc_cpu_t dialect ATTRIBUTE_UNUSED,
++	    const char **errmsg ATTRIBUTE_UNUSED)
++{
++  return insn | ((value & 0x1f) << 16) | ((value & 0x20) >> 3) | (value & 0x40);
++}
++
++static long
++extract_dcmxs (unsigned long insn,
++	     ppc_cpu_t dialect ATTRIBUTE_UNUSED,
++	     int *invalid ATTRIBUTE_UNUSED)
++{
++  return (insn & 0x40) | ((insn << 3) & 0x20) | ((insn >> 16) & 0x1f);
++}
++
++/* The D field in a DX form instruction when the field is split
++   into separate D0, D1 and D2 fields.  */
++
++static unsigned long
++insert_dxd (unsigned long insn,
++	    long value,
++	    ppc_cpu_t dialect ATTRIBUTE_UNUSED,
++	    const char **errmsg ATTRIBUTE_UNUSED)
++{
++  return insn | (value & 0xffc1) | ((value & 0x3e) << 15);
++}
++
++static long
++extract_dxd (unsigned long insn,
++	     ppc_cpu_t dialect ATTRIBUTE_UNUSED,
++	     int *invalid ATTRIBUTE_UNUSED)
++{
++  unsigned long dxd = (insn & 0xffc1) | ((insn >> 15) & 0x3e);
++  return (dxd ^ 0x8000) - 0x8000;
++}
++
++static unsigned long
++insert_dxdn (unsigned long insn,
++	    long value,
++	    ppc_cpu_t dialect ATTRIBUTE_UNUSED,
++	    const char **errmsg ATTRIBUTE_UNUSED)
++{
++  return insert_dxd (insn, -value, dialect, errmsg);
++}
++
++static long
++extract_dxdn (unsigned long insn,
++	     ppc_cpu_t dialect ATTRIBUTE_UNUSED,
++	     int *invalid ATTRIBUTE_UNUSED)
++{
++  return -extract_dxd (insn, dialect, invalid);
++}
++
+ /* FXM mask in mfcr and mtcrf instructions.  */
+ 
+ static unsigned long
+@@ -1343,6 +1468,58 @@ extract_fxm (unsigned long insn,
+   return mask;
+ }
+ 
++/* The L field in an X form instruction which must have the value zero.  */
++
++static unsigned long
++insert_l0 (unsigned long insn,
++	   long value,
++	   ppc_cpu_t dialect ATTRIBUTE_UNUSED,
++	   const char **errmsg)
++{
++  if (value != 0)
++    *errmsg = _("invalid operand constant");
++  return insn & ~(0x1 << 21);
++}
++
++static long
++extract_l0 (unsigned long insn,
++	    ppc_cpu_t dialect ATTRIBUTE_UNUSED,
++	    int *invalid)
++{
++  long value;
++
++  value = (insn >> 21) & 0x1;
++  if (value != 0)
++    *invalid = 1;
++  return value;
++}
++
++/* The L field in an X form instruction which must have the value one.  */
++
++static unsigned long
++insert_l1 (unsigned long insn,
++	   long value,
++	   ppc_cpu_t dialect ATTRIBUTE_UNUSED,
++	   const char **errmsg)
++{
++  if (value != 1)
++    *errmsg = _("invalid operand constant");
++  return insn | (0x1 << 21);
++}
++
++static long
++extract_l1 (unsigned long insn,
++	    ppc_cpu_t dialect ATTRIBUTE_UNUSED,
++	    int *invalid)
++{
++  long value;
++
++  value = (insn >> 21) & 0x1;
++  if (value != 1)
++    *invalid = 1;
++  return value;
++}
++
+ static unsigned long
+ insert_li20 (unsigned long insn,
+ 	     long value,
+@@ -1398,16 +1575,16 @@ insert_ls (unsigned long insn,
+ static unsigned long
+ insert_esync (unsigned long insn,
+ 	      long value,
+-	      ppc_cpu_t dialect ATTRIBUTE_UNUSED,
++	      ppc_cpu_t dialect,
+ 	      const char **errmsg)
+ {
+-  unsigned long ls;
++  unsigned long ls = (insn >> 21) & 0x03;
+ 
+-  ls = (insn >> 21) & 0x03;
+   if (value == 0)
+     {
+-      if (ls > 1)
+-	*errmsg = _("illegal L operand value");
++      if (((dialect & PPC_OPCODE_E6500) != 0 && ls > 1)
++	  || ((dialect & PPC_OPCODE_POWER9) != 0 && ls > 2))
++        *errmsg = _("illegal L operand value");
+       return insn;
+     }
+ 
+@@ -1945,6 +2122,24 @@ extract_xt6 (unsigned long insn,
+   return ((insn << 5) & 0x20) | ((insn >> 21) & 0x1f);
+ }
+ 
++/* The XT and XS fields in an DQ form VSX instruction.  This is split.  */
++static unsigned long
++insert_xtq6 (unsigned long insn,
++	    long value,
++	    ppc_cpu_t dialect ATTRIBUTE_UNUSED,
++	    const char **errmsg ATTRIBUTE_UNUSED)
++{
++  return insn | ((value & 0x1f) << 21) | ((value & 0x20) >> 2);
++}
++
++static long
++extract_xtq6 (unsigned long insn,
++	     ppc_cpu_t dialect ATTRIBUTE_UNUSED,
++	     int *invalid ATTRIBUTE_UNUSED)
++{
++  return ((insn << 2) & 0x20) | ((insn >> 21) & 0x1f);
++}
++
+ /* The XA field in an XX3 form instruction.  This is split.  */
+ 
+ static unsigned long
+@@ -2258,10 +2453,18 @@ extract_vleil (unsigned long insn,
+ /* The main opcode mask with the RA field clear.  */
+ #define DRA_MASK (OP_MASK | RA_MASK)
+ 
++/* A DQ form VSX instruction.  */
++#define DQX(op, xop) (OP (op) | ((xop) & 0x7))
++#define DQX_MASK DQX (0x3f, 7)
++
+ /* A DS form instruction.  */
+ #define DSO(op, xop) (OP (op) | ((xop) & 0x3))
+ #define DS_MASK DSO (0x3f, 3)
+ 
++/* An DX form instruction.  */
++#define DX(op, xop) (OP (op) | ((((unsigned long)(xop)) & 0x1f) << 1))
++#define DX_MASK DX (0x3f, 0x1f)
++
+ /* An EVSEL form instruction.  */
+ #define EVSEL(op, xop) (OP (op) | (((unsigned long)(xop)) & 0xff) << 3)
+ #define EVSEL_MASK EVSEL(0x3f, 0xff)
+@@ -2374,6 +2577,9 @@ extract_vleil (unsigned long insn,
+ /* A VX_MASK with a PS field.  */
+ #define VXPS_MASK (VX_MASK & ~(0x1 << 9))
+ 
++/* A VX_MASK with the VA field fixed with a PS field.  */
++#define VXVAPS_MASK ((VX_MASK | (0x1f << 16)) & ~(0x1 << 9))
++
+ /* A VA form instruction.  */
+ #define VXA(op, xop) (OP (op) | (((unsigned long)(xop)) & 0x03f))
+ 
+@@ -2389,9 +2595,15 @@ extract_vleil (unsigned long insn,
+ /* The mask for a VXR form instruction.  */
+ #define VXR_MASK VXR(0x3f, 0x3ff, 1)
+ 
++/* A VX form instruction with a VA tertiary opcode.  */
++#define VXVA(op, xop, vaop) (VX(op,xop) | (((vaop) & 0x1f) << 16))
++
+ /* An X form instruction.  */
+ #define X(op, xop) (OP (op) | ((((unsigned long)(xop)) & 0x3ff) << 1))
+ 
++/* A X form instruction for Quad-Precision FP Instructions.  */
++#define XVA(op, xop, vaop) (X(op,xop) | (((vaop) & 0x1f) << 16))
++
+ /* An EX form instruction.  */
+ #define EX(op, xop) (OP (op) | (((unsigned long)(xop)) & 0x7ff))
+ 
+@@ -2401,6 +2613,9 @@ extract_vleil (unsigned long insn,
+ /* An XX2 form instruction.  */
+ #define XX2(op, xop) (OP (op) | ((((unsigned long)(xop)) & 0x1ff) << 2))
+ 
++/* A XX2 form instruction with the VA bits specified.  */
++#define XX2VA(op, xop, vaop) (XX2(op,xop) | (((vaop) & 0x1f) << 16))
++
+ /* An XX3 form instruction.  */
+ #define XX3(op, xop) (OP (op) | ((((unsigned long)(xop)) & 0xff) << 3))
+ 
+@@ -2416,12 +2631,18 @@ extract_vleil (unsigned long insn,
+ /* An X form instruction with the RC bit specified.  */
+ #define XRC(op, xop, rc) (X ((op), (xop)) | ((rc) & 1))
+ 
++/* A X form instruction for Quad-Precision FP Instructions with RC bit.  */
++#define XVARC(op, xop, vaop, rc) (XVA ((op), (xop), (vaop)) | ((rc) & 1))
++
+ /* A Z form instruction with the RC bit specified.  */
+ #define ZRC(op, xop, rc) (Z ((op), (xop)) | ((rc) & 1))
+ 
+ /* The mask for an X form instruction.  */
+ #define X_MASK XRC (0x3f, 0x3ff, 1)
+ 
++/* The mask for an X form instruction with the BF bits specified.  */
++#define XBF_MASK (X_MASK | (3 << 21))
++
+ /* An X form wait instruction with everything filled in except the WC field.  */
+ #define XWC_MASK (XRC (0x3f, 0x3ff, 1) | (7 << 23) | RA_MASK | RB_MASK)
+ 
+@@ -2437,9 +2658,18 @@ extract_vleil (unsigned long insn,
+ /* The mask for an XX2 form instruction with the UIM bits specified.  */
+ #define XX2UIM_MASK (XX2 (0x3f, 0x1ff) | (7 << 18))
+ 
++/* The mask for an XX2 form instruction with the 4 UIM bits specified.  */
++#define XX2UIM4_MASK (XX2 (0x3f, 0x1ff) | (1 << 20))
++
+ /* The mask for an XX2 form instruction with the BF bits specified.  */
+ #define XX2BF_MASK (XX2_MASK | (3 << 21) | (1))
+ 
++/* The mask for an XX2 form instruction with the BF and DCMX bits specified.  */
++#define XX2BFD_MASK (XX2 (0x3f, 0x1ff) | 1)
++
++/* The mask for an XX2 form instruction with a split DCMX bits specified.  */
++#define XX2DCMXS_MASK XX2 (0x3f, 0x1ee)
++
+ /* The mask for an XX3 form instruction.  */
+ #define XX3_MASK XX3 (0x3f, 0xff)
+ 
+@@ -2460,11 +2690,13 @@ extract_vleil (unsigned long insn,
+ #define Z_MASK ZRC (0x3f, 0x1ff, 1)
+ #define Z2_MASK ZRC (0x3f, 0xff, 1)
+ 
+-/* An X_MASK with the RA field fixed.  */
++/* An X_MASK with the RA/VA field fixed.  */
+ #define XRA_MASK (X_MASK | RA_MASK)
++#define XVA_MASK XRA_MASK
+ 
+-/* An XRA_MASK with the W field clear.  */
++/* An XRA_MASK with the A_L/W field clear.  */
+ #define XWRA_MASK (XRA_MASK & ~((unsigned long) 1 << 16))
++#define XRLA_MASK XWRA_MASK
+ 
+ /* An X_MASK with the RB field fixed.  */
+ #define XRB_MASK (X_MASK | RB_MASK)
+@@ -2478,9 +2710,15 @@ extract_vleil (unsigned long insn,
+ /* An X_MASK with the RA and RB fields fixed.  */
+ #define XRARB_MASK (X_MASK | RA_MASK | RB_MASK)
+ 
++/* An XBF_MASK with the RA and RB fields fixed.  */
++#define XBFRARB_MASK (XBF_MASK | RA_MASK | RB_MASK)
++
+ /* An XRARB_MASK, but with the L bit clear.  */
+ #define XRLARB_MASK (XRARB_MASK & ~((unsigned long) 1 << 16))
+ 
++/* An XRARB_MASK, but with the L bits in a darn instruction clear.  */
++#define XLRAND_MASK (XRARB_MASK & ~((unsigned long) 3 << 16))
++
+ /* An X_MASK with the RT and RA fields fixed.  */
+ #define XRTRA_MASK (X_MASK | RT_MASK | RA_MASK)
+ 
+@@ -2738,6 +2976,7 @@ extract_vleil (unsigned long insn,
+ #define POWER6	PPC_OPCODE_POWER6
+ #define POWER7	PPC_OPCODE_POWER7
+ #define POWER8	PPC_OPCODE_POWER8
++#define POWER9	PPC_OPCODE_POWER9
+ #define CELL	PPC_OPCODE_CELL
+ #define PPC64	PPC_OPCODE_64 | PPC_OPCODE_64_BRIDGE
+ #define NON32	(PPC_OPCODE_64 | PPC_OPCODE_POWER4	\
+@@ -2753,8 +2992,10 @@ extract_vleil (unsigned long insn,
+ #define PPCPS	PPC_OPCODE_PPCPS
+ #define PPCVEC	PPC_OPCODE_ALTIVEC
+ #define PPCVEC2	PPC_OPCODE_ALTIVEC2
++#define PPCVEC3	PPC_OPCODE_ALTIVEC2
+ #define PPCVSX	PPC_OPCODE_VSX
+ #define PPCVSX2	PPC_OPCODE_VSX
++#define PPCVSX3	PPC_OPCODE_VSX3
+ #define POWER	PPC_OPCODE_POWER
+ #define POWER2	PPC_OPCODE_POWER | PPC_OPCODE_POWER2
+ #define PWR2COM PPC_OPCODE_POWER | PPC_OPCODE_POWER2 | PPC_OPCODE_COMMON
+@@ -2864,11 +3105,13 @@ const struct powerpc_opcode powerpc_opco
+ {"twi",		OP(3),		OP_MASK,     PPCCOM,	PPCNONE,	{TO, RA, SI}},
+ {"ti",		OP(3),		OP_MASK,     PWRCOM,	PPCNONE,	{TO, RA, SI}},
+ 
+-{"ps_cmpu0",	X  (4,	 0), X_MASK|(3<<21), PPCPS,	PPCNONE,	{BF, FRA, FRB}},
++{"ps_cmpu0",	X  (4,	 0),    XBF_MASK,    PPCPS,	PPCNONE,	{BF, FRA, FRB}},
+ {"vaddubm",	VX (4,	 0),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"vmul10cuq",	VX (4,   1),	VXVB_MASK,   PPCVEC3,	    PPCNONE,	{VD, VA}},
+ {"vmaxub",	VX (4,	 2),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vrlb",	VX (4,	 4),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vcmpequb",	VXR(4,	 6,0),	VXR_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"vcmpneb",	VXR(4,	 7,0),	VXR_MASK,    PPCVEC3,	PPCNONE,	{VD, VA, VB}},
+ {"vmuloub",	VX (4,	 8),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vaddfp",	VX (4,	10),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"psq_lx",	XW (4,	 6,0),	XW_MASK,     PPCPS,	PPCNONE,	{FRT,RA,RB,PSWM,PSQM}},
+@@ -2914,6 +3157,9 @@ const struct powerpc_opcode powerpc_opco
+ {"vmaddfp",	VXA(4,	46),	VXA_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VC, VB}},
+ {"ps_sel.",	A  (4,	23,1),	A_MASK,      PPCPS,	PPCNONE,	{FRT, FRA, FRC, FRB}},
+ {"vnmsubfp",	VXA(4,	47),	VXA_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VC, VB}},
++{"maddhd",	VXA(4,	48),	VXA_MASK,    POWER9,	PPCNONE,	{RT, RA, RB, RC}},
++{"maddhdu",	VXA(4,	49),	VXA_MASK,    POWER9,	PPCNONE,	{RT, RA, RB, RC}},
++{"maddld",	VXA(4,	51),	VXA_MASK,    POWER9,	PPCNONE,	{RT, RA, RB, RC}},
+ {"ps_res",	A  (4,	24,0), AFRAFRC_MASK, PPCPS,	PPCNONE,	{FRT, FRB}},
+ {"ps_res.",	A  (4,	24,1), AFRAFRC_MASK, PPCPS,	PPCNONE,	{FRT, FRB}},
+ {"ps_mul",	A  (4,	25,0), AFRB_MASK,    PPCPS,	PPCNONE,	{FRT, FRA, FRC}},
+@@ -2928,15 +3174,18 @@ const struct powerpc_opcode powerpc_opco
+ {"ps_nmsub.",	A  (4,	30,1),	A_MASK,      PPCPS,	PPCNONE,	{FRT, FRA, FRC, FRB}},
+ {"ps_nmadd",	A  (4,	31,0),	A_MASK,      PPCPS,	PPCNONE,	{FRT, FRA, FRC, FRB}},
+ {"ps_nmadd.",	A  (4,	31,1),	A_MASK,      PPCPS,	PPCNONE,	{FRT, FRA, FRC, FRB}},
+-{"ps_cmpo0",	X  (4,	32), X_MASK|(3<<21), PPCPS,	PPCNONE,	{BF, FRA, FRB}},
++{"ps_cmpo0",	X  (4,	32),    XBF_MASK,    PPCPS,	PPCNONE,	{BF, FRA, FRB}},
++{"vpermr",	VXA(4,	59),	VXA_MASK,    PPCVEC3,	PPCNONE,	{VD, VA, VB, VC}},
+ {"vaddeuqm",	VXA(4,	60),	VXA_MASK,    PPCVEC2,	PPCNONE,	{VD, VA, VB, VC}},
+ {"vaddecuq",	VXA(4,	61),	VXA_MASK,    PPCVEC2,	PPCNONE,	{VD, VA, VB, VC}},
+ {"vsubeuqm",	VXA(4,	62),	VXA_MASK,    PPCVEC2,	PPCNONE,	{VD, VA, VB, VC}},
+ {"vsubecuq",	VXA(4,	63),	VXA_MASK,    PPCVEC2,	PPCNONE,	{VD, VA, VB, VC}},
+ {"vadduhm",	VX (4,	64),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"vmul10ecuq",	VX (4,  65),	VX_MASK,     PPCVEC3,	    PPCNONE,	{VD, VA, VB}},
+ {"vmaxuh",	VX (4,	66),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vrlh",	VX (4,	68),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vcmpequh",	VXR(4,	70,0),	VXR_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"vcmpneh",	VXR(4,  71,0),	VXR_MASK,    PPCVEC3,	PPCNONE,	{VD, VA, VB}},
+ {"vmulouh",	VX (4,	72),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vsubfp",	VX (4,	74),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"psq_lux",	XW (4,	38,0),	XW_MASK,     PPCPS,	PPCNONE,	{FRT,RA,RB,PSWM,PSQM}},
+@@ -2951,11 +3200,13 @@ const struct powerpc_opcode powerpc_opco
+ {"machhw.",	XO (4,	44,0,1),XO_MASK,     MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ {"nmachhw",	XO (4,	46,0,0),XO_MASK,     MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ {"nmachhw.",	XO (4,	46,0,1),XO_MASK,     MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+-{"ps_cmpu1",	X  (4,	64), X_MASK|(3<<21), PPCPS,	PPCNONE,	{BF, FRA, FRB}},
++{"ps_cmpu1",	X  (4,	64),    XBF_MASK,    PPCPS,	PPCNONE,	{BF, FRA, FRB}},
+ {"vadduwm",	VX (4,	128),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vmaxuw",	VX (4,	130),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vrlw",	VX (4,	132),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"vrlwmi",	VX (4,  133),	VX_MASK,     PPCVEC3,       PPCNONE,	{VD, VA, VB}},
+ {"vcmpequw",	VXR(4,	134,0), VXR_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"vcmpnew",	VXR(4,  135,0),	VXR_MASK,    PPCVEC3,	PPCNONE,	{VD, VA, VB}},
+ {"vmulouw",	VX (4,  136),	VX_MASK,     PPCVEC2,	    PPCNONE,	{VD, VA, VB}},
+ {"vmuluwm",	VX (4,  137),	VX_MASK,     PPCVEC2,	    PPCNONE,	{VD, VA, VB}},
+ {"vmrghw",	VX (4,	140),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+@@ -2964,10 +3215,11 @@ const struct powerpc_opcode powerpc_opco
+ {"ps_mr.",	XRC(4,	72,1),	XRA_MASK,    PPCPS,	PPCNONE,	{FRT, FRB}},
+ {"machhwsu",	XO (4,	76,0,0),XO_MASK,     MULHW|PPCVLE,  PPCNONE,	{RT, RA, RB}},
+ {"machhwsu.",	XO (4,	76,0,1),XO_MASK,     MULHW|PPCVLE,  PPCNONE,	{RT, RA, RB}},
+-{"ps_cmpo1",	X  (4,	96), X_MASK|(3<<21), PPCPS,	PPCNONE,	{BF, FRA, FRB}},
++{"ps_cmpo1",	X  (4,	96),    XBF_MASK,    PPCPS,	PPCNONE,	{BF, FRA, FRB}},
+ {"vaddudm",	VX (4, 192),	VX_MASK,     PPCVEC2,	PPCNONE,	{VD, VA, VB}},
+ {"vmaxud",	VX (4, 194),	VX_MASK,     PPCVEC2,	PPCNONE,	{VD, VA, VB}},
+ {"vrld",	VX (4, 196),	VX_MASK,     PPCVEC2,	PPCNONE,	{VD, VA, VB}},
++{"vrldmi",	VX (4, 197),	VX_MASK,     PPCVEC3,   PPCNONE,	{VD, VA, VB}},
+ {"vcmpeqfp",	VXR(4, 198,0),	VXR_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vcmpequd",	VXR(4, 199,0),	VXR_MASK,    PPCVEC2,	PPCNONE,	{VD, VA, VB}},
+ {"vpkuwus",	VX (4, 206),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+@@ -2977,6 +3229,7 @@ const struct powerpc_opcode powerpc_opco
+ {"nmachhws.",	XO (4, 110,0,1),XO_MASK,     MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ {"vadduqm",	VX (4, 256),	VX_MASK,     PPCVEC2,	PPCNONE,	{VD, VA, VB}},
+ {"vmaxsb",	VX (4, 258),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"vcmpnezb",	VXR(4, 263,0),	VXR_MASK,    PPCVEC3,	PPCNONE,	{VD, VA, VB}},
+ {"vslb",	VX (4, 260),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vmulosb",	VX (4, 264),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vrefp",	VX (4, 266),	VXVA_MASK,   PPCVEC|PPCVLE, PPCNONE,	{VD, VB}},
+@@ -2991,6 +3244,7 @@ const struct powerpc_opcode powerpc_opco
+ {"vaddcuq",	VX (4, 320),	VX_MASK,     PPCVEC2,      PPCNONE,	{VD, VA, VB}},
+ {"vmaxsh",	VX (4, 322),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vslh",	VX (4, 324),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"vcmpnezh",	VXR(4, 327,0),	VXR_MASK,    PPCVEC3,	PPCNONE,	{VD, VA, VB}},
+ {"vmulosh",	VX (4, 328),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vrsqrtefp",	VX (4, 330),	VXVA_MASK,   PPCVEC|PPCVLE, PPCNONE,	{VD, VB}},
+ {"vmrglh",	VX (4, 332),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+@@ -3004,6 +3258,8 @@ const struct powerpc_opcode powerpc_opco
+ {"vaddcuw",	VX (4, 384),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vmaxsw",	VX (4, 386),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vslw",	VX (4, 388),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"vrlwnm",	VX (4, 389),	VX_MASK,     PPCVEC3,       PPCNONE,	{VD, VA, VB}},
++{"vcmpnezw",	VXR(4, 391,0),	VXR_MASK,    PPCVEC3,	PPCNONE,	{VD, VA, VB}},
+ {"vmulosw",	VX (4, 392),	VX_MASK,     PPCVEC2,	    PPCNONE,	{VD, VA, VB}},
+ {"vexptefp",	VX (4, 394),	VXVA_MASK,   PPCVEC|PPCVLE, PPCNONE,	{VD, VB}},
+ {"vmrglw",	VX (4, 396),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+@@ -3012,6 +3268,7 @@ const struct powerpc_opcode powerpc_opco
+ {"macchwsu.",	XO (4, 204,0,1),XO_MASK,     MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ {"vmaxsd",	VX (4, 450),	VX_MASK,     PPCVEC2,	    PPCNONE,	{VD, VA, VB}},
+ {"vsl",		VX (4, 452),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"vrldnm",	VX (4, 453),	VX_MASK,     PPCVEC3,       PPCNONE,	{VD, VA, VB}},
+ {"vcmpgefp",	VXR(4, 454,0),	VXR_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vlogefp",	VX (4, 458),	VXVA_MASK,   PPCVEC|PPCVLE, PPCNONE,	{VD, VB}},
+ {"vpkswss",	VX (4, 462),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+@@ -3021,6 +3278,7 @@ const struct powerpc_opcode powerpc_opco
+ {"nmacchws.",	XO (4, 238,0,1),XO_MASK,     MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ {"evaddw",	VX (4, 512),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"vaddubs",	VX (4, 512),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"vmul10uq",	VX (4, 513),	VXVB_MASK,   PPCVEC3,	    PPCNONE,	{VD, VA}},
+ {"evaddiw",	VX (4, 514),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RB, UIMM}},
+ {"vminub",	VX (4, 514),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"evsubfw",	VX (4, 516),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+@@ -3037,6 +3295,7 @@ const struct powerpc_opcode powerpc_opco
+ {"evextsh",	VX (4, 523),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA}},
+ {"evrndw",	VX (4, 524),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA}},
+ {"vspltb",	VX (4, 524),	VXUIMM4_MASK,PPCVEC|PPCVLE, PPCNONE,	{VD, VB, UIMM4}},
++{"vextractub",	VX (4, 525),	VXUIMM4_MASK,PPCVEC3,	    PPCNONE,	{VD, VB, UIMM4}},
+ {"evcntlzw",	VX (4, 525),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA}},
+ {"evcntlsw",	VX (4, 526),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA}},
+ {"vupkhsb",	VX (4, 526),	VXVA_MASK,   PPCVEC|PPCVLE, PPCNONE,	{VD, VB}},
+@@ -3075,12 +3334,14 @@ const struct powerpc_opcode powerpc_opco
+ {"evcmpeq",	VX (4, 564),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{CRFD, RA, RB}},
+ {"cget",	APU(4, 284,0),	APU_RA_MASK, PPC405,	PPCNONE,	{RT, FSL}},
+ {"vadduhs",	VX (4, 576),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"vmul10euq",	VX (4, 577),	VX_MASK,     PPCVEC3,	    PPCNONE,	{VD, VA, VB}},
+ {"vminuh",	VX (4, 578),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vsrh",	VX (4, 580),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vcmpgtuh",	VXR(4, 582,0),	VXR_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vmuleuh",	VX (4, 584),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vrfiz",	VX (4, 586),	VXVA_MASK,   PPCVEC|PPCVLE, PPCNONE,	{VD, VB}},
+ {"vsplth",	VX (4, 588),	VXUIMM3_MASK,PPCVEC|PPCVLE, PPCNONE,	{VD, VB, UIMM3}},
++{"vextractuh",	VX (4, 589),	VXUIMM4_MASK,PPCVEC3,	    PPCNONE,	{VD, VB, UIMM4}},
+ {"vupkhsh",	VX (4, 590),	VXVA_MASK,   PPCVEC|PPCVLE, PPCNONE,	{VD, VB}},
+ {"nget",	APU(4, 300,0),	APU_RA_MASK, PPC405,	PPCNONE,	{RT, FSL}},
+ {"evsel",	EVSEL(4,79),	EVSEL_MASK,  PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB, CRFS}},
+@@ -3100,6 +3361,7 @@ const struct powerpc_opcode powerpc_opco
+ {"vrfip",	VX (4, 650),	VXVA_MASK,   PPCVEC|PPCVLE, PPCNONE,	{VD, VB}},
+ {"evfscmpgt",	VX (4, 652),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{CRFD, RA, RB}},
+ {"vspltw",	VX (4, 652),	VXUIMM2_MASK,PPCVEC|PPCVLE, PPCNONE,	{VD, VB, UIMM2}},
++{"vextractuw",	VX (4, 653),	VXUIMM4_MASK,PPCVEC3,	    PPCNONE,	{VD, VB, UIMM4}},
+ {"evfscmplt",	VX (4, 653),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{CRFD, RA, RB}},
+ {"evfscmpeq",	VX (4, 654),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{CRFD, RA, RB}},
+ {"vupklsb",	VX (4, 654),	VXVA_MASK,   PPCVEC|PPCVLE, PPCNONE,	{VD, VB}},
+@@ -3131,6 +3393,7 @@ const struct powerpc_opcode powerpc_opco
+ {"efsdiv",	VX (4, 713),	VX_MASK,     PPCEFS|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"vrfim",	VX (4, 714),	VXVA_MASK,   PPCVEC|PPCVLE, PPCNONE,	{VD, VB}},
+ {"efscmpgt",	VX (4, 716),	VX_MASK,     PPCEFS|PPCVLE, PPCNONE,	{CRFD, RA, RB}},
++{"vextractd",	VX (4, 717),	VXUIMM4_MASK,PPCVEC3,	    PPCNONE,	{VD, VB, UIMM4}},
+ {"efscmplt",	VX (4, 717),	VX_MASK,     PPCEFS|PPCVLE, PPCNONE,	{CRFD, RA, RB}},
+ {"efscmpeq",	VX (4, 718),	VX_MASK,     PPCEFS|PPCVLE, PPCNONE,	{CRFD, RA, RB}},
+ {"vupklsh",	VX (4, 718),	VXVA_MASK,   PPCVEC|PPCVLE, PPCNONE,	{VD, VB}},
+@@ -3195,6 +3458,7 @@ const struct powerpc_opcode powerpc_opco
+ {"vcuxwfp",	VX (4, 778),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VB, UIMM}},
+ {"evlhhousplatx",VX(4, 780),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"vspltisb",	VX (4, 780),	VXVB_MASK,   PPCVEC|PPCVLE, PPCNONE,	{VD, SIMM}},
++{"vinsertb",	VX (4, 781),	VXUIMM4_MASK,PPCVEC3,	    PPCNONE,	{VD, VB, UIMM4}},
+ {"evlhhousplat",VX (4, 781),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, EVUIMM_2, RA}},
+ {"evlhhossplatx",VX(4, 782),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"vpkpx",	VX (4, 782),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+@@ -3228,6 +3492,7 @@ const struct powerpc_opcode powerpc_opco
+ {"evstwwox",	VX (4, 828),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"evstwwo",	VX (4, 829),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, EVUIMM_4, RA}},
+ {"vaddshs",	VX (4, 832),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"bcdcpsgn.",	VX (4, 833),	VX_MASK,     PPCVEC3,	    PPCNONE,	{VD, VA, VB}},
+ {"vminsh",	VX (4, 834),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vsrah",	VX (4, 836),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vcmpgtsh",	VXR(4, 838,0),	VXR_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+@@ -3235,6 +3500,7 @@ const struct powerpc_opcode powerpc_opco
+ {"vcfsx",	VX (4, 842),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VB, UIMM}},
+ {"vcsxwfp",	VX (4, 842),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VB, UIMM}},
+ {"vspltish",	VX (4, 844),	VXVB_MASK,   PPCVEC|PPCVLE, PPCNONE,	{VD, SIMM}},
++{"vinserth",	VX (4, 845),	VXUIMM4_MASK,PPCVEC3,	    PPCNONE,	{VD, VB, UIMM4}},
+ {"vupkhpx",	VX (4, 846),	VXVA_MASK,   PPCVEC|PPCVLE, PPCNONE,	{VD, VB}},
+ {"mullhw",	XRC(4, 424,0),	X_MASK,      MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ {"mullhw.",	XRC(4, 424,1),	X_MASK,      MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+@@ -3250,6 +3516,7 @@ const struct powerpc_opcode powerpc_opco
+ {"vctuxs",	VX (4, 906),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VB, UIMM}},
+ {"vcfpuxws",	VX (4, 906),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VB, UIMM}},
+ {"vspltisw",	VX (4, 908),	VXVB_MASK,   PPCVEC|PPCVLE, PPCNONE,	{VD, SIMM}},
++{"vinsertw",	VX (4, 909),	VXUIMM4_MASK,PPCVEC3,	    PPCNONE,	{VD, VB, UIMM4}},
+ {"maclhwsu",	XO (4, 460,0,0),XO_MASK,     MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ {"maclhwsu.",	XO (4, 460,0,1),XO_MASK,     MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ {"vminsd",	VX (4, 962),	VX_MASK,     PPCVEC2,	    PPCNONE,	{VD, VA, VB}},
+@@ -3258,6 +3525,7 @@ const struct powerpc_opcode powerpc_opco
+ {"vcmpgtsd",	VXR(4, 967,0),	VXR_MASK,    PPCVEC2,	PPCNONE,	{VD, VA, VB}},
+ {"vctsxs",	VX (4, 970),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VB, UIMM}},
+ {"vcfpsxws",	VX (4, 970),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VB, UIMM}},
++{"vinsertd",	VX (4, 973),	VXUIMM4_MASK,PPCVEC3,	    PPCNONE,	{VD, VB, UIMM4}},
+ {"vupklpx",	VX (4, 974),	VXVA_MASK,   PPCVEC|PPCVLE, PPCNONE,	{VD, VB}},
+ {"maclhws",	XO (4, 492,0,0),XO_MASK,     MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ {"maclhws.",	XO (4, 492,0,1),XO_MASK,     MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+@@ -3270,6 +3538,7 @@ const struct powerpc_opcode powerpc_opco
+ {"evmhessf",	VX (4,1027),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"vand",	VX (4,1028),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vcmpequb.",	VXR(4,	 6,1),	VXR_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"vcmpneb.",	VXR(4,	 7,1),	VXR_MASK,    PPCVEC3,	PPCNONE,	{VD, VA, VB}},
+ {"udi0fcm.",	APU(4, 515,0), APU_MASK, PPC405|PPC440, PPC476,		{URT, URA, URB}},
+ {"udi0fcm",	APU(4, 515,1), APU_MASK, PPC405|PPC440, PPC476,		{URT, URA, URB}},
+ {"evmhossf",	VX (4,1031),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+@@ -3302,6 +3571,7 @@ const struct powerpc_opcode powerpc_opco
+ {"vcmpequh.",	VXR(4,	70,1),	VXR_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"udi1fcm.",	APU(4, 547,0), APU_MASK, PPC405|PPC440, PPC476,		{URT, URA, URB}},
+ {"udi1fcm",	APU(4, 547,1), APU_MASK, PPC405|PPC440, PPC476,		{URT, URA, URB}},   
++{"vcmpneh.",	VXR(4,  71,1),	VXR_MASK,    PPCVEC3,	PPCNONE,	{VD, VA, VB}},
+ {"evmwhssf",	VX (4,1095),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"vpmsumh",	VX (4,1096),	VX_MASK,     PPCVEC2,	    PPCNONE,	{VD, VA, VB}},
+ {"evmwlumi",	VX (4,1096),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+@@ -3331,10 +3601,12 @@ const struct powerpc_opcode powerpc_opco
+ {"evmwsmia",	VX (4,1145),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"evmwsmfa",	VX (4,1147),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"vsubuwm",	VX (4,1152),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"bcdus.",	VX (4,1153),	VX_MASK,     PPCVEC3,	    PPCNONE,	{VD, VA, VB}},
+ {"vavguw",	VX (4,1154),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vabsduw",	VX (4,1155),	VX_MASK,     PPCVEC2,	PPCNONE,	{VD, VA, VB}},
+ {"vmr",		VX (4,1156),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VBA}},
+ {"vor",		VX (4,1156),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"vcmpnew.",	VXR(4, 135,1),	VXR_MASK,    PPCVEC3,	PPCNONE,	{VD, VA, VB}},
+ {"vpmsumw",	VX (4,1160),	VX_MASK,     PPCVEC2,	    PPCNONE,	{VD, VA, VB}},
+ {"vcmpequw.",	VXR(4, 134,1),	VXR_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"udi2fcm.",	APU(4, 579,0), APU_MASK, PPC405|PPC440, PPC476,		{URT, URA, URB}},
+@@ -3345,6 +3617,7 @@ const struct powerpc_opcode powerpc_opco
+ {"ps_merge10.",	XOPS(4,592,1),	XOPS_MASK,   PPCPS,	PPCNONE,	{FRT, FRA, FRB}},
+ {"vsubudm",	VX (4,1216),	VX_MASK,     PPCVEC2,	    PPCNONE,	{VD, VA, VB}},
+ {"evaddusiaaw",	VX (4,1216),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA}},
++{"bcds.",	VX (4,1217),	VXPS_MASK,   PPCVEC3,	    PPCNONE,	{VD, VA, VB, PS}},
+ {"evaddssiaaw",	VX (4,1217),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA}},
+ {"evsubfusiaaw",VX (4,1218),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA}},
+ {"evsubfssiaaw",VX (4,1219),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA}},
+@@ -3370,6 +3643,7 @@ const struct powerpc_opcode powerpc_opco
+ {"ps_merge11.",	XOPS(4,624,1),	XOPS_MASK,   PPCPS,	PPCNONE,	{FRT, FRA, FRB}},
+ {"vsubuqm",	VX (4,1280),	VX_MASK,     PPCVEC2,	PPCNONE,	{VD, VA, VB}},
+ {"evmheusiaaw",	VX (4,1280),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
++{"bcdtrunc.",	VX (4,1281),	VXPS_MASK,   PPCVEC3,	    PPCNONE,	{VD, VA, VB, PS}},
+ {"evmhessiaaw",	VX (4,1281),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"vavgsb",	VX (4,1282),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"evmhessfaaw",	VX (4,1283),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+@@ -3379,6 +3653,7 @@ const struct powerpc_opcode powerpc_opco
+ {"evmhossiaaw",	VX (4,1285),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"udi4fcm.",	APU(4, 643,0), APU_MASK, PPC405|PPC440, PPC476,		{URT, URA, URB}},
+ {"udi4fcm",	APU(4, 643,1), APU_MASK, PPC405|PPC440, PPC476,		{URT, URA, URB}},
++{"vcmpnezb.",	VXR(4, 263,1),	VXR_MASK,    PPCVEC3,	PPCNONE,	{VD, VA, VB}},
+ {"evmhossfaaw",	VX (4,1287),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"evmheumiaaw",	VX (4,1288),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"vcipher",	VX (4,1288),	VX_MASK,     PPCVEC2,	    PPCNONE,	{VD, VA, VB}},
+@@ -3399,11 +3674,13 @@ const struct powerpc_opcode powerpc_opco
+ {"evmhogsmfaa",	VX (4,1327),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"vsubcuq",	VX (4,1344),	VX_MASK,     PPCVEC2,	    PPCNONE,	{VD, VA, VB}},
+ {"evmwlusiaaw",	VX (4,1344),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
++{"bcdutrunc.",	VX (4,1345),	VX_MASK,     PPCVEC3,	    PPCNONE,	{VD, VA, VB}},
+ {"evmwlssiaaw",	VX (4,1345),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"vavgsh",	VX (4,1346),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vorc",	VX (4,1348),	VX_MASK,     PPCVEC2,	    PPCNONE,	{VD, VA, VB}},
+ {"udi5fcm.",	APU(4, 675,0), APU_MASK, PPC405|PPC440, PPC476,		{URT, URA, URB}},
+ {"udi5fcm",	APU(4, 675,1), APU_MASK, PPC405|PPC440, PPC476,		{URT, URA, URB}},
++{"vcmpnezh.",	VXR(4, 327,1),	VXR_MASK,    PPCVEC3,	PPCNONE,	{VD, VA, VB}},
+ {"vncipher",	VX (4,1352),	VX_MASK,     PPCVEC2,	    PPCNONE,	{VD, VA, VB}},
+ {"evmwlumiaaw",	VX (4,1352),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"vncipherlast",VX (4,1353),	VX_MASK,     PPCVEC2,	    PPCNONE,	{VD, VA, VB}},
+@@ -3421,6 +3698,13 @@ const struct powerpc_opcode powerpc_opco
+ {"evmheusianw",	VX (4,1408),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"vsubcuw",	VX (4,1408),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"evmhessianw",	VX (4,1409),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
++{"bcdctsq.",	VXVA(4,1409,0),	VXVA_MASK,   PPCVEC3,	    PPCNONE,	{VD, VB}},
++{"bcdcfsq.",	VXVA(4,1409,2),	VXVAPS_MASK, PPCVEC3,	    PPCNONE,	{VD, VB, PS}},
++{"bcdctz.",	VXVA(4,1409,4),	VXVAPS_MASK, PPCVEC3,	    PPCNONE,	{VD, VB, PS}},
++{"bcdctn.",	VXVA(4,1409,5),	VXVA_MASK,   PPCVEC3,	    PPCNONE,	{VD, VB}},
++{"bcdcfz.",	VXVA(4,1409,6),	VXVAPS_MASK, PPCVEC3,	    PPCNONE,	{VD, VB, PS}},
++{"bcdcfn.",	VXVA(4,1409,7),	VXVAPS_MASK, PPCVEC3,	    PPCNONE,	{VD, VB, PS}},
++{"bcdsetsgn.",	VXVA(4,1409,31),VXVAPS_MASK, PPCVEC3,	    PPCNONE,	{VD, VB, PS}},
+ {"vavgsw",	VX (4,1410),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"evmhessfanw",	VX (4,1411),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"vnand",	VX (4,1412),	VX_MASK,     PPCVEC2,	    PPCNONE,	{VD, VA, VB}},
+@@ -3428,6 +3712,7 @@ const struct powerpc_opcode powerpc_opco
+ {"evmhossianw",	VX (4,1413),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"udi6fcm.",	APU(4, 707,0), APU_MASK, PPC405|PPC440, PPC476,		{URT, URA, URB}},
+ {"udi6fcm",	APU(4, 707,1), APU_MASK, PPC405|PPC440, PPC476,		{URT, URA, URB}},
++{"vcmpnezw.",	VXR(4, 391,1),	VXR_MASK,    PPCVEC3,	PPCNONE,	{VD, VA, VB}},
+ {"evmhossfanw",	VX (4,1415),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"evmheumianw",	VX (4,1416),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"evmhesmianw",	VX (4,1417),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+@@ -3444,6 +3729,7 @@ const struct powerpc_opcode powerpc_opco
+ {"evmhogsmian",	VX (4,1453),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"evmhogsmfan",	VX (4,1455),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"evmwlusianw",	VX (4,1472),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
++{"bcdsr.",	VX (4,1473),	VXPS_MASK,   PPCVEC3,	    PPCNONE,	{VD, VA, VB, PS}},
+ {"evmwlssianw",	VX (4,1473),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"vsld",	VX (4,1476),	VX_MASK,     PPCVEC2,	    PPCNONE,	{VD, VA, VB}},
+ {"vcmpgefp.",	VXR(4, 454,1),	VXR_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+@@ -3452,6 +3738,7 @@ const struct powerpc_opcode powerpc_opco
+ {"vsbox",	VX (4,1480),	VXVB_MASK,   PPCVEC2,	    PPCNONE,	{VD, VA}},
+ {"evmwlumianw",	VX (4,1480),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"evmwlsmianw",	VX (4,1481),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
++{"vbpermd",	VX (4,1484),	VX_MASK,     PPCVEC3,	    PPCNONE,	{VD, VA, VB}},
+ {"vpksdss",	VX (4,1486),	VX_MASK,     PPCVEC2,	    PPCNONE,	{VD, VA, VB}},
+ {"evmwssfan",	VX (4,1491),	VX_MASK,     PPCSPE|PPCVLE, PPCNONE,	{RS, RA, RB}},
+ {"macchwso",	XO (4, 236,1,0),XO_MASK,     MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+@@ -3462,17 +3749,35 @@ const struct powerpc_opcode powerpc_opco
+ {"nmacchwso",	XO (4, 238,1,0),XO_MASK,     MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ {"nmacchwso.",	XO (4, 238,1,1),XO_MASK,     MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ {"vsububs",	VX (4,1536),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"vclzlsbb",	VXVA(4,1538,0), VXVA_MASK,   PPCVEC3,	    PPCNONE,	{RT, VB}},
++{"vctzlsbb",	VXVA(4,1538,1), VXVA_MASK,   PPCVEC3,	    PPCNONE,	{RT, VB}},
++{"vnegw",	VXVA(4,1538,6), VXVA_MASK,   PPCVEC3,	    PPCNONE,	{VD, VB}},
++{"vnegd",	VXVA(4,1538,7), VXVA_MASK,   PPCVEC3,	    PPCNONE,	{VD, VB}},
++{"vprtybw",	VXVA(4,1538,8), VXVA_MASK,   PPCVEC3,	    PPCNONE,	{VD, VB}},
++{"vprtybd",	VXVA(4,1538,9), VXVA_MASK,   PPCVEC3,	    PPCNONE,	{VD, VB}},
++{"vprtybq",	VXVA(4,1538,10),VXVA_MASK,   PPCVEC3,	    PPCNONE,	{VD, VB}},
++{"vextsb2w",	VXVA(4,1538,16),VXVA_MASK,   PPCVEC3,	    PPCNONE,	{VD, VB}},
++{"vextsh2w",	VXVA(4,1538,17),VXVA_MASK,   PPCVEC3,	    PPCNONE,	{VD, VB}},
++{"vextsb2d",	VXVA(4,1538,24),VXVA_MASK,   PPCVEC3,	    PPCNONE,	{VD, VB}},
++{"vextsh2d",	VXVA(4,1538,25),VXVA_MASK,   PPCVEC3,	    PPCNONE,	{VD, VB}},
++{"vextsw2d",	VXVA(4,1538,26),VXVA_MASK,   PPCVEC3,	    PPCNONE,	{VD, VB}},
++{"vctzb",	VXVA(4,1538,28),VXVA_MASK,   PPCVEC3,	    PPCNONE,	{VD, VB}},
++{"vctzh",	VXVA(4,1538,29),VXVA_MASK,   PPCVEC3,	    PPCNONE,	{VD, VB}},
++{"vctzw",	VXVA(4,1538,30),VXVA_MASK,   PPCVEC3,	    PPCNONE,	{VD, VB}},
++{"vctzd",	VXVA(4,1538,31),VXVA_MASK,   PPCVEC3,	    PPCNONE,	{VD, VB}},
+ {"mfvscr",	VX (4,1540),	VXVAVB_MASK, PPCVEC|PPCVLE, PPCNONE,	{VD}},
+ {"vcmpgtub.",	VXR(4, 518,1),	VXR_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"udi8fcm.",	APU(4, 771,0),	APU_MASK,    PPC440,	PPC476,		{URT, URA, URB}},
+ {"udi8fcm",	APU(4, 771,1),	APU_MASK,    PPC440,	PPC476,		{URT, URA, URB}},
+ {"vsum4ubs",	VX (4,1544),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"vextublx",	VX (4,1549),	VX_MASK,     PPCVEC3,	    PPCNONE,	{RT, RA, VB}},
+ {"vsubuhs",	VX (4,1600),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"mtvscr",	VX (4,1604),	VXVDVA_MASK, PPCVEC|PPCVLE, PPCNONE,	{VB}},
+ {"vcmpgtuh.",	VXR(4, 582,1),	VXR_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vsum4shs",	VX (4,1608),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"udi9fcm.",	APU(4, 804,0),	APU_MASK,    PPC440,	PPC476,		{URT, URA, URB}},
+ {"udi9fcm",	APU(4, 804,1),	APU_MASK,    PPC440,	PPC476,		{URT, URA, URB}},
++{"vextuhlx",	VX (4,1613),	VX_MASK,     PPCVEC3,	PPCNONE,	{RT, RA, VB}},
+ {"vupkhsw",	VX (4,1614),	VXVA_MASK,   PPCVEC2,	    PPCNONE,	{VD, VB}},
+ {"vsubuws",	VX (4,1664),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vshasigmaw",	VX (4,1666),	VX_MASK,     PPCVEC2,	PPCNONE,	{VD, VA, ST, SIX}},
+@@ -3482,6 +3787,7 @@ const struct powerpc_opcode powerpc_opco
+ {"udi10fcm",	APU(4, 835,1),	APU_MASK,    PPC440,	PPC476,		{URT, URA, URB}},
+ {"vsum2sws",	VX (4,1672),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vmrgow",	VX (4,1676),	VX_MASK,     PPCVEC2,	PPCNONE,	{VD, VA, VB}},
++{"vextuwlx",	VX (4,1677),	VX_MASK,     PPCVEC3,	PPCNONE,	{RT, RA, VB}},
+ {"vshasigmad",	VX (4,1730),	VX_MASK,     PPCVEC2,	PPCNONE,	{VD, VA, ST, SIX}},
+ {"vsrd",	VX (4,1732),	VX_MASK,     PPCVEC2,	PPCNONE,	{VD, VA, VB}},
+ {"vcmpgtfp.",	VXR(4, 710,1),	VXR_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+@@ -3492,16 +3798,20 @@ const struct powerpc_opcode powerpc_opco
+ {"vsubsbs",	VX (4,1792),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vclzb",	VX (4,1794),	VXVA_MASK,   PPCVEC2,	PPCNONE,	{VD, VB}},
+ {"vpopcntb",	VX (4,1795),	VXVA_MASK,   PPCVEC2,	PPCNONE,	{VD, VB}},
++{"vsrv",	VX (4,1796),	VX_MASK,     PPCVEC3,	PPCNONE,	{VD, VA, VB}},
+ {"vcmpgtsb.",	VXR(4, 774,1),	VXR_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"udi12fcm.",	APU(4, 899,0),	APU_MASK,    PPC440,	PPC476,		{URT, URA, URB}},
+ {"udi12fcm",	APU(4, 899,1),	APU_MASK,    PPC440,	PPC476,		{URT, URA, URB}},
+ {"vsum4sbs",	VX (4,1800),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"vextubrx",	VX (4,1805),	VX_MASK,     PPCVEC3,	PPCNONE,	{RT, RA, VB}},
+ {"maclhwuo",	XO (4, 396,1,0),XO_MASK,     MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ {"maclhwuo.",	XO (4, 396,1,1),XO_MASK,     MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ {"vsubshs",	VX (4,1856),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vclzh",	VX (4,1858),	VXVA_MASK,   PPCVEC2,	PPCNONE,	{VD, VB}},
+ {"vpopcnth",	VX (4,1859),	VXVA_MASK,   PPCVEC2,	PPCNONE,	{VD, VB}},
++{"vslv",	VX (4,1860),	VX_MASK,     PPCVEC3,	PPCNONE,	{VD, VA, VB}},
+ {"vcmpgtsh.",	VXR(4, 838,1),	VXR_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
++{"vextuhrx",	VX (4,1869),	VX_MASK,     PPCVEC3,	PPCNONE,	{RT, RA, VB}},
+ {"udi13fcm.",	APU(4, 931,0),	APU_MASK,    PPC440,	PPC476,		{URT, URA, URB}},
+ {"udi13fcm",	APU(4, 931,1),	APU_MASK,    PPC440,	PPC476,		{URT, URA, URB}},
+ {"maclhwo",	XO (4, 428,1,0),XO_MASK,     MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+@@ -3516,6 +3826,7 @@ const struct powerpc_opcode powerpc_opco
+ {"udi14fcm",	APU(4, 963,1),	APU_MASK,    PPC440,	PPC476,		{URT, URA, URB}},
+ {"vsumsws",	VX (4,1928),	VX_MASK,     PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB}},
+ {"vmrgew",	VX (4,1932),	VX_MASK,     PPCVEC2,	PPCNONE,	{VD, VA, VB}},
++{"vextuwrx",	VX (4,1933),	VX_MASK,     PPCVEC3,	PPCNONE,	{RT, RA, VB}},
+ {"maclhwsuo",	XO (4, 460,1,0),XO_MASK,     MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ {"maclhwsuo.",	XO (4, 460,1,1),XO_MASK,     MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ {"vclzd",	VX (4,1986),	VXVA_MASK,   PPCVEC2,	PPCNONE,	{VD, VB}},
+@@ -3854,6 +4165,9 @@ const struct powerpc_opcode powerpc_opco
+ 
+ {"mcrf",      XL(19,0), XLBB_MASK|(3<<21)|(3<<16), COM,	PPCNONE,	{BF, BFA}},
+ 
++{"addpcis",   DX(19,2),		DX_MASK,     POWER9,	PPCNONE,	{RT, DXD}},
++{"subpcis",   DX(19,2),		DX_MASK,     POWER9,	PPCNONE,	{RT, NDXD}},
++
+ {"bdnzlr",   XLO(19,BODNZ,16,0),	XLBOBIBB_MASK, PPCCOM,	 PPCNONE,	{0}},
+ {"bdnzlr-",  XLO(19,BODNZ,16,0),	XLBOBIBB_MASK, PPCCOM,   ISA_V2,	{0}},
+ {"bdnzlrl",  XLO(19,BODNZ,16,1),	XLBOBIBB_MASK, PPCCOM,	 PPCNONE,	{0}},
+@@ -4113,17 +4427,20 @@ const struct powerpc_opcode powerpc_opco
+ {"crset",	XL(19,289),	XL_MASK,     PPCCOM,	PPCNONE,	{BT, BAT, BBA}},
+ {"creqv",	XL(19,289),	XL_MASK,     COM,	PPCNONE,	{BT, BA, BB}},
+ 
+-{"doze",	XL(19,402),	0xffffffff,  POWER6,	PPCNONE,	{0}},
++{"urfid",	XL(19,306),	0xffffffff,  POWER9,	PPCNONE,	{0}},
++{"stop",	XL(19,370),	0xffffffff,  POWER9,	PPCNONE,	{0}},
++
++{"doze",	XL(19,402),	0xffffffff,  POWER6,	POWER9,		{0}},
+ 
+ {"crorc",	XL(19,417),	XL_MASK,     COM,	PPCNONE,	{BT, BA, BB}},
+ 
+-{"nap",		XL(19,434),	0xffffffff,  POWER6,	PPCNONE,	{0}},
++{"nap",		XL(19,434),	0xffffffff,  POWER6,	POWER9,		{0}},
+ 
+ {"crmove",	XL(19,449),	XL_MASK,     PPCCOM,	PPCNONE,	{BT, BA, BBA}},
+ {"cror",	XL(19,449),	XL_MASK,     COM,	PPCNONE,	{BT, BA, BB}},
+ 
+-{"sleep",	XL(19,466),	0xffffffff,  POWER6,	PPCNONE,	{0}},
+-{"rvwinkle",	XL(19,498),	0xffffffff,  POWER6,	PPCNONE,	{0}},
++{"sleep",	XL(19,466),	0xffffffff,  POWER6,	POWER9,		{0}},
++{"rvwinkle",	XL(19,498),	0xffffffff,  POWER6,	POWER9,		{0}},
+ 
+ {"bctr",    XLO(19,BOU,528,0),		XLBOBIBB_MASK, COM,	 PPCNONE,	{0}},
+ {"bctrl",   XLO(19,BOU,528,1),		XLBOBIBB_MASK, COM,	 PPCNONE,	{0}},
+@@ -4459,7 +4776,8 @@ const struct powerpc_opcode powerpc_opco
+ 
+ {"ldepx",	X(31,29),	X_MASK,      E500MC|PPCA2|PPCVLE, PPCNONE, {RT, RA0, RB}},
+ 
+-{"waitasec",	X(31,30),	XRTRARB_MASK,POWER8,	PPCNONE,	{0}},
++{"waitasec",	X(31,30),	XRTRARB_MASK,POWER8,	POWER9,		{0}},
++{"wait",	X(31,30),	XWC_MASK,    POWER9,	PPCNONE,	{WC}},
+ 
+ {"lwepx",	X(31,31),	X_MASK,	     E500MC|PPCA2|PPCVLE, PPCNONE, {RT, RA0, RB}},
+ 
+@@ -4591,6 +4909,8 @@ const struct powerpc_opcode powerpc_opco
+ 
+ {"dcbfep",	XRT(31,127,0),	XRT_MASK,    E500MC|PPCA2|PPCVLE, PPCNONE, {RA0, RB}},
+  
++{"setb",	X(31,128),	XRB_MASK|(3<<16), POWER9, PPCNONE,	{RT, BFA}},
++
+ {"wrtee",	X(31,131),	XRARB_MASK,  PPC403|BOOKE|PPCA2|PPC476|PPCVLE, PPCNONE, {RS}},
+  
+ {"dcbtstls",	X(31,134),	X_MASK,	     PPCCHLK|PPC476|TITAN|PPCVLE, PPCNONE, {CT, RA0, RB}},
+@@ -4673,6 +4993,8 @@ const struct powerpc_opcode powerpc_opco
+ 
+ {"prtyd",	X(31,186),	XRB_MASK, POWER6|PPCA2,	PPCNONE,	{RA, RS}},
+ 
++{"cmprb",	X(31,192),	XCMP_MASK,   POWER9,	PPCNONE,	{BF, L, RA, RB}},
++
+ {"icblq.",	XRC(31,198,1),	X_MASK,      E6500,	PPCNONE,	{CT, RA0, RB}},
+ 
+ {"stvewx",	X(31,199),	X_MASK,      PPCVEC,	PPCNONE,	{VS, RA0, RB}},
+@@ -4711,6 +5033,8 @@ const struct powerpc_opcode powerpc_opco
+ 
+ {"stbepx",	X(31,223),	X_MASK,      E500MC|PPCA2|PPCVLE, PPCNONE, {RS, RA0, RB}},
+  
++{"cmpeqb",	X(31,224),	XCMPL_MASK,   POWER9,	PPCNONE,	{BF, RA, RB}},
++
+ {"icblc",	X(31,230),	X_MASK,	PPCCHLK|PPC476|TITAN|PPCVLE, PPCNONE, {CT, RA0, RB}},
+ 
+ {"stvx",	X(31,231),	X_MASK,      PPCVEC|PPCVLE, PPCNONE,	{VS, RA0, RB}},
+@@ -4770,14 +5094,22 @@ const struct powerpc_opcode powerpc_opco
+ {"doz",		XO(31,264,0,0),	XO_MASK,     M601,	PPCNONE,	{RT, RA, RB}},
+ {"doz.",	XO(31,264,0,1),	XO_MASK,     M601,	PPCNONE,	{RT, RA, RB}},
+ 
++{"modud",	X(31,265),	X_MASK,      POWER9,	PPCNONE,	{RT, RA, RB}},
++
+ {"add",		XO(31,266,0,0),	XO_MASK,     PPCCOM|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ {"cax",		XO(31,266,0,0),	XO_MASK,     PWRCOM,	PPCNONE,	{RT, RA, RB}},
+ {"add.",	XO(31,266,0,1),	XO_MASK,     PPCCOM|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ {"cax.",	XO(31,266,0,1),	XO_MASK,     PWRCOM,	PPCNONE,	{RT, RA, RB}},
+ 
++{"moduw",	X(31,267),	X_MASK,      POWER9,	PPCNONE,	{RT, RA, RB}},
++
++{"lxvx",	X(31,268),	XX1_MASK|1<<6, PPCVSX3,	PPCNONE,	{XT6, RA0, RB}},
++{"lxvl",	X(31,269),	XX1_MASK,    PPCVSX3,	PPCNONE,	{XT6, RA0, RB}},
++
+ {"ehpriv",	X(31,270),	0xffffffff, E500MC|PPCA2|PPCVLE, PPCNONE, {0}},
+ 
+-{"tlbiel",	X(31,274),	XRTLRA_MASK, POWER4,	PPC476,		{RB, L}},
++{"tlbiel",	X(31,274),	X_MASK|1<<20,POWER9,	PPC476,  	{RB, RSO, RIC, PRS, X_R}},
++{"tlbiel",	X(31,274),	XRTLRA_MASK, POWER4,	POWER9|PPC476,	{RB, L}},
+ 
+ {"mfapidi",	X(31,275),	X_MASK,      BOOKE,	TITAN,  	{RT, RA}},
+ 
+@@ -4805,12 +5137,19 @@ const struct powerpc_opcode powerpc_opco
+ {"lvexhx",	X(31,293),	X_MASK,      PPCVEC2,	PPCNONE,	{VD, RA0, RB}},
+ {"lvepx",	X(31,295),	X_MASK,      PPCVEC2|PPCVLE, PPCNONE,	{VD, RA0, RB}},
+ 
++{"lxvll",	X(31,301),	XX1_MASK,    PPCVSX3,	PPCNONE,	{XT6, RA0, RB}},
++
+ {"mfbhrbe",	X(31,302),	X_MASK,      POWER8,	PPCNONE,	{RT, BHRBE}},
+ 
+-{"tlbie",	X(31,306),	XRA_MASK,    POWER7,	TITAN,  	{RB, RS}},
+-{"tlbie",	X(31,306),	XRTLRA_MASK, PPC,	POWER7|TITAN,  	{RB, L}},
++{"tlbie",	X(31,306),	X_MASK|1<<20,POWER9,	TITAN,  	{RB, RS, RIC, PRS, X_R}},
++{"tlbie",	X(31,306),	XRA_MASK,    POWER7,	POWER9|TITAN,  	{RB, RS}},
++{"tlbie",	X(31,306),	XRTLRA_MASK, PPC,	E500|POWER7|TITAN,  	{RB, L}},
+ {"tlbi",	X(31,306),	XRT_MASK,    POWER,	PPCNONE,	{RA0, RB}},
+ 
++{"mfvsrld",	X(31,307),	XX1RB_MASK,  PPCVSX3,	PPCNONE,	{RA, XS6}},
++
++{"ldmx",	X(31,309),	X_MASK,      POWER9,	PPCNONE,  	{RT, RA0, RB}},
++
+ {"eciwx",	X(31,310),	X_MASK,      PPC,	TITAN,  	{RT, RA0, RB}},
+ 
+ {"lhzux",	X(31,311),	X_MASK,      COM|PPCVLE, PPCNONE,	{RT, RAL, RB}},
+@@ -4871,6 +5210,8 @@ const struct powerpc_opcode powerpc_opco
+ {"mfpmr",	X(31,334),	X_MASK, PPCPMR|PPCE300|PPCVLE, PPCNONE,	{RT, PMR}},
+ {"mftmr",	X(31,366),	X_MASK,	PPCTMR|E6500,	PPCNONE,	{RT, TMR}},
+ 
++{"slbsync",	X(31,338),      0xffffffff,  POWER9,	PPCNONE,	{0}},
++
+ {"mfmq",	XSPR(31,339,  0), XSPR_MASK, M601,	PPCNONE,	{RT}},
+ {"mfxer",	XSPR(31,339,  1), XSPR_MASK, COM|PPCVLE, PPCNONE,	{RT}},
+ {"mfrtcu",	XSPR(31,339,  4), XSPR_MASK, COM,	TITAN,  	{RT}},
+@@ -5085,6 +5426,8 @@ const struct powerpc_opcode powerpc_opco
+ {"divs",	XO(31,363,0,0),	XO_MASK,     M601,	PPCNONE,	{RT, RA, RB}},
+ {"divs.",	XO(31,363,0,1),	XO_MASK,     M601,	PPCNONE,	{RT, RA, RB}},
+ 
++{"lxvwsx",	X(31,364),	XX1_MASK,    PPCVSX3,	PPCNONE,	{XT6, RA0, RB}},
++
+ {"tlbia",	X(31,370),	0xffffffff,  PPC,	TITAN,  	{0}},
+ 
+ {"mftbu",	XSPR(31,371,269), XSPR_MASK, PPC,	NO371|POWER4,	{RT}},
+@@ -5112,10 +5455,15 @@ const struct powerpc_opcode powerpc_opco
+ {"divweu",	XO(31,395,0,0),	XO_MASK,  POWER7|PPCA2,	PPCNONE,	{RT, RA, RB}},
+ {"divweu.",	XO(31,395,0,1),	XO_MASK,  POWER7|PPCA2,	PPCNONE,	{RT, RA, RB}},
+ 
++{"stxvx",	X(31,396),	XX1_MASK,    PPCVSX3,	PPCNONE,	{XS6, RA0, RB}},
++{"stxvl",	X(31,397),	XX1_MASK,    PPCVSX3,	PPCNONE,	{XS6, RA0, RB}},
++
+ {"dcblce",	X(31,398),	X_MASK,      PPCCHLK,	E500MC,		{CT, RA, RB}},
+ 
+ {"slbmte",	X(31,402),	XRA_MASK,    PPC64,	PPCNONE,	{RS, RB}},
+ 
++{"mtvsrws",	X(31,403),	XX1RB_MASK,  PPCVSX3,	PPCNONE,	{XT6, RA}},
++
+ {"pbt.",	XRC(31,404,1),	X_MASK,      POWER8,	PPCNONE,	{RS, RA0, RB}},
+ 
+ {"icswx",	XRC(31,406,0),	X_MASK,   POWER7|PPCA2,	PPCNONE,	{RS, RA, RB}},
+@@ -5139,10 +5487,14 @@ const struct powerpc_opcode powerpc_opco
+ {"divwe",	XO(31,427,0,0),	XO_MASK,  POWER7|PPCA2,	PPCNONE,	{RT, RA, RB}},
+ {"divwe.",	XO(31,427,0,1),	XO_MASK,  POWER7|PPCA2,	PPCNONE,	{RT, RA, RB}},
+ 
++{"stxvll",	X(31,429),	XX1_MASK,    PPCVSX3,	PPCNONE,	{XS6, RA0, RB}},
++
+ {"clrbhrb",	X(31,430),	0xffffffff,  POWER8,	PPCNONE,	{0}},
+ 
+ {"slbie",	X(31,434),	XRTRA_MASK,  PPC64,	PPCNONE,	{RB}},
+ 
++{"mtvsrdd",	X(31,435),	XX1_MASK,    PPCVSX3,	PPCNONE,	{XT6, RA0, RB}},
++
+ {"ecowx",	X(31,438),	X_MASK,      PPC,	TITAN,  	{RT, RA0, RB}},
+ 
+ {"sthux",	X(31,439),	X_MASK,      COM|PPCVLE, PPCNONE,	{RS, RAS, RB}},
+@@ -5212,6 +5564,8 @@ const struct powerpc_opcode powerpc_opco
+ {"mtpmr",	X(31,462),	X_MASK, PPCPMR|PPCE300|PPCVLE, PPCNONE,	{PMR, RS}},
+ {"mttmr",	X(31,494),	X_MASK,	PPCTMR|E6500,	PPCNONE,	{TMR, RS}},
+ 
++{"slbieg",	X(31,466),	XRA_MASK,    POWER9,	PPCNONE,	{RS, RB}},
++
+ {"mtmq",	XSPR(31,467,  0), XSPR_MASK, M601,	PPCNONE,	{RS}},
+ {"mtxer",	XSPR(31,467,  1), XSPR_MASK, COM|PPCVLE, PPCNONE,	{RS}},
+ {"mtlr",	XSPR(31,467,  8), XSPR_MASK, COM|PPCVLE, PPCNONE,	{RS}},
+@@ -5409,7 +5763,7 @@ const struct powerpc_opcode powerpc_opco
+ 
+ {"cmpb",	X(31,508),	X_MASK, POWER6|PPCA2|PPC476, PPCNONE,	{RA, RS, RB}},
+ 
+-{"mcrxr",	X(31,512), XRARB_MASK|(3<<21), COM|PPCVLE, POWER7,	{BF}},
++{"mcrxr",	X(31,512),	XBFRARB_MASK, COM|PPCVLE, POWER7,	{BF}},
+ 
+ {"lbdx",	X(31,515),	X_MASK,      E500MC|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ 
+@@ -5452,6 +5806,9 @@ const struct powerpc_opcode powerpc_opco
+ {"rrib",	XRC(31,537,0),	X_MASK,      M601,	PPCNONE,	{RA, RS, RB}},
+ {"rrib.",	XRC(31,537,1),	X_MASK,      M601,	PPCNONE,	{RA, RS, RB}},
+ 
++{"cnttzw",	XRC(31,538,0),	XRB_MASK,    POWER9,	PPCNONE,	{RA, RS}},
++{"cnttzw.",	XRC(31,538,1),	XRB_MASK,    POWER9,	PPCNONE,	{RA, RS}},
++
+ {"srd",		XRC(31,539,0),	X_MASK,      PPC64,	PPCNONE,	{RA, RS, RB}},
+ {"srd.",	XRC(31,539,1),	X_MASK,      PPC64,	PPCNONE,	{RA, RS, RB}},
+ 
+@@ -5476,10 +5833,17 @@ const struct powerpc_opcode powerpc_opco
+ 
+ {"lfsux",	X(31,567),	X_MASK,      COM,	PPCEFS,		{FRT, RAS, RB}},
+ 
++{"cnttzd",	XRC(31,570,0),	XRB_MASK,    POWER9,	PPCNONE,	{RA, RS}},
++{"cnttzd.",	XRC(31,570,1),	XRB_MASK,    POWER9,	PPCNONE,	{RA, RS}},
++
++{"mcrxrx",	X(31,576),	XBFRARB_MASK, POWER9,	PPCNONE,	{BF}},
++
+ {"lwdx",	X(31,579),	X_MASK,      E500MC|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ 
+ {"lvtlx",	X(31,581),	X_MASK,      PPCVEC2,	PPCNONE,	{VD, RA0, RB}},
+ 
++{"lwat",	X(31,582),	X_MASK,      POWER9,	PPCNONE,	{RT, RA0, FC}},
++
+ {"lwfcmux",	APU(31,583,0), 	APU_MASK,    PPC405,	PPCNONE,	{FCRT, RA, RB}},
+ 
+ {"lxsdx",	X(31,588),	XX1_MASK,    PPCVSX,	PPCNONE,	{XT6, RA0, RB}},
+@@ -5492,8 +5856,8 @@ const struct powerpc_opcode powerpc_opco
+ {"hwsync",	XSYNC(31,598,0), 0xffffffff, POWER4,	BOOKE|PPC476,	{0}},
+ {"lwsync",	XSYNC(31,598,1), 0xffffffff, PPC,	E500,		{0}},
+ {"ptesync",	XSYNC(31,598,2), 0xffffffff, PPC64,	PPCNONE,	{0}},
+-{"sync",	X(31,598),	XSYNCLE_MASK,E6500,	PPCNONE,	{LS, ESYNC}},
+-{"sync",	X(31,598),	XSYNC_MASK, PPCCOM|PPCVLE, BOOKE|PPC476, {LS}},
++{"sync",	X(31,598),	XSYNCLE_MASK,POWER9|E6500, PPCNONE,	{LS, ESYNC}},
++{"sync",	X(31,598),	XSYNC_MASK, PPCCOM|PPCVLE, BOOKE|PPC476|POWER9, {LS}},
+ {"msync",	X(31,598),	0xffffffff, BOOKE|PPCA2|PPC476, PPCNONE, {0}},
+ {"sync",	X(31,598),	0xffffffff, BOOKE|PPC476, E6500,	{0}},
+ {"lwsync",	X(31,598),	0xffffffff, E500,	PPCNONE,	{0}},
+@@ -5508,6 +5872,8 @@ const struct powerpc_opcode powerpc_opco
+ 
+ {"lvswx",	X(31,613),	X_MASK,      PPCVEC2,	PPCNONE,	{VD, RA0, RB}},
+ 
++{"ldat",	X(31,614),	X_MASK,      POWER9,	PPCNONE,	{RT, RA0, FC}},
++
+ {"lqfcmux",	APU(31,615,0), 	APU_MASK,    PPC405,	PPCNONE,	{FCRT, RA, RB}},
+ 
+ {"nego",	XO(31,104,1,0),	XORB_MASK,   COM|PPCVLE, PPCNONE,	{RT, RA}},
+@@ -5580,6 +5946,8 @@ const struct powerpc_opcode powerpc_opco
+ 
+ {"stvflx",	X(31,709),	X_MASK,      PPCVEC2,	PPCNONE,	{VS, RA0, RB}},
+ 
++{"stwat",	X(31,710),	X_MASK,      POWER9,	PPCNONE,	{RS, RA0, FC}},
++
+ {"stwfcmux",	APU(31,711,0), 	APU_MASK,    PPC405,	PPCNONE,	{FCRT, RA, RB}},
+ 
+ {"stxsdx",	X(31,716),	XX1_MASK,    PPCVSX,	PPCNONE,	{XS6, RA0, RB}},
+@@ -5616,6 +5984,8 @@ const struct powerpc_opcode powerpc_opco
+ 
+ {"stvswx",	X(31,741),	X_MASK,      PPCVEC2,	PPCNONE,	{VS, RA0, RB}},
+ 
++{"stdat",	X(31,742),	X_MASK,      POWER9,	PPCNONE,	{RS, RA0, FC}},
++
+ {"stqfcmux",	APU(31,743,0), 	APU_MASK,    PPC405,	PPCNONE,	{FCRT, RA, RB}},
+ 
+ {"subfmeo",	XO(31,232,1,0),	XORB_MASK,   PPCCOM,	PPCNONE,	{RT, RA}},
+@@ -5640,6 +6010,8 @@ const struct powerpc_opcode powerpc_opco
+ {"tresume.",	XRCL(31,750,1,1), XRTRARB_MASK,PPCHTM,	PPCNONE,	{0}},
+ {"tsr.",	XRC(31,750,1),    XRTLRARB_MASK,PPCHTM,	PPCNONE,	{L}},
+ 
++{"darn",	X(31,755),	XLRAND_MASK, POWER9,	PPCNONE,	{RT, LRAND}},
++
+ {"dcba",	X(31,758), XRT_MASK, PPC405|PPC7450|BOOKE|PPCA2|PPC476|PPCVLE, PPCNONE, {RA0, RB}},
+ {"dcbal",	XOPL(31,758,1), XRT_MASK,    E500MC,	PPCNONE,	{RA0, RB}},
+ 
+@@ -5649,6 +6021,10 @@ const struct powerpc_opcode powerpc_opco
+ {"srliq.",	XRC(31,760,1),	X_MASK,      M601,	PPCNONE,	{RA, RS, SH}},
+ 
+ {"lvsm",	X(31,773),	X_MASK,      PPCVEC2,	PPCNONE,	{VD, RA0, RB}},
++
++{"copy_first",	XOPL(31,774,1),	XRT_MASK,    POWER9,	PPCNONE,	{RA0, RB}},
++{"copy",	X(31,774),	XLRT_MASK,   POWER9,	PPCNONE,	{RA0, RB, L}},
++
+ {"stvepxl",	X(31,775),	X_MASK,      PPCVEC2,	PPCNONE,	{VS, RA0, RB}},
+ {"lvlxl",	X(31,775),	X_MASK,      CELL,	PPCNONE,	{VD, RA0, RB}},
+ {"ldfcmux",	APU(31,775,0), 	APU_MASK,    PPC405,	PPCNONE,	{FCRT, RA, RB}},
+@@ -5661,7 +6037,11 @@ const struct powerpc_opcode powerpc_opco
+ {"addo.",	XO(31,266,1,1),	XO_MASK, PPCCOM|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ {"caxo.",	XO(31,266,1,1),	XO_MASK,     PWRCOM,	PPCNONE,	{RT, RA, RB}},
+ 
++{"modsd",	X(31,777),	X_MASK,      POWER9,	PPCNONE,	{RT, RA, RB}},
++{"modsw",	X(31,779),	X_MASK,      POWER9,	PPCNONE,	{RT, RA, RB}},
++
+ {"lxvw4x",	X(31,780),	XX1_MASK,    PPCVSX,	PPCNONE,	{XT6, RA0, RB}},
++{"lxsibzx",	X(31,781),	XX1_MASK,    PPCVSX3,	PPCNONE,	{XT6, RA0, RB}},
+ 
+ {"tabortwc.",	XRC(31,782,1),	X_MASK,      PPCHTM,	PPCNONE,	{TO, RA, RB}},
+ 
+@@ -5688,6 +6068,9 @@ const struct powerpc_opcode powerpc_opco
+ {"stvepx",	X(31,807),	X_MASK,      PPCVEC2,	PPCNONE,	{VS, RA0, RB}},
+ {"lvrxl",	X(31,807),	X_MASK,      CELL,	PPCNONE,	{VD, RA0, RB}},
+ 
++{"lxvh8x",	X(31,812),	XX1_MASK,    PPCVSX3,	PPCNONE,	{XT6, RA0, RB}},
++{"lxsihzx",	X(31,813),	XX1_MASK,    PPCVSX3,	PPCNONE,	{XT6, RA0, RB}},
++
+ {"tabortdc.",	XRC(31,814,1),	X_MASK,      PPCHTM,	PPCNONE,	{TO, RA, RB}},
+ 
+ {"rac",		X(31,818),	X_MASK,      M601,	PPCNONE,	{RT, RA, RB}},
+@@ -5710,17 +6093,20 @@ const struct powerpc_opcode powerpc_opco
+ 
+ {"lvtlxl",	X(31,837),	X_MASK,      PPCVEC2,	PPCNONE,	{VD, RA0, RB}},
+ 
++{"cp_abort",	X(31,838),	XRTRARB_MASK,POWER9,	PPCNONE,	{0}},
++
+ {"divo",	XO(31,331,1,0),	XO_MASK,     M601,	PPCNONE,	{RT, RA, RB}},
+ {"divo.",	XO(31,331,1,1),	XO_MASK,     M601,	PPCNONE,	{RT, RA, RB}},
+ 
+ {"lxvd2x",	X(31,844),	XX1_MASK,    PPCVSX,	PPCNONE,	{XT6, RA0, RB}},
+-{"lxvx",	X(31,844),	XX1_MASK,    PPCVSX,	PPCNONE,	{XT6, RA0, RB}},
++{"lxvx",	X(31,844),	XX1_MASK,    POWER8,	POWER9|PPCVSX3,	{XT6, RA0, RB}},
+ 
+ {"tabortwci.",	XRC(31,846,1),	X_MASK,      PPCHTM,	PPCNONE,	{TO, RA, HTM_SI}},
+ 
+ {"tlbsrx.",	XRC(31,850,1),	XRT_MASK,    PPCA2,	PPCNONE,	{RA0, RB}},
+ 
+-{"slbmfev",	X(31,851),	XRA_MASK,    PPC64,	PPCNONE,	{RT, RB}},
++{"slbmfev",	X(31,851),	XRLA_MASK,   POWER9,	PPCNONE,	{RT, RB, A_L}},
++{"slbmfev",	X(31,851),	XRA_MASK,    PPC64,	POWER9,		{RT, RB}},
+ 
+ {"lbzcix",	X(31,853),	X_MASK,      POWER6,	PPCNONE,	{RT, RA0, RB}},
+ 
+@@ -5739,12 +6125,25 @@ const struct powerpc_opcode powerpc_opco
+ {"divso",	XO(31,363,1,0),	XO_MASK,     M601,	PPCNONE,	{RT, RA, RB}},
+ {"divso.",	XO(31,363,1,1),	XO_MASK,     M601,	PPCNONE,	{RT, RA, RB}},
+ 
++{"lxvb16x",	X(31,876),	XX1_MASK,    PPCVSX3,	PPCNONE,	{XT6, RA0, RB}},
++
+ {"tabortdci.",	XRC(31,878,1),	X_MASK,      PPCHTM,	PPCNONE,	{TO, RA, HTM_SI}},
+ 
++{"rmieg",	X(31,882),	XRTRA_MASK,  POWER9,	PPCNONE,	{RB}},
++
+ {"ldcix",	X(31,885),	X_MASK,      POWER6,	PPCNONE,	{RT, RA0, RB}},
+ 
++{"msgsync",	X(31,886),	0xffffffff,  POWER9,	PPCNONE,	{0}},
++
+ {"lfiwzx",	X(31,887),	X_MASK,   POWER7|PPCA2,	PPCNONE,	{FRT, RA0, RB}},
+ 
++{"extswsli",	XS(31,445,0),	XS_MASK,     POWER9,	PPCNONE,	{RA, RS, SH6}},
++{"extswsli.",	XS(31,445,1),	XS_MASK,     POWER9,	PPCNONE,	{RA, RS, SH6}},
++
++{"paste",	XRC(31,902,0),  XLRT_MASK,   POWER9,	PPCNONE,	{RA0, RB, L0}},
++{"paste_last",	XRCL(31,902,1,1),XRT_MASK,   POWER9,	PPCNONE,	{RA0, RB}},
++{"paste.",	XRC(31,902,1),  XLRT_MASK,   POWER9,	PPCNONE,	{RA0, RB, L1}},
++
+ {"stvlxl",	X(31,903),	X_MASK,      CELL,	PPCNONE,	{VS, RA0, RB}},
+ {"stdfcmux",	APU(31,903,0), 	APU_MASK,    PPC405,	PPCNONE,	{FCRT, RA, RB}},
+ 
+@@ -5754,13 +6153,15 @@ const struct powerpc_opcode powerpc_opco
+ {"divweuo.",	XO(31,395,1,1),	XO_MASK,  POWER7|PPCA2,	PPCNONE,	{RT, RA, RB}},
+ 
+ {"stxvw4x",	X(31,908),	XX1_MASK,    PPCVSX,	PPCNONE,	{XS6, RA0, RB}},
++{"stxsibx",	X(31,909),	XX1_MASK,    PPCVSX3,	PPCNONE,	{XS6, RA0, RB}},
+ 
+ {"tabort.",	XRC(31,910,1),	XRTRB_MASK,  PPCHTM,	PPCNONE,	{RA}},
+ 
+ {"tlbsx",	XRC(31,914,0),	X_MASK, PPC403|BOOKE|PPCA2|PPC476, PPCNONE, {RTO, RA0, RB}},
+ {"tlbsx.",	XRC(31,914,1),	X_MASK, PPC403|BOOKE|PPCA2|PPC476, PPCNONE, {RTO, RA0, RB}},
+ 
+-{"slbmfee",	X(31,915),	XRA_MASK,    PPC64,	PPCNONE,	{RT, RB}},
++{"slbmfee",	X(31,915),	XRLA_MASK,   POWER9,	PPCNONE,	{RT, RB, A_L}},
++{"slbmfee",	X(31,915),	XRA_MASK,    PPC64,	POWER9,		{RT, RB}},
+ 
+ {"stwcix",	X(31,917),	X_MASK,      POWER6,	PPCNONE,	{RS, RA0, RB}},
+ 
+@@ -5795,6 +6196,9 @@ const struct powerpc_opcode powerpc_opco
+ {"divweo",	XO(31,427,1,0),	XO_MASK,  POWER7|PPCA2,	PPCNONE,	{RT, RA, RB}},
+ {"divweo.",	XO(31,427,1,1),	XO_MASK,  POWER7|PPCA2,	PPCNONE,	{RT, RA, RB}},
+ 
++{"stxvh8x",	X(31,940),	XX1_MASK,    PPCVSX3,	PPCNONE,	{XS6, RA0, RB}},
++{"stxsihx",	X(31,941),	XX1_MASK,    PPCVSX3,	PPCNONE,	{XS6, RA0, RB}},
++
+ {"treclaim.",	XRC(31,942,1),	XRTRB_MASK,  PPCHTM,	PPCNONE,	{RA}},
+ 
+ {"tlbrehi",	XTLB(31,946,0),	XTLB_MASK,   PPC403,	PPCA2,		{RT, RA}},
+@@ -5826,7 +6230,7 @@ const struct powerpc_opcode powerpc_opco
+ {"divwuo.",	XO(31,459,1,1),	XO_MASK,     PPC|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ 
+ {"stxvd2x",	X(31,972),	XX1_MASK,    PPCVSX,	PPCNONE,	{XS6, RA0, RB}},
+-{"stxvx",	X(31,972),	XX1_MASK,    PPCVSX,	PPCNONE,	{XS6, RA0, RB}},
++{"stxvx",	X(31,972),	XX1_MASK,    POWER8,	POWER9|PPCVSX3,	{XS6, RA0, RB}},
+ 
+ {"tlbld",	X(31,978),	XRTRA_MASK,  PPC, PPC403|BOOKE|PPCA2|PPC476, {RB}},
+ {"tlbwehi",	XTLB(31,978,0),	XTLB_MASK,   PPC403,	PPCNONE,	{RT, RA}},
+@@ -5859,6 +6263,8 @@ const struct powerpc_opcode powerpc_opco
+ {"divwo",	XO(31,491,1,0),	XO_MASK,   PPC|PPCVLE,	PPCNONE,	{RT, RA, RB}},
+ {"divwo.",	XO(31,491,1,1),	XO_MASK,   PPC|PPCVLE,	PPCNONE,	{RT, RA, RB}},
+ 
++{"stxvb16x",	X(31,1004),	XX1_MASK,    PPCVSX3,	PPCNONE,	{XS6, RA0, RB}},
++
+ {"trechkpt.",	XRC(31,1006,1),	XRTRARB_MASK,PPCHTM,	PPCNONE,	{0}},
+ 
+ {"tlbli",	X(31,1010),	XRTRA_MASK,  PPC,	TITAN,  	{RB}},
+@@ -5943,6 +6349,8 @@ const struct powerpc_opcode powerpc_opco
+ {"psq_l",	OP(56),		OP_MASK,     PPCPS,	PPCNONE,	{FRT,PSD,RA,PSW,PSQ}},
+ {"lfq",		OP(56),		OP_MASK,     POWER2,	PPCNONE,	{FRT, D, RA0}},
+ 
++{"lxsd",	DSO(57,2),	DS_MASK,     PPCVSX3,	PPCNONE,	{VD, DS, RA0}},
++{"lxssp",	DSO(57,3),	DS_MASK,     PPCVSX3,	PPCNONE,	{VD, DS, RA0}},
+ {"lfdp",	OP(57),		OP_MASK,     POWER6,	POWER7,		{FRTp, DS, RA0}},
+ {"psq_lu",	OP(57),		OP_MASK,     PPCPS,	PPCNONE,	{FRT,PSD,RA,PSW,PSQ}},
+ {"lfqu",	OP(57),		OP_MASK,     POWER2,	PPCNONE,	{FRT, D, RA0}},
+@@ -6042,6 +6450,7 @@ const struct powerpc_opcode powerpc_opco
+ {"dcmpu",	X(59,642),	X_MASK,      POWER6,	PPCNONE,	{BF,  FRA, FRB}},
+ 
+ {"dtstsf",	X(59,674),	X_MASK,      POWER6,	PPCNONE,	{BF,  FRA, FRB}},
++{"dtstsfi",	X(59,675),      X_MASK|1<<22,POWER9,	PPCNONE,	{BF, UIM6, FRB}},
+ 
+ {"drsp",	XRC(59,770,0),	X_MASK,      POWER6,	PPCNONE,	{FRT, FRB}},
+ {"drsp.",	XRC(59,770,1),	X_MASK,      POWER6,	PPCNONE,	{FRT, FRB}},
+@@ -6064,6 +6473,9 @@ const struct powerpc_opcode powerpc_opco
+ {"xsaddsp",	XX3(60,0),	XX3_MASK,    PPCVSX2,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xsmaddasp",	XX3(60,1),	XX3_MASK,    PPCVSX2,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xxsldwi",	XX3(60,2),	XX3SHW_MASK, PPCVSX,	PPCNONE,	{XT6, XA6, XB6, SHW}},
++{"xscmpeqdp",	XX3(60,3),	XX3_MASK,    PPCVSX3,	PPCNONE,	{XT6, XA6, XB6}},
++{"xsrsqrtesp",	XX2(60,10),	XX2_MASK,    PPCVSX2,	PPCNONE,	{XT6, XB6}},
++{"xssqrtsp",	XX2(60,11),	XX2_MASK,    PPCVSX2,	PPCNONE,	{XT6, XB6}},
+ {"xxsel",	XX4(60,3),	XX4_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6, XC6}},
+ {"xssubsp",	XX3(60,8),	XX3_MASK,    PPCVSX2,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xsmaddmsp",	XX3(60,9),	XX3_MASK,    PPCVSX2,	PPCNONE,	{XT6, XA6, XB6}},
+@@ -6072,163 +6484,203 @@ const struct powerpc_opcode powerpc_opco
+ {"xxswapd",	XX3(60,10)|(2<<8), XX3_MASK, PPCVSX,	PPCNONE,	{XT6, XA6, XB6S}},
+ {"xxmrgld",	XX3(60,10)|(3<<8), XX3_MASK, PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xxpermdi",	XX3(60,10),	XX3DM_MASK,  PPCVSX,	PPCNONE,	{XT6, XA6, XB6, DM}},
+-{"xsrsqrtesp",	XX2(60,10),	XX2_MASK,    PPCVSX2,	PPCNONE,	{XT6, XB6}},
+-{"xssqrtsp",	XX2(60,11),	XX2_MASK,    PPCVSX2,	PPCNONE,	{XT6, XB6}},
++{"xscmpgtdp",	XX3(60,11),	XX3_MASK,    PPCVSX3,	PPCNONE,	{XT6, XA6, XB6}},
++{"xsresp",	XX2(60,26),	XX2_MASK,    PPCVSX2,	PPCNONE,	{XT6, XB6}},
+ {"xsmulsp",	XX3(60,16),	XX3_MASK,    PPCVSX2,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xsmsubasp",	XX3(60,17),	XX3_MASK,    PPCVSX2,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xxmrghw",	XX3(60,18),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
++{"xscmpgedp",	XX3(60,19),	XX3_MASK,    PPCVSX3,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xsdivsp",	XX3(60,24),	XX3_MASK,    PPCVSX2,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xsmsubmsp",	XX3(60,25),	XX3_MASK,    PPCVSX2,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xsresp",	XX2(60,26),	XX2_MASK,    PPCVSX2,	PPCNONE,	{XT6, XB6}},
++{"xxperm",	XX3(60,26),	XX3_MASK,    PPCVSX3,	PPCNONE,	{XT6, XA6, XB6}},
++{"xscmpnedp",	XX3(60,27),	XX3_MASK,    PPCVSX3,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xsadddp",	XX3(60,32),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xsmaddadp",	XX3(60,33),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xscmpudp",	XX3(60,35),	XX3BF_MASK,  PPCVSX,	PPCNONE,	{BF, XA6, XB6}},
++{"xscvdpuxws",	XX2(60,72),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xsrdpi",	XX2(60,73),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xsrsqrtedp",	XX2(60,74),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xssqrtdp",	XX2(60,75),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xssubdp",	XX3(60,40),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xsmaddmdp",	XX3(60,41),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xscmpodp",	XX3(60,43),	XX3BF_MASK,  PPCVSX,	PPCNONE,	{BF, XA6, XB6}},
++{"xscvdpsxws",	XX2(60,88),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xsrdpiz",	XX2(60,89),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xsredp",	XX2(60,90),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xsmuldp",	XX3(60,48),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xsmsubadp",	XX3(60,49),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xxmrglw",	XX3(60,50),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
++{"xsrdpip",	XX2(60,105),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xstsqrtdp",	XX2(60,106),	XX2BF_MASK,  PPCVSX,	PPCNONE,	{BF, XB6}},
++{"xsrdpic",	XX2(60,107),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xsdivdp",	XX3(60,56),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xsmsubmdp",	XX3(60,57),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
++{"xxpermr",	XX3(60,58),	XX3_MASK,    PPCVSX3,	PPCNONE,	{XT6, XA6, XB6}},
++{"xscmpexpdp",	XX3(60,59),	XX3BF_MASK,  PPCVSX3,	PPCNONE,	{BF, XA6, XB6}},
++{"xsrdpim",	XX2(60,121),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xstdivdp",	XX3(60,61),	XX3BF_MASK,  PPCVSX,	PPCNONE,	{BF, XA6, XB6}},
+ {"xvaddsp",	XX3(60,64),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvmaddasp",	XX3(60,65),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvcmpeqsp",	XX3RC(60,67,0),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvcmpeqsp.",	XX3RC(60,67,1),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
++{"xvcvspuxws",	XX2(60,136),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvrspi",	XX2(60,137),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvrsqrtesp",	XX2(60,138),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvsqrtsp",	XX2(60,139),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvsubsp",	XX3(60,72),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xscvdpuxws",	XX2(60,72),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvmaddmsp",	XX3(60,73),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xsrdpi",	XX2(60,73),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xsrsqrtedp",	XX2(60,74),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xssqrtdp",	XX2(60,75),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvcmpgtsp",	XX3RC(60,75,0),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvcmpgtsp.",	XX3RC(60,75,1),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
++{"xvcvspsxws",	XX2(60,152),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvrspiz",	XX2(60,153),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvresp",	XX2(60,154),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvmulsp",	XX3(60,80),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvmsubasp",	XX3(60,81),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
++{"xxspltw",	XX2(60,164),	XX2UIM_MASK, PPCVSX,	PPCNONE,	{XT6, XB6, UIM}},
++{"xxextractuw",	XX2(60,165),	XX2UIM4_MASK,PPCVSX3,	PPCNONE,	{XT6, XB6, UIMM4}},
+ {"xvcmpgesp",	XX3RC(60,83,0),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvcmpgesp.",	XX3RC(60,83,1),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
++{"xvcvuxwsp",	XX2(60,168),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvrspip",	XX2(60,169),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvtsqrtsp",	XX2(60,170),	XX2BF_MASK,  PPCVSX,	PPCNONE,	{BF, XB6}},
++{"xvrspic",	XX2(60,171),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvdivsp",	XX3(60,88),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xscvdpsxws",	XX2(60,88),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvmsubmsp",	XX3(60,89),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xsrdpiz",	XX2(60,89),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xsredp",	XX2(60,90),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xxspltib",	X(60,360),	XX1_MASK|3<<19, PPCVSX3,PPCNONE,	{XT6, IMM8}},
++{"xxinsertw",	XX2(60,181),	XX2UIM4_MASK,PPCVSX3,	PPCNONE,	{XT6, XB6, UIMM4}},
++{"xvcmpnesp",	XX3RC(60,91,0), XX3_MASK,    PPCVSX3,	PPCNONE,	{XT6, XA6, XB6}},
++{"xvcmpnesp.",	XX3RC(60,91,1), XX3_MASK,    PPCVSX3,	PPCNONE,	{XT6, XA6, XB6}},
++{"xvcvsxwsp",	XX2(60,184),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvrspim",	XX2(60,185),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvtdivsp",	XX3(60,93),	XX3BF_MASK,  PPCVSX,	PPCNONE,	{BF, XA6, XB6}},
+ {"xvadddp",	XX3(60,96),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvmaddadp",	XX3(60,97),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvcmpeqdp",	XX3RC(60,99,0),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvcmpeqdp.",	XX3RC(60,99,1),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
++{"xvcvdpuxws",	XX2(60,200),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvrdpi",	XX2(60,201),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvrsqrtedp",	XX2(60,202),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvsqrtdp",	XX2(60,203),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvsubdp",	XX3(60,104),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvmaddmdp",	XX3(60,105),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xsrdpip",	XX2(60,105),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xstsqrtdp",	XX2(60,106),	XX2BF_MASK,  PPCVSX,	PPCNONE,	{BF, XB6}},
+-{"xsrdpic",	XX2(60,107),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvcmpgtdp",	XX3RC(60,107,0), XX3_MASK,   PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvcmpgtdp.",	XX3RC(60,107,1), XX3_MASK,   PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
++{"xvcvdpsxws",	XX2(60,216),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvrdpiz",	XX2(60,217),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvredp",	XX2(60,218),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvmuldp",	XX3(60,112),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvmsubadp",	XX3(60,113),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvcmpgedp",	XX3RC(60,115,0), XX3_MASK,   PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvcmpgedp.",	XX3RC(60,115,1), XX3_MASK,   PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
++{"xvcvuxwdp",	XX2(60,232),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvrdpip",	XX2(60,233),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvtsqrtdp",	XX2(60,234),	XX2BF_MASK,  PPCVSX,	PPCNONE,	{BF, XB6}},
++{"xvrdpic",	XX2(60,235),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvdivdp",	XX3(60,120),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvmsubmdp",	XX3(60,121),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xsrdpim",	XX2(60,121),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvcmpnedp",	XX3RC(60,123,0), XX3_MASK,   PPCVSX3,	PPCNONE,	{XT6, XA6, XB6}},
++{"xvcmpnedp.",	XX3RC(60,123,1), XX3_MASK,   PPCVSX3,	PPCNONE,	{XT6, XA6, XB6}},
++{"xvcvsxwdp",	XX2(60,248),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvrdpim",	XX2(60,249),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvtdivdp",	XX3(60,125),	XX3BF_MASK,  PPCVSX,	PPCNONE,	{BF, XA6, XB6}},
++{"xsmaxcdp",	XX3(60,128),	XX3_MASK,    PPCVSX3,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xsnmaddasp",	XX3(60,129),	XX3_MASK,    PPCVSX2,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xxland",	XX3(60,130),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvcvspuxws",	XX2(60,136),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xscvdpsp",	XX2(60,265),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xscvdpspn",	XX2(60,267),	XX2_MASK,    PPCVSX2,	PPCNONE,	{XT6, XB6}},
++{"xsmincdp",	XX3(60,136),	XX3_MASK,    PPCVSX3,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xsnmaddmsp",	XX3(60,137),	XX3_MASK,    PPCVSX2,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvrspi",	XX2(60,137),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xxlandc",	XX3(60,138),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvrsqrtesp",	XX2(60,138),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xvsqrtsp",	XX2(60,139),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xsrsp",	XX2(60,281),	XX2_MASK,    PPCVSX2,	PPCNONE,	{XT6, XB6}},
++{"xsmaxjdp",	XX3(60,144),	XX3_MASK,    PPCVSX3,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xsnmsubasp",	XX3(60,145),	XX3_MASK,    PPCVSX2,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xxlor",	XX3(60,146),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvcvspsxws",	XX2(60,152),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xscvuxdsp",	XX2(60,296),	XX2_MASK,    PPCVSX2,	PPCNONE,	{XT6, XB6}},
++{"xststdcsp",	XX2(60,298),	XX2BFD_MASK, PPCVSX3,	PPCNONE,	{BF, XB6, DCMX}},
++{"xsminjdp",	XX3(60,152),	XX3_MASK,    PPCVSX3,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xsnmsubmsp",	XX3(60,153),	XX3_MASK,    PPCVSX2,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvrspiz",	XX2(60,153),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xxlxor",	XX3(60,154),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvresp",	XX2(60,154),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xscvsxdsp",	XX2(60,312),	XX2_MASK,    PPCVSX2,	PPCNONE,	{XT6, XB6}},
+ {"xsmaxdp",	XX3(60,160),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xsnmaddadp",	XX3(60,161),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xxlnor",	XX3(60,162),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xxspltw",	XX2(60,164),	XX2UIM_MASK, PPCVSX,	PPCNONE,	{XT6, XB6, UIM}},
++{"xscvdpuxds",	XX2(60,328),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xscvspdp",	XX2(60,329),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xscvspdpn",	XX2(60,331),	XX2_MASK,    PPCVSX2,	PPCNONE,	{XT6, XB6}},
+ {"xsmindp",	XX3(60,168),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvcvuxwsp",	XX2(60,168),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xsnmaddmdp",	XX3(60,169),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvrspip",	XX2(60,169),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xvtsqrtsp",	XX2(60,170),	XX2BF_MASK,  PPCVSX,	PPCNONE,	{BF, XB6}},
+ {"xxlorc",	XX3(60,170),	XX3_MASK,    PPCVSX2,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvrspic",	XX2(60,171),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xscvdpsxds",	XX2(60,344),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xsabsdp",	XX2(60,345),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xsxexpdp",	XX2VA(60,347,0),XX2_MASK|1,  PPCVSX3,	PPCNONE,	{RT, XB6}},
++{"xsxsigdp",	XX2VA(60,347,1),XX2_MASK|1,  PPCVSX3,	PPCNONE,	{RT, XB6}},
++{"xscvhpdp",	XX2VA(60,347,16),XX2_MASK,   PPCVSX3,	PPCNONE,	{XT6, XB6}},
++{"xscvdphp",	XX2VA(60,347,17),XX2_MASK,   PPCVSX3,	PPCNONE,	{XT6, XB6}},
+ {"xscpsgndp",	XX3(60,176),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xsnmsubadp",	XX3(60,177),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xxlnand",	XX3(60,178),	XX3_MASK,    PPCVSX2,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvcvsxwsp",	XX2(60,184),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xscvuxddp",	XX2(60,360),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xsnabsdp",	XX2(60,361),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xststdcdp",	XX2(60,362),	XX2BFD_MASK, PPCVSX3,	PPCNONE,	{BF, XB6, DCMX}},
+ {"xsnmsubmdp",	XX3(60,185),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvrspim",	XX2(60,185),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xxleqv",	XX3(60,186),	XX3_MASK,    PPCVSX2,	PPCNONE,	{XT6, XA6, XB6}},
++{"xscvsxddp",	XX2(60,376),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xsnegdp",	XX2(60,377),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvmaxsp",	XX3(60,192),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvnmaddasp",	XX3(60,193),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
++{"xvcvspuxds",	XX2(60,392),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvcvdpsp",	XX2(60,393),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvminsp",	XX3(60,200),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvcvdpuxws",	XX2(60,200),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvnmaddmsp",	XX3(60,201),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvrdpi",	XX2(60,201),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xvrsqrtedp",	XX2(60,202),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xvsqrtdp",	XX2(60,203),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvcvspsxds",	XX2(60,408),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvabssp",	XX2(60,409),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvmovsp",	XX3(60,208),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6S}},
+ {"xvcpsgnsp",	XX3(60,208),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvnmsubasp",	XX3(60,209),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvcvdpsxws",	XX2(60,216),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xvnmsubmsp",	XX3(60,217),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvrdpiz",	XX2(60,217),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xvredp",	XX2(60,218),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xvmaxdp",	XX3(60,224),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvnmaddadp",	XX3(60,225),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvmindp",	XX3(60,232),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvnmaddmdp",	XX3(60,233),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvcvuxwdp",	XX2(60,232),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xvrdpip",	XX2(60,233),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xvtsqrtdp",	XX2(60,234),	XX2BF_MASK,  PPCVSX,	PPCNONE,	{BF, XB6}},
+-{"xvrdpic",	XX2(60,235),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xvmovdp",	XX3(60,240),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6S}},
+-{"xvcpsgndp",	XX3(60,240),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvnmsubadp",	XX3(60,241),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvcvsxwdp",	XX2(60,248),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xvnmsubmdp",	XX3(60,249),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+-{"xvrdpim",	XX2(60,249),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xscvdpsp",	XX2(60,265),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xscvdpspn",	XX2(60,267),	XX2_MASK,    PPCVSX2,	PPCNONE,	{XT6, XB6}},
+-{"xsrsp",	XX2(60,281),	XX2_MASK,    PPCVSX2,	PPCNONE,	{XT6, XB6}},
+-{"xscvuxdsp",	XX2(60,296),	XX2_MASK,    PPCVSX2,	PPCNONE,	{XT6, XB6}},
+-{"xscvsxdsp",	XX2(60,312),	XX2_MASK,    PPCVSX2,	PPCNONE,	{XT6, XB6}},
+-{"xscvdpuxds",	XX2(60,328),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xscvspdp",	XX2(60,329),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xscvspdpn",	XX2(60,331),	XX2_MASK,    PPCVSX2,	PPCNONE,	{XT6, XB6}},
+-{"xscvdpsxds",	XX2(60,344),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xsabsdp",	XX2(60,345),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xscvuxddp",	XX2(60,360),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xsnabsdp",	XX2(60,361),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xscvsxddp",	XX2(60,376),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xsnegdp",	XX2(60,377),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xvcvspuxds",	XX2(60,392),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xvcvdpsp",	XX2(60,393),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xvcvspsxds",	XX2(60,408),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+-{"xvabssp",	XX2(60,409),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvcvuxdsp",	XX2(60,424),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvnabssp",	XX2(60,425),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvtstdcsp",	XX2(60,426),	XX2DCMXS_MASK,PPCVSX3,	PPCNONE,	{XT6, XB6, DCMXS}},
++{"xviexpsp",	XX3(60,216),	XX3_MASK,    PPCVSX3,	PPCNONE,	{XT6, XA6, XB6}},
++{"xvnmsubmsp",	XX3(60,217),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvcvsxdsp",	XX2(60,440),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvnegsp",	XX2(60,441),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvmaxdp",	XX3(60,224),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
++{"xvnmaddadp",	XX3(60,225),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvcvdpuxds",	XX2(60,456),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvcvspdp",	XX2(60,457),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xsiexpdp",	X(60,918),	XX1_MASK,    PPCVSX3,	PPCNONE,	{XT6, RA, RB}},
++{"xvmindp",	XX3(60,232),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
++{"xvnmaddmdp",	XX3(60,233),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvcvdpsxds",	XX2(60,472),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvabsdp",	XX2(60,473),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvxexpdp",	XX2VA(60,475,0),XX2_MASK,    PPCVSX3,	PPCNONE,	{XT6, XB6}},
++{"xvxsigdp",	XX2VA(60,475,1),XX2_MASK,    PPCVSX3,	PPCNONE,	{XT6, XB6}},
++{"xxbrh",	XX2VA(60,475,7),XX2_MASK,    PPCVSX3,	PPCNONE,	{XT6, XB6}},
++{"xvxexpsp",	XX2VA(60,475,8),XX2_MASK,    PPCVSX3,	PPCNONE,	{XT6, XB6}},
++{"xvxsigsp",	XX2VA(60,475,9),XX2_MASK,    PPCVSX3,	PPCNONE,	{XT6, XB6}},
++{"xxbrw",	XX2VA(60,475,15),XX2_MASK,   PPCVSX3,	PPCNONE,	{XT6, XB6}},
++{"xxbrd",	XX2VA(60,475,23),XX2_MASK,   PPCVSX3,	PPCNONE,	{XT6, XB6}},
++{"xvcvhpsp",	XX2VA(60,475,24),XX2_MASK,   PPCVSX3,	PPCNONE,	{XT6, XB6}},
++{"xvcvsphp",	XX2VA(60,475,25),XX2_MASK,   PPCVSX3,	PPCNONE,	{XT6, XB6}},
++{"xxbrq",	XX2VA(60,475,31),XX2_MASK,   PPCVSX3,	PPCNONE,	{XT6, XB6}},
++{"xvmovdp",	XX3(60,240),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6S}},
++{"xvcpsgndp",	XX3(60,240),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
++{"xvnmsubadp",	XX3(60,241),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvcvuxddp",	XX2(60,488),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvnabsdp",	XX2(60,489),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
++{"xvtstdcdp",	XX2(60,490),	XX2DCMXS_MASK,PPCVSX3,	PPCNONE,	{XT6, XB6, DCMXS}},
++{"xviexpdp",	XX3(60,248),	XX3_MASK,    PPCVSX3,	PPCNONE,	{XT6, XA6, XB6}},
++{"xvnmsubmdp",	XX3(60,249),	XX3_MASK,    PPCVSX,	PPCNONE,	{XT6, XA6, XB6}},
+ {"xvcvsxddp",	XX2(60,504),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ {"xvnegdp",	XX2(60,505),	XX2_MASK,    PPCVSX,	PPCNONE,	{XT6, XB6}},
+ 
+ {"psq_st",	OP(60),		OP_MASK,     PPCPS,	PPCNONE,	{FRS,PSD,RA,PSW,PSQ}},
+ {"stfq",	OP(60),		OP_MASK,     POWER2,	PPCNONE,	{FRS, D, RA}},
+ 
++{"lxv",		DQX(61,1),	DQX_MASK,    PPCVSX3,	PPCNONE,	{XTQ6, DQ, RA0}},
++{"stxv",	DQX(61,5),	DQX_MASK,    PPCVSX3,	PPCNONE,	{XSQ6, DQ, RA0}},
++{"stxsd",	DSO(61,2),	DS_MASK,     PPCVSX3,	PPCNONE,	{VS, DS, RA0}},
++{"stxssp",	DSO(61,3),	DS_MASK,     PPCVSX3,	PPCNONE,	{VS, DS, RA0}},
+ {"stfdp",	OP(61),		OP_MASK,     POWER6,	POWER7,		{FRSp, DS, RA0}},
+ {"psq_stu",	OP(61),		OP_MASK,     PPCPS,	PPCNONE,	{FRS,PSD,RA,PSW,PSQ}},
+ {"stfqu",	OP(61),		OP_MASK,     POWER2,	PPCNONE,	{FRS, D, RA}},
+@@ -6237,7 +6689,7 @@ const struct powerpc_opcode powerpc_opco
+ {"stdu",	DSO(62,1),	DS_MASK,     PPC64,	PPCNONE,	{RS, DS, RAS}},
+ {"stq",		DSO(62,2),	DS_MASK,     POWER4,	PPC476,		{RSQ, DS, RA0}},
+ 
+-{"fcmpu",	X(63,0),     X_MASK|(3<<21), COM,	PPCEFS,		{BF, FRA, FRB}},
++{"fcmpu",	X(63,0),        XBF_MASK,    COM,	PPCEFS,		{BF, FRA, FRB}},
+ 
+ {"daddq",	XRC(63,2,0),	X_MASK,      POWER6,	PPCNONE,	{FRTp, FRAp, FRBp}},
+ {"daddq.",	XRC(63,2,1),	X_MASK,      POWER6,	PPCNONE,	{FRTp, FRAp, FRBp}},
+@@ -6245,6 +6697,12 @@ const struct powerpc_opcode powerpc_opco
+ {"dquaq",	ZRC(63,3,0),	Z2_MASK,     POWER6,	PPCNONE,	{FRTp, FRAp, FRBp, RMC}},
+ {"dquaq.",	ZRC(63,3,1),	Z2_MASK,     POWER6,	PPCNONE,	{FRTp, FRAp, FRBp, RMC}},
+ 
++{"xsaddqp",	XRC(63,4,0),	X_MASK,      PPCVSX3,	PPCNONE,	{VD, VA, VB}},
++{"xsaddqpo",	XRC(63,4,1),	X_MASK,      PPCVSX3,	PPCNONE,	{VD, VA, VB}},
++
++{"xsrqpi",	ZRC(63,5,0),	Z2_MASK,     PPCVSX3,	PPCNONE,	{R, VD, VB, RMC}},
++{"xsrqpix",	ZRC(63,5,1),	Z2_MASK,     PPCVSX3,	PPCNONE,	{R, VD, VB, RMC}},
++
+ {"fcpsgn",	XRC(63,8,0),	X_MASK, POWER6|PPCA2|PPC476, PPCNONE,	{FRT, FRA, FRB}},
+ {"fcpsgn.",	XRC(63,8,1),	X_MASK, POWER6|PPCA2|PPC476, PPCNONE,	{FRT, FRA, FRB}},
+ 
+@@ -6317,7 +6775,7 @@ const struct powerpc_opcode powerpc_opco
+ {"fnmadd.",	A(63,31,1),	A_MASK,      PPCCOM,	PPCEFS,		{FRT, FRA, FRC, FRB}},
+ {"fnma.",	A(63,31,1),	A_MASK,      PWRCOM,	PPCNONE,	{FRT, FRA, FRC, FRB}},
+ 
+-{"fcmpo",	X(63,32),    X_MASK|(3<<21), COM,	PPCEFS,		{BF, FRA, FRB}},
++{"fcmpo",	X(63,32),       XBF_MASK,    COM,	PPCEFS,		{BF, FRA, FRB}},
+ 
+ {"dmulq",	XRC(63,34,0),	X_MASK,      POWER6,	PPCNONE,	{FRTp, FRAp, FRBp}},
+ {"dmulq.",	XRC(63,34,1),	X_MASK,      POWER6,	PPCNONE,	{FRTp, FRAp, FRBp}},
+@@ -6325,6 +6783,11 @@ const struct powerpc_opcode powerpc_opco
+ {"drrndq",	ZRC(63,35,0),	Z2_MASK,     POWER6,	PPCNONE,	{FRTp, FRA, FRBp, RMC}},
+ {"drrndq.",	ZRC(63,35,1),	Z2_MASK,     POWER6,	PPCNONE,	{FRTp, FRA, FRBp, RMC}},
+ 
++{"xsmulqp",	XRC(63,36,0),	X_MASK,      PPCVSX3,	PPCNONE,	{VD, VA, VB}},
++{"xsmulqpo",	XRC(63,36,1),	X_MASK,      PPCVSX3,	PPCNONE,	{VD, VA, VB}},
++
++{"xsrqpxp",	Z(63,37),	Z2_MASK,     PPCVSX3,	PPCNONE,	{R, VD, VB, RMC}},
++
+ {"mtfsb1",	XRC(63,38,0),	XRARB_MASK,  COM,	PPCNONE,	{BT}},
+ {"mtfsb1.",	XRC(63,38,1),	XRARB_MASK,  COM,	PPCNONE,	{BT}},
+ 
+@@ -6351,10 +6814,14 @@ const struct powerpc_opcode powerpc_opco
+ {"drintxq",	ZRC(63,99,0),	Z2_MASK,     POWER6,	PPCNONE,	{R, FRTp, FRBp, RMC}},
+ {"drintxq.",	ZRC(63,99,1),	Z2_MASK,     POWER6,	PPCNONE,	{R, FRTp, FRBp, RMC}},
+ 
+-{"ftdiv",	X(63,128),   X_MASK|(3<<21), POWER7,	PPCNONE,	{BF, FRA, FRB}},
++{"xscpsgnqp",	X(63,100),      X_MASK,      PPCVSX3,	PPCNONE,	{VD, VA, VB}},
++
++{"ftdiv",	X(63,128),      XBF_MASK,    POWER7,	PPCNONE,	{BF, FRA, FRB}},
+ 
+ {"dcmpoq",	X(63,130),	X_MASK,      POWER6,	PPCNONE,	{BF, FRAp, FRBp}},
+ 
++{"xscmpoqp",	X(63,132),      XBF_MASK,    PPCVSX3,	PPCNONE,	{BF, VA, VB}},
++
+ {"mtfsfi",  XRC(63,134,0), XWRA_MASK|(3<<21)|(1<<11), POWER6|PPCA2|PPC476, PPCNONE, {BFF, U, W}},
+ {"mtfsfi",  XRC(63,134,0), XRA_MASK|(3<<21)|(1<<11), COM, POWER6|PPCA2|PPC476, {BFF, U}},
+ {"mtfsfi.", XRC(63,134,1), XWRA_MASK|(3<<21)|(1<<11), POWER6|PPCA2|PPC476, PPCNONE, {BFF, U, W}},
+@@ -6368,9 +6835,12 @@ const struct powerpc_opcode powerpc_opco
+ {"fctiwuz",	XRC(63,143,0),	XRA_MASK,    POWER7,	PPCNONE,	{FRT, FRB}},
+ {"fctiwuz.",	XRC(63,143,1),	XRA_MASK,    POWER7,	PPCNONE,	{FRT, FRB}},
+ 
+-{"ftsqrt",	X(63,160), X_MASK|(3<<21|FRA_MASK), POWER7, PPCNONE,	{BF, FRB}},
++{"ftsqrt",	X(63,160),      XBF_MASK|FRA_MASK, POWER7, PPCNONE,	{BF, FRB}},
+ 
+ {"dtstexq",	X(63,162),	X_MASK,      POWER6,	PPCNONE,	{BF, FRAp, FRBp}},
++
++{"xscmpexpqp",	X(63,164),      XBF_MASK,    PPCVSX3,	PPCNONE,	{BF, VA, VB}},
++
+ {"dtstdcq",	Z(63,194),	Z_MASK,      POWER6,	PPCNONE,	{BF, FRAp, DCM}},
+ {"dtstdgq",	Z(63,226),	Z_MASK,      POWER6,	PPCNONE,	{BF, FRAp, DGM}},
+ 
+@@ -6392,27 +6862,53 @@ const struct powerpc_opcode powerpc_opco
+ {"dxexq",	XRC(63,354,0),	X_MASK,      POWER6,	PPCNONE,	{FRT, FRBp}},
+ {"dxexq.",	XRC(63,354,1),	X_MASK,      POWER6,	PPCNONE,	{FRT, FRBp}},
+ 
++{"xsmaddqp",	XRC(63,388,0),	X_MASK,      PPCVSX3,	PPCNONE,	{VD, VA, VB}},
++{"xsmaddqpo",	XRC(63,388,1),	X_MASK,      PPCVSX3,	PPCNONE,	{VD, VA, VB}},
++
+ {"frin",	XRC(63,392,0),	XRA_MASK,    POWER5,	PPCNONE,	{FRT, FRB}},
+ {"frin.",	XRC(63,392,1),	XRA_MASK,    POWER5,	PPCNONE,	{FRT, FRB}},
++
++{"xsmsubqp",	XRC(63,420,0),	X_MASK,      PPCVSX3,	PPCNONE,	{VD, VA, VB}},
++{"xsmsubqpo",	XRC(63,420,1),	X_MASK,      PPCVSX3,	PPCNONE,	{VD, VA, VB}},
++
+ {"friz",	XRC(63,424,0),	XRA_MASK,    POWER5,	PPCNONE,	{FRT, FRB}},
+ {"friz.",	XRC(63,424,1),	XRA_MASK,    POWER5,	PPCNONE,	{FRT, FRB}},
++
++{"xsnmaddqp",	XRC(63,452,0),	X_MASK,      PPCVSX3,	PPCNONE,	{VD, VA, VB}},
++{"xsnmaddqpo",	XRC(63,452,1),	X_MASK,      PPCVSX3,	PPCNONE,	{VD, VA, VB}},
++
+ {"frip",	XRC(63,456,0),	XRA_MASK,    POWER5,	PPCNONE,	{FRT, FRB}},
+ {"frip.",	XRC(63,456,1),	XRA_MASK,    POWER5,	PPCNONE,	{FRT, FRB}},
++
++{"xsnmsubqp",	XRC(63,484,0),	X_MASK,      PPCVSX3,	PPCNONE,	{VD, VA, VB}},
++{"xsnmsubqpo",	XRC(63,484,1),	X_MASK,      PPCVSX3,	PPCNONE,	{VD, VA, VB}},
++
+ {"frim",	XRC(63,488,0),	XRA_MASK,    POWER5,	PPCNONE,	{FRT, FRB}},
+ {"frim.",	XRC(63,488,1),	XRA_MASK,    POWER5,	PPCNONE,	{FRT, FRB}},
+ 
+ {"dsubq",	XRC(63,514,0),	X_MASK,      POWER6,	PPCNONE,	{FRTp, FRAp, FRBp}},
+ {"dsubq.",	XRC(63,514,1),	X_MASK,      POWER6,	PPCNONE,	{FRTp, FRAp, FRBp}},
+ 
++{"xssubqp",	XRC(63,516,0),	X_MASK,      PPCVSX3,	PPCNONE,	{VD, VA, VB}},
++{"xssubqpo",	XRC(63,516,1),	X_MASK,      PPCVSX3,	PPCNONE,	{VD, VA, VB}},
++
+ {"ddivq",	XRC(63,546,0),	X_MASK,      POWER6,	PPCNONE,	{FRTp, FRAp, FRBp}},
+ {"ddivq.",	XRC(63,546,1),	X_MASK,      POWER6,	PPCNONE,	{FRTp, FRAp, FRBp}},
+ 
++{"xsdivqp",	XRC(63,548,0),	X_MASK,      PPCVSX3,	PPCNONE,	{VD, VA, VB}},
++{"xsdivqpo",	XRC(63,548,1),	X_MASK,      PPCVSX3,	PPCNONE,	{VD, VA, VB}},
++
+ {"mffs",	XRC(63,583,0),	XRARB_MASK,  COM,	PPCEFS,		{FRT}},
+ {"mffs.",	XRC(63,583,1),	XRARB_MASK,  COM,	PPCEFS,		{FRT}},
+ 
+ {"dcmpuq",	X(63,642),	X_MASK,      POWER6,	PPCNONE,	{BF, FRAp, FRBp}},
+ 
++{"xscmpuqp",	X(63,644),      XBF_MASK,    PPCVSX3,	PPCNONE,	{BF, VA, VB}},
++
+ {"dtstsfq",	X(63,674),	X_MASK,      POWER6,	PPCNONE,	{BF, FRA, FRBp}},
++{"dtstsfiq",	X(63,675),      X_MASK|1<<22,POWER9,	PPCNONE,	{BF, UIM6, FRBp}},
++
++{"xststdcqp",	X(63,708),      X_MASK,      PPCVSX3,	PPCNONE,	{BF, VB, DCMX}},
+ 
+ {"mtfsf",	XFL(63,711,0),	XFL_MASK, POWER6|PPCA2|PPC476, PPCNONE,	{FLM, FRB, XFL_L, W}},
+ {"mtfsf",	XFL(63,711,0),	XFL_MASK,    COM, POWER6|PPCA2|PPC476|PPCEFS,	{FLM, FRB}},
+@@ -6425,6 +6921,14 @@ const struct powerpc_opcode powerpc_opco
+ {"dcffixq",	XRC(63,802,0),	X_MASK,      POWER6,	PPCNONE,	{FRTp, FRB}},
+ {"dcffixq.",	XRC(63,802,1),	X_MASK,      POWER6,	PPCNONE,	{FRTp, FRB}},
+ 
++{"xsabsqp",	XVA(63,804,0),	XVA_MASK,    PPCVSX3,	PPCNONE,	{VD, VB}},
++{"xsxexpqp",	XVA(63,804,2),	XVA_MASK,    PPCVSX3,	PPCNONE,	{VD, VB}},
++{"xsnabsqp",	XVA(63,804,8),	XVA_MASK,    PPCVSX3,	PPCNONE,	{VD, VB}},
++{"xsnegqp",	XVA(63,804,16),	XVA_MASK,    PPCVSX3,	PPCNONE,	{VD, VB}},
++{"xsxsigqp",	XVA(63,804,18),	XVA_MASK,    PPCVSX3,	PPCNONE,	{VD, VB}},
++{"xssqrtqp",	XVARC(63,804,27,0), XVA_MASK, PPCVSX3,	PPCNONE,	{VD, VB}},
++{"xssqrtqpo",	XVARC(63,804,27,1), XVA_MASK, PPCVSX3,	PPCNONE,	{VD, VB}},
++
+ {"fctid",	XRC(63,814,0),	XRA_MASK,    PPC64,	PPCNONE,	{FRT, FRB}},
+ {"fctid",	XRC(63,814,0),	XRA_MASK,    PPC476,	PPCNONE,	{FRT, FRB}},
+ {"fctid.",	XRC(63,814,1),	XRA_MASK,    PPC64,	PPCNONE,	{FRT, FRB}},
+@@ -6438,6 +6942,16 @@ const struct powerpc_opcode powerpc_opco
+ {"denbcdq",	XRC(63,834,0),	X_MASK,      POWER6,	PPCNONE,	{S, FRTp, FRBp}},
+ {"denbcdq.",	XRC(63,834,1),	X_MASK,      POWER6,	PPCNONE,	{S, FRTp, FRBp}},
+ 
++{"xscvqpuwz",	XVA(63,836,1),	XVA_MASK,    PPCVSX3,	PPCNONE,	{VD, VB}},
++{"xscvudqp",	XVA(63,836,2),	XVA_MASK,    PPCVSX3,	PPCNONE,	{VD, VB}},
++{"xscvqpswz",	XVA(63,836,9),	XVA_MASK,    PPCVSX3,	PPCNONE,	{VD, VB}},
++{"xscvsdqp",	XVA(63,836,10),	XVA_MASK,    PPCVSX3,	PPCNONE,	{VD, VB}},
++{"xscvqpudz",	XVA(63,836,17),	XVA_MASK,    PPCVSX3,	PPCNONE,	{VD, VB}},
++{"xscvqpdp",	XVARC(63,836,20,0), XVA_MASK, PPCVSX3,	PPCNONE,	{VD, VB}},
++{"xscvqpdpo",	XVARC(63,836,20,1), XVA_MASK, PPCVSX3,	PPCNONE,	{VD, VB}},
++{"xscvdpqp",	XVA(63,836,22),	XVA_MASK,    PPCVSX3,	PPCNONE,	{VD, VB}},
++{"xscvqpsdz",	XVA(63,836,25),	XVA_MASK,    PPCVSX3,	PPCNONE,	{VD, VB}},
++
+ {"fmrgow",	X(63,838),	X_MASK,      PPCVSX2,	PPCNONE,	{FRT, FRA, FRB}},
+ 
+ {"fcfid",	XRC(63,846,0),	XRA_MASK,    PPC64,	PPCNONE,	{FRT, FRB}},
+@@ -6448,6 +6962,8 @@ const struct powerpc_opcode powerpc_opco
+ {"diexq",	XRC(63,866,0),	X_MASK,      POWER6,	PPCNONE,	{FRTp, FRA, FRBp}},
+ {"diexq.",	XRC(63,866,1),	X_MASK,      POWER6,	PPCNONE,	{FRTp, FRA, FRBp}},
+ 
++{"xsiexpqp",	X(63,868),	X_MASK,      PPCVSX3,	PPCNONE,	{VD, VA, VB}},
++
+ {"fctidu",	XRC(63,942,0),	XRA_MASK, POWER7|PPCA2,	PPCNONE,	{FRT, FRB}},
+ {"fctidu.",	XRC(63,942,1),	XRA_MASK, POWER7|PPCA2,	PPCNONE,	{FRT, FRB}},
+ 
+Only in binutils-2.25.1/opcodes: ppc-opc.c.orig
+Only in binutils-2.25.1/opcodes: ppc-opc.c.rej
+--- /dev/null	2016-05-23 09:42:50.354737742 +0100
++++ binutils-2.25.1/gas/testsuite/gas/ppc/power9.d	2016-05-23 12:38:32.546422674 +0100
+@@ -0,0 +1,386 @@
++#as: -mpower9
++#objdump: -dr -Mpower9
++#name: POWER9 tests
++
++.*
++
++
++Disassembly of section \.text:
++
++0+00 <power9>:
++
++.*:	(7d a3 04 74|74 04 a3 7d) 	cnttzd  r3,r13
++.*:	(7d c4 04 75|75 04 c4 7d) 	cnttzd\. r4,r14
++.*:	(7d e5 04 34|34 04 e5 7d) 	cnttzw  r5,r15
++.*:	(7e 06 04 35|35 04 06 7e) 	cnttzw\. r6,r16
++.*:	(7d 54 ae 12|12 ae 54 7d) 	modsd   r10,r20,r21
++.*:	(7d 75 b6 16|16 b6 75 7d) 	modsw   r11,r21,r22
++.*:	(7d 96 ba 12|12 ba 96 7d) 	modud   r12,r22,r23
++.*:	(7d b7 c2 16|16 c2 b7 7d) 	moduw   r13,r23,r24
++.*:	(10 67 25 81|81 25 67 10) 	bcdcfn\. v3,v4,0
++.*:	(10 67 27 81|81 27 67 10) 	bcdcfn\. v3,v4,1
++.*:	(10 82 2d 81|81 2d 82 10) 	bcdcfsq\. v4,v5,0
++.*:	(10 82 2f 81|81 2f 82 10) 	bcdcfsq\. v4,v5,1
++.*:	(10 a6 35 81|81 35 a6 10) 	bcdcfz\. v5,v6,0
++.*:	(10 a6 37 81|81 37 a6 10) 	bcdcfz\. v5,v6,1
++.*:	(10 c7 43 41|41 43 c7 10) 	bcdcpsgn\. v6,v7,v8
++.*:	(10 e5 45 81|81 45 e5 10) 	bcdctn\. v7,v8
++.*:	(11 00 4d 81|81 4d 00 11) 	bcdctsq\. v8,v9
++.*:	(11 24 55 81|81 55 24 11) 	bcdctz\. v9,v10,0
++.*:	(11 24 57 81|81 57 24 11) 	bcdctz\. v9,v10,1
++.*:	(11 5f 5d 81|81 5d 5f 11) 	bcdsetsgn\. v10,v11,0
++.*:	(11 5f 5f 81|81 5f 5f 11) 	bcdsetsgn\. v10,v11,1
++.*:	(11 6c 6d c1|c1 6d 6c 11) 	bcdsr\.  v11,v12,v13,0
++.*:	(11 6c 6f c1|c1 6f 6c 11) 	bcdsr\.  v11,v12,v13,1
++.*:	(11 8d 74 c1|c1 74 8d 11) 	bcds\.   v12,v13,v14,0
++.*:	(11 8d 76 c1|c1 76 8d 11) 	bcds\.   v12,v13,v14,1
++.*:	(11 ae 7d 01|01 7d ae 11) 	bcdtrunc\. v13,v14,v15,0
++.*:	(11 ae 7f 01|01 7f ae 11) 	bcdtrunc\. v13,v14,v15,1
++.*:	(11 cf 84 81|81 84 cf 11) 	bcdus\.  v14,v15,v16
++.*:	(11 f0 8d 41|41 8d f0 11) 	bcdutrunc\. v15,v16,v17
++.*:	(7e 80 aa 5a|5a aa 80 7e) 	lxvll   vs20,0,r21
++.*:	(7e 8a aa 5a|5a aa 8a 7e) 	lxvll   vs20,r10,r21
++.*:	(7e a0 5b 5a|5a 5b a0 7e) 	stxvll  vs21,0,r11
++.*:	(7e aa 5b 5a|5a 5b aa 7e) 	stxvll  vs21,r10,r11
++.*:	(12 d7 00 01|01 00 d7 12) 	vmul10cuq v22,v23
++.*:	(12 f8 c8 41|41 c8 f8 12) 	vmul10ecuq v23,v24,v25
++.*:	(13 19 d2 41|41 d2 19 13) 	vmul10euq v24,v25,v26
++.*:	(13 3a 02 01|01 02 3a 13) 	vmul10uq v25,v26
++.*:	(fd 4b 60 08|08 60 4b fd) 	xsaddqp v10,v11,v12
++.*:	(fd 6c 60 09|09 60 6c fd) 	xsaddqpo v11,v12,v12
++.*:	(fe 80 f0 0a|0a f0 80 fe) 	xsrqpi  0,v20,v30,0
++.*:	(fe 81 f0 0a|0a f0 81 fe) 	xsrqpi  1,v20,v30,0
++.*:	(fe 80 f6 0a|0a f6 80 fe) 	xsrqpi  0,v20,v30,3
++.*:	(fe 81 f6 0a|0a f6 81 fe) 	xsrqpi  1,v20,v30,3
++.*:	(fe a0 f8 0b|0b f8 a0 fe) 	xsrqpix 0,v21,v31,0
++.*:	(fe a1 f8 0b|0b f8 a1 fe) 	xsrqpix 1,v21,v31,0
++.*:	(fe a0 fe 0b|0b fe a0 fe) 	xsrqpix 0,v21,v31,3
++.*:	(fe a1 fe 0b|0b fe a1 fe) 	xsrqpix 1,v21,v31,3
++.*:	(fd 8d 70 48|48 70 8d fd) 	xsmulqp v12,v13,v14
++.*:	(fd ae 78 49|49 78 ae fd) 	xsmulqpo v13,v14,v15
++.*:	(fe c0 b8 4a|4a b8 c0 fe) 	xsrqpxp 0,v22,v23,0
++.*:	(fe c1 b8 4a|4a b8 c1 fe) 	xsrqpxp 1,v22,v23,0
++.*:	(fe c0 be 4a|4a be c0 fe) 	xsrqpxp 0,v22,v23,3
++.*:	(fe c1 be 4a|4a be c1 fe) 	xsrqpxp 1,v22,v23,3
++.*:	(fd cf 80 c8|c8 80 cf fd) 	xscpsgnqp v14,v15,v16
++.*:	(fc 0f 81 08|08 81 0f fc) 	xscmpoqp cr0,v15,v16
++.*:	(ff 8f 81 08|08 81 8f ff) 	xscmpoqp cr7,v15,v16
++.*:	(fc 10 89 48|48 89 10 fc) 	xscmpexpqp cr0,v16,v17
++.*:	(ff 90 89 48|48 89 90 ff) 	xscmpexpqp cr7,v16,v17
++.*:	(fe 32 9b 08|08 9b 32 fe) 	xsmaddqp v17,v18,v19
++.*:	(fe 53 a3 09|09 a3 53 fe) 	xsmaddqpo v18,v19,v20
++.*:	(fe 74 ab 48|48 ab 74 fe) 	xsmsubqp v19,v20,v21
++.*:	(fe 95 b3 49|49 b3 95 fe) 	xsmsubqpo v20,v21,v22
++.*:	(fe b6 bb 88|88 bb b6 fe) 	xsnmaddqp v21,v22,v23
++.*:	(fe d7 c3 89|89 c3 d7 fe) 	xsnmaddqpo v22,v23,v24
++.*:	(fe f8 cb c8|c8 cb f8 fe) 	xsnmsubqp v23,v24,v25
++.*:	(ff 19 d3 c9|c9 d3 19 ff) 	xsnmsubqpo v24,v25,v26
++.*:	(ff 3a dc 08|08 dc 3a ff) 	xssubqp v25,v26,v27
++.*:	(ff 5b e4 09|09 e4 5b ff) 	xssubqpo v26,v27,v28
++.*:	(ff 7c ec 48|48 ec 7c ff) 	xsdivqp v27,v28,v29
++.*:	(ff 9d f4 49|49 f4 9d ff) 	xsdivqpo v28,v29,v30
++.*:	(fc 1d f5 08|08 f5 1d fc) 	xscmpuqp cr0,v29,v30
++.*:	(ff 9d f5 08|08 f5 9d ff) 	xscmpuqp cr7,v29,v30
++.*:	(fc 00 f5 88|88 f5 00 fc) 	xststdcqp cr0,v30,0
++.*:	(ff 80 f5 88|88 f5 80 ff) 	xststdcqp cr7,v30,0
++.*:	(fc 7f fd 88|88 fd 7f fc) 	xststdcqp cr0,v31,127
++.*:	(ff ff fd 88|88 fd ff ff) 	xststdcqp cr7,v31,127
++.*:	(fd 40 5e 48|48 5e 40 fd) 	xsabsqp v10,v11
++.*:	(fd 62 66 48|48 66 62 fd) 	xsxexpqp v11,v12
++.*:	(fd 88 6e 48|48 6e 88 fd) 	xsnabsqp v12,v13
++.*:	(fd b0 76 48|48 76 b0 fd) 	xsnegqp v13,v14
++.*:	(fd d2 7e 48|48 7e d2 fd) 	xsxsigqp v14,v15
++.*:	(fd fb 86 48|48 86 fb fd) 	xssqrtqp v15,v16
++.*:	(fe 1b 8e 49|49 8e 1b fe) 	xssqrtqpo v16,v17
++.*:	(fe 21 96 88|88 96 21 fe) 	xscvqpuwz v17,v18
++.*:	(fe 42 9e 88|88 9e 42 fe) 	xscvudqp v18,v19
++.*:	(fe 69 a6 88|88 a6 69 fe) 	xscvqpswz v19,v20
++.*:	(fe 8a ae 88|88 ae 8a fe) 	xscvsdqp v20,v21
++.*:	(fe b1 b6 88|88 b6 b1 fe) 	xscvqpudz v21,v22
++.*:	(fe d4 be 88|88 be d4 fe) 	xscvqpdp v22,v23
++.*:	(fe f4 c6 89|89 c6 f4 fe) 	xscvqpdpo v23,v24
++.*:	(ff 16 ce 88|88 ce 16 ff) 	xscvdpqp v24,v25
++.*:	(ff 39 d6 88|88 d6 39 ff) 	xscvqpsdz v25,v26
++.*:	(ff 5b e6 c8|c8 e6 5b ff) 	xsiexpqp v26,v27,v28
++.*:	(10 85 31 fb|fb 31 85 10) 	vpermr  v4,v5,v6,v7
++.*:	(10 a0 32 0d|0d 32 a0 10) 	vextractub v5,v6,0
++.*:	(10 af 32 0d|0d 32 af 10) 	vextractub v5,v6,15
++.*:	(10 c0 3a 4d|4d 3a c0 10) 	vextractuh v6,v7,0
++.*:	(10 cf 3a 4d|4d 3a cf 10) 	vextractuh v6,v7,15
++.*:	(10 e0 42 8d|8d 42 e0 10) 	vextractuw v7,v8,0
++.*:	(10 ef 42 8d|8d 42 ef 10) 	vextractuw v7,v8,15
++.*:	(11 00 4a cd|cd 4a 00 11) 	vextractd v8,v9,0
++.*:	(11 0f 4a cd|cd 4a 0f 11) 	vextractd v8,v9,15
++.*:	(11 20 53 0d|0d 53 20 11) 	vinsertb v9,v10,0
++.*:	(11 2f 53 0d|0d 53 2f 11) 	vinsertb v9,v10,15
++.*:	(11 40 5b 4d|4d 5b 40 11) 	vinserth v10,v11,0
++.*:	(11 4f 5b 4d|4d 5b 4f 11) 	vinserth v10,v11,15
++.*:	(11 60 63 8d|8d 63 60 11) 	vinsertw v11,v12,0
++.*:	(11 6f 63 8d|8d 63 6f 11) 	vinsertw v11,v12,15
++.*:	(11 80 6b cd|cd 6b 80 11) 	vinsertd v12,v13,0
++.*:	(11 8f 6b cd|cd 6b 8f 11) 	vinsertd v12,v13,15
++.*:	(7d b4 02 67|67 02 b4 7d) 	mfvsrld r20,vs45
++.*:	(7d d5 03 27|27 03 d5 7d) 	mtvsrws vs46,r21
++.*:	(7d e0 bb 67|67 bb e0 7d) 	mtvsrdd vs47,0,r23
++.*:	(7d f6 bb 67|67 bb f6 7d) 	mtvsrdd vs47,r22,r23
++.*:	(7e 40 5a 19|19 5a 40 7e) 	lxvx    vs50,0,r11
++.*:	(7c 0a 5a 18|18 5a 0a 7c) 	lxvx    vs0,r10,r11
++.*:	(7e 60 62 d9|d9 62 60 7e) 	lxvwsx  vs51,0,r12
++.*:	(7c 2a 62 d8|d8 62 2a 7c) 	lxvwsx  vs1,r10,r12
++.*:	(7e 80 6e 59|59 6e 80 7e) 	lxvh8x  vs52,0,r13
++.*:	(7c 4a 6e 58|58 6e 4a 7c) 	lxvh8x  vs2,r10,r13
++.*:	(7e a0 76 d9|d9 76 a0 7e) 	lxvb16x vs53,0,r14
++.*:	(7c 6a 76 d8|d8 76 6a 7c) 	lxvb16x vs3,r10,r14
++.*:	(7e c0 7b 19|19 7b c0 7e) 	stxvx   vs54,0,r15
++.*:	(7c 94 7b 18|18 7b 94 7c) 	stxvx   vs4,r20,r15
++.*:	(7e e0 87 59|59 87 e0 7e) 	stxvh8x vs55,0,r16
++.*:	(7c b4 87 58|58 87 b4 7c) 	stxvh8x vs5,r20,r16
++.*:	(7f 00 8f d9|d9 8f 00 7f) 	stxvb16x vs56,0,r17
++.*:	(7c d4 8f d8|d8 8f d4 7c) 	stxvb16x vs6,r20,r17
++.*:	(f0 80 2a 94|94 2a 80 f0) 	xxextractuw vs4,vs5,0
++.*:	(f1 0f 92 97|97 92 0f f1) 	xxextractuw vs40,vs50,15
++.*:	(f0 80 02 d0|d0 02 80 f0) 	xxspltib vs4,0
++.*:	(f0 84 02 d0|d0 02 84 f0) 	xxspltib vs4,128
++.*:	(f1 27 fa d1|d1 fa 27 f1) 	xxspltib vs41,255
++.*:	(f1 27 fa d1|d1 fa 27 f1) 	xxspltib vs41,255
++.*:	(f0 a0 32 d4|d4 32 a0 f0) 	xxinsertw vs5,vs6,0
++.*:	(f2 4f e2 d7|d7 e2 4f f2) 	xxinsertw vs50,vs60,15
++.*:	(f0 c7 3f 6c|6c 3f c7 f0) 	xxbrh   vs6,vs7
++.*:	(f3 07 cf 6f|6f cf 07 f3) 	xxbrh   vs56,vs57
++.*:	(f0 ef 47 6c|6c 47 ef f0) 	xxbrw   vs7,vs8
++.*:	(f3 2f d7 6f|6f d7 2f f3) 	xxbrw   vs57,vs58
++.*:	(f1 17 4f 6c|6c 4f 17 f1) 	xxbrd   vs8,vs9
++.*:	(f3 57 df 6f|6f df 57 f3) 	xxbrd   vs58,vs59
++.*:	(f1 3f 57 6c|6c 57 3f f1) 	xxbrq   vs9,vs10
++.*:	(f3 7f e7 6f|6f e7 7f f3) 	xxbrq   vs59,vs60
++.*:	(e6 80 00 02|02 00 80 e6) 	lxsd    v20,0\(0\)
++.*:	(e6 8a 00 02|02 00 8a e6) 	lxsd    v20,0\(r10\)
++.*:	(e6 80 00 0a|0a 00 80 e6) 	lxsd    v20,8\(0\)
++.*:	(e6 8a 00 0a|0a 00 8a e6) 	lxsd    v20,8\(r10\)
++.*:	(e6 80 ff fa|fa ff 80 e6) 	lxsd    v20,-8\(0\)
++.*:	(e6 8a ff fa|fa ff 8a e6) 	lxsd    v20,-8\(r10\)
++.*:	(e6 80 7f fe|fe 7f 80 e6) 	lxsd    v20,32764\(0\)
++.*:	(e6 8a 7f fe|fe 7f 8a e6) 	lxsd    v20,32764\(r10\)
++.*:	(e6 80 80 02|02 80 80 e6) 	lxsd    v20,-32768\(0\)
++.*:	(e6 8a 80 02|02 80 8a e6) 	lxsd    v20,-32768\(r10\)
++.*:	(e7 c0 00 03|03 00 c0 e7) 	lxssp   v30,0\(0\)
++.*:	(e7 cb 00 03|03 00 cb e7) 	lxssp   v30,0\(r11\)
++.*:	(e7 c0 00 0b|0b 00 c0 e7) 	lxssp   v30,8\(0\)
++.*:	(e7 cb 00 0b|0b 00 cb e7) 	lxssp   v30,8\(r11\)
++.*:	(e7 c0 ff fb|fb ff c0 e7) 	lxssp   v30,-8\(0\)
++.*:	(e7 cb ff fb|fb ff cb e7) 	lxssp   v30,-8\(r11\)
++.*:	(e7 c0 7f ff|ff 7f c0 e7) 	lxssp   v30,32764\(0\)
++.*:	(e7 cb 7f ff|ff 7f cb e7) 	lxssp   v30,32764\(r11\)
++.*:	(e7 c0 80 03|03 80 c0 e7) 	lxssp   v30,-32768\(0\)
++.*:	(e7 cb 80 03|03 80 cb e7) 	lxssp   v30,-32768\(r11\)
++.*:	(f5 00 00 09|09 00 00 f5) 	lxv     vs40,0\(0\)
++.*:	(f5 0c 00 09|09 00 0c f5) 	lxv     vs40,0\(r12\)
++.*:	(f5 00 00 19|19 00 00 f5) 	lxv     vs40,16\(0\)
++.*:	(f5 0c 00 19|19 00 0c f5) 	lxv     vs40,16\(r12\)
++.*:	(f5 00 ff f9|f9 ff 00 f5) 	lxv     vs40,-16\(0\)
++.*:	(f5 4c ff f1|f1 ff 4c f5) 	lxv     vs10,-16\(r12\)
++.*:	(f5 40 7f f1|f1 7f 40 f5) 	lxv     vs10,32752\(0\)
++.*:	(f5 4c 7f f1|f1 7f 4c f5) 	lxv     vs10,32752\(r12\)
++.*:	(f5 40 80 01|01 80 40 f5) 	lxv     vs10,-32768\(0\)
++.*:	(f5 4c 80 01|01 80 4c f5) 	lxv     vs10,-32768\(r12\)
++.*:	(f6 a0 00 02|02 00 a0 f6) 	stxsd   v21,0\(0\)
++.*:	(f6 aa 00 02|02 00 aa f6) 	stxsd   v21,0\(r10\)
++.*:	(f6 a0 00 0a|0a 00 a0 f6) 	stxsd   v21,8\(0\)
++.*:	(f6 aa 00 0a|0a 00 aa f6) 	stxsd   v21,8\(r10\)
++.*:	(f6 a0 ff fa|fa ff a0 f6) 	stxsd   v21,-8\(0\)
++.*:	(f6 aa ff fa|fa ff aa f6) 	stxsd   v21,-8\(r10\)
++.*:	(f6 a0 7f fe|fe 7f a0 f6) 	stxsd   v21,32764\(0\)
++.*:	(f6 aa 7f fe|fe 7f aa f6) 	stxsd   v21,32764\(r10\)
++.*:	(f6 a0 80 02|02 80 a0 f6) 	stxsd   v21,-32768\(0\)
++.*:	(f6 aa 80 02|02 80 aa f6) 	stxsd   v21,-32768\(r10\)
++.*:	(f7 e0 00 03|03 00 e0 f7) 	stxssp  v31,0\(0\)
++.*:	(f7 eb 00 03|03 00 eb f7) 	stxssp  v31,0\(r11\)
++.*:	(f7 e0 00 0b|0b 00 e0 f7) 	stxssp  v31,8\(0\)
++.*:	(f7 eb 00 0b|0b 00 eb f7) 	stxssp  v31,8\(r11\)
++.*:	(f7 e0 ff fb|fb ff e0 f7) 	stxssp  v31,-8\(0\)
++.*:	(f7 eb ff fb|fb ff eb f7) 	stxssp  v31,-8\(r11\)
++.*:	(f7 e0 7f ff|ff 7f e0 f7) 	stxssp  v31,32764\(0\)
++.*:	(f7 eb 7f ff|ff 7f eb f7) 	stxssp  v31,32764\(r11\)
++.*:	(f7 e0 80 03|03 80 e0 f7) 	stxssp  v31,-32768\(0\)
++.*:	(f7 eb 80 03|03 80 eb f7) 	stxssp  v31,-32768\(r11\)
++.*:	(f5 20 00 0d|0d 00 20 f5) 	stxv    vs41,0\(0\)
++.*:	(f5 2c 00 0d|0d 00 2c f5) 	stxv    vs41,0\(r12\)
++.*:	(f5 20 00 1d|1d 00 20 f5) 	stxv    vs41,16\(0\)
++.*:	(f5 2c 00 1d|1d 00 2c f5) 	stxv    vs41,16\(r12\)
++.*:	(f5 20 ff fd|fd ff 20 f5) 	stxv    vs41,-16\(0\)
++.*:	(f5 6c ff f5|f5 ff 6c f5) 	stxv    vs11,-16\(r12\)
++.*:	(f5 60 7f f5|f5 7f 60 f5) 	stxv    vs11,32752\(0\)
++.*:	(f5 6c 7f f5|f5 7f 6c f5) 	stxv    vs11,32752\(r12\)
++.*:	(f5 60 80 05|05 80 60 f5) 	stxv    vs11,-32768\(0\)
++.*:	(f5 6c 80 05|05 80 6c f5) 	stxv    vs11,-32768\(r12\)
++.*:	(f2 96 c0 d0|d0 c0 96 f2) 	xxperm  vs20,vs22,vs24
++.*:	(f1 0a 60 d7|d7 60 0a f1) 	xxperm  vs40,vs42,vs44
++.*:	(f2 b7 c9 d0|d0 c9 b7 f2) 	xxpermr vs21,vs23,vs25
++.*:	(f1 2b 69 d7|d7 69 2b f1) 	xxpermr vs41,vs43,vs45
++.*:	(7e 8c 06 f4|f4 06 8c 7e) 	extswsli r12,r20,0
++.*:	(7e 8c 0e f4|f4 0e 8c 7e) 	extswsli r12,r20,1
++.*:	(7e 8c fe f6|f6 fe 8c 7e) 	extswsli r12,r20,63
++.*:	(7e ad 06 f5|f5 06 ad 7e) 	extswsli\. r13,r21,0
++.*:	(7e ad 0e f5|f5 0e ad 7e) 	extswsli\. r13,r21,1
++.*:	(7e ad fe f7|f7 fe ad 7e) 	extswsli\. r13,r21,63
++.*:	(11 d6 b8 85|85 b8 d6 11) 	vrlwmi  v14,v22,v23
++.*:	(11 f7 c0 c5|c5 c0 f7 11) 	vrldmi  v15,v23,v24
++.*:	(12 18 c9 85|85 c9 18 12) 	vrlwnm  v16,v24,v25
++.*:	(12 39 d1 c5|c5 d1 39 12) 	vrldnm  v17,v25,v26
++.*:	(12 5a dd cc|cc dd 5a 12) 	vbpermd v18,v26,v27
++.*:	(12 66 a6 02|02 a6 66 12) 	vnegw   v19,v20
++.*:	(12 87 ae 02|02 ae 87 12) 	vnegd   v20,v21
++.*:	(12 a8 b6 02|02 b6 a8 12) 	vprtybw v21,v22
++.*:	(12 c9 be 02|02 be c9 12) 	vprtybd v22,v23
++.*:	(12 ea c6 02|02 c6 ea 12) 	vprtybq v23,v24
++.*:	(13 10 ce 02|02 ce 10 13) 	vextsb2w v24,v25
++.*:	(13 31 d6 02|02 d6 31 13) 	vextsh2w v25,v26
++.*:	(13 58 de 02|02 de 58 13) 	vextsb2d v26,v27
++.*:	(13 79 e6 02|02 e6 79 13) 	vextsh2d v27,v28
++.*:	(13 9a ee 02|02 ee 9a 13) 	vextsw2d v28,v29
++.*:	(13 bc f6 02|02 f6 bc 13) 	vctzb   v29,v30
++.*:	(13 dd fe 02|02 fe dd 13) 	vctzh   v30,v31
++.*:	(13 fe f6 02|02 f6 fe 13) 	vctzw   v31,v30
++.*:	(13 df ee 02|02 ee df 13) 	vctzd   v30,v29
++.*:	(7d 40 a6 1a|1a a6 40 7d) 	lxsibzx vs10,0,r20
++.*:	(7e 4a a6 1b|1b a6 4a 7e) 	lxsibzx vs50,r10,r20
++.*:	(7d 60 ae 5a|5a ae 60 7d) 	lxsihzx vs11,0,r21
++.*:	(7e 6b ae 5b|5b ae 6b 7e) 	lxsihzx vs51,r11,r21
++.*:	(7d 80 b7 1a|1a b7 80 7d) 	stxsibx vs12,0,r22
++.*:	(7e 8c b7 1b|1b b7 8c 7e) 	stxsibx vs52,r12,r22
++.*:	(7d a0 bf 5a|5a bf a0 7d) 	stxsihx vs13,0,r23
++.*:	(7e ad bf 5b|5b bf ad 7e) 	stxsihx vs53,r13,r23
++.*:	(11 4b 63 70|70 63 4b 11) 	maddhd  r10,r11,r12,r13
++.*:	(12 95 b5 f1|f1 b5 95 12) 	maddhdu r20,r21,r22,r23
++.*:	(10 43 21 73|73 21 43 10) 	maddld  r2,r3,r4,r5
++.*:	(f0 0a a1 d8|d8 a1 0a f0) 	xscmpexpdp cr0,vs10,vs20
++.*:	(f3 88 91 de|de 91 88 f3) 	xscmpexpdp cr7,vs40,vs50
++.*:	(f1 2b af 2d|2d af 2b f1) 	xsiexpdp vs41,r11,r21
++.*:	(f0 7f 5d a8|a8 5d 7f f0) 	xststdcdp cr0,vs11,127
++.*:	(f3 ff 4d aa|aa 4d ff f3) 	xststdcdp cr7,vs41,127
++.*:	(f0 7f 5c a8|a8 5c 7f f0) 	xststdcsp cr0,vs11,127
++.*:	(f3 ff 4c aa|aa 4c ff f3) 	xststdcsp cr7,vs41,127
++.*:	(f1 a0 5d 6e|6e 5d a0 f1) 	xsxexpdp r13,vs43
++.*:	(f1 c1 65 6e|6e 65 c1 f1) 	xsxsigdp r14,vs44
++.*:	(f1 ae 7f c7|c7 7f ae f1) 	xviexpdp vs45,vs46,vs47
++.*:	(f1 cf 86 c7|c7 86 cf f1) 	xviexpsp vs46,vs47,vs48
++.*:	(f2 c0 bf ab|ab bf c0 f2) 	xvtstdcdp vs54,vs55,0
++.*:	(f2 df bf ef|ef bf df f2) 	xvtstdcdp vs54,vs55,127
++.*:	(f2 e0 c6 ab|ab c6 e0 f2) 	xvtstdcsp vs55,vs56,0
++.*:	(f2 ff c6 ef|ef c6 ff f2) 	xvtstdcsp vs55,vs56,127
++.*:	(f3 20 d7 6f|6f d7 20 f3) 	xvxexpdp vs57,vs58
++.*:	(f3 48 df 6f|6f df 48 f3) 	xvxexpsp vs58,vs59
++.*:	(f3 61 e7 6f|6f e7 61 f3) 	xvxsigdp vs59,vs60
++.*:	(f3 89 ef 6f|6f ef 89 f3) 	xvxsigsp vs60,vs61
++.*:	(7c 06 39 c0|c0 39 06 7c) 	cmpeqb  cr0,r6,r7
++.*:	(7f 86 39 c0|c0 39 86 7f) 	cmpeqb  cr7,r6,r7
++.*:	(7c 08 49 80|80 49 08 7c) 	cmprb   cr0,r8,r9
++.*:	(7f 88 49 80|80 49 88 7f) 	cmprb   cr7,r8,r9
++.*:	(7c 28 49 80|80 49 28 7c) 	cmprb   cr0,1,r8,r9
++.*:	(7f a8 49 80|80 49 a8 7f) 	cmprb   cr7,1,r8,r9
++.*:	(7d e0 01 00|00 01 e0 7d) 	setb    r15,cr0
++.*:	(7d fc 01 00|00 01 fc 7d) 	setb    r15,cr7
++.*:	(7f 40 52 1a|1a 52 40 7f) 	lxvl    vs26,0,r10
++.*:	(7f 14 52 1b|1b 52 14 7f) 	lxvl    vs56,r20,r10
++.*:	(7f 60 5b 1a|1a 5b 60 7f) 	stxvl   vs27,0,r11
++.*:	(7f 35 5b 1b|1b 5b 35 7f) 	stxvl   vs57,r21,r11
++.*:	(12 80 f6 02|02 f6 80 12) 	vclzlsbb r20,v30
++.*:	(12 a1 fe 02|02 fe a1 12) 	vctzlsbb r21,v31
++.*:	(11 4b 60 07|07 60 4b 11) 	vcmpneb v10,v11,v12
++.*:	(12 95 b4 07|07 b4 95 12) 	vcmpneb\. v20,v21,v22
++.*:	(11 6c 68 47|47 68 6c 11) 	vcmpneh v11,v12,v13
++.*:	(12 b6 bc 47|47 bc b6 12) 	vcmpneh\. v21,v22,v23
++.*:	(11 8d 70 87|87 70 8d 11) 	vcmpnew v12,v13,v14
++.*:	(12 d7 c4 87|87 c4 d7 12) 	vcmpnew\. v22,v23,v24
++.*:	(11 ae 79 07|07 79 ae 11) 	vcmpnezb v13,v14,v15
++.*:	(12 f8 cd 07|07 cd f8 12) 	vcmpnezb\. v23,v24,v25
++.*:	(11 cf 81 47|47 81 cf 11) 	vcmpnezh v14,v15,v16
++.*:	(13 19 d5 47|47 d5 19 13) 	vcmpnezh\. v24,v25,v26
++.*:	(11 f0 89 87|87 89 f0 11) 	vcmpnezw v15,v16,v17
++.*:	(13 3a dd 87|87 dd 3a 13) 	vcmpnezw\. v25,v26,v27
++.*:	(12 11 56 0d|0d 56 11 12) 	vextublx r16,r17,v10
++.*:	(12 32 5f 0d|0d 5f 32 12) 	vextubrx r17,r18,v11
++.*:	(12 53 66 4d|4d 66 53 12) 	vextuhlx r18,r19,v12
++.*:	(12 74 6f 4d|4d 6f 74 12) 	vextuhrx r19,r20,v13
++.*:	(12 95 76 8d|8d 76 95 12) 	vextuwlx r20,r21,v14
++.*:	(12 b6 7f 8d|8d 7f b6 12) 	vextuwrx r21,r22,v15
++.*:	(ec 00 1d 46|46 1d 00 ec) 	dtstsfi cr0,0,f3
++.*:	(ef bf 1d 46|46 1d bf ef) 	dtstsfi cr7,63,f3
++.*:	(fc 00 25 46|46 25 00 fc) 	dtstsfiq cr0,0,f4
++.*:	(ff bf 25 46|46 25 bf ff) 	dtstsfiq cr7,63,f4
++.*:	(f1 10 95 6f|6f 95 10 f1) 	xscvhpdp vs40,vs50
++.*:	(f1 31 9d 6f|6f 9d 31 f1) 	xscvdphp vs41,vs51
++.*:	(f1 58 a7 6f|6f a7 58 f1) 	xvcvhpsp vs42,vs52
++.*:	(f1 79 af 6f|6f af 79 f1) 	xvcvsphp vs43,vs53
++.*:	(4c 60 00 04|04 00 60 4c) 	addpcis r3,0
++.*:	(4c 60 00 04|04 00 60 4c) 	addpcis r3,0
++.*:	(4c 80 00 05|05 00 80 4c) 	addpcis r4,1
++.*:	(4c 80 00 05|05 00 80 4c) 	addpcis r4,1
++.*:	(4c bf ff c4|c4 ff bf 4c) 	addpcis r5,-2
++.*:	(4c bf ff c4|c4 ff bf 4c) 	addpcis r5,-2
++.*:	(4c df 7f c5|c5 7f df 4c) 	addpcis r6,32767
++.*:	(4c df 7f c5|c5 7f df 4c) 	addpcis r6,32767
++.*:	(4c e0 80 04|04 80 e0 4c) 	addpcis r7,-32768
++.*:	(4c e0 80 04|04 80 e0 4c) 	addpcis r7,-32768
++.*:	(7c 00 02 a4|a4 02 00 7c) 	slbsync
++.*:	(7d 40 5b a4|a4 5b 40 7d) 	slbieg  r10,r11
++.*:	(7c 60 27 26|26 27 60 7c) 	slbmfee r3,r4
++.*:	(7c 60 27 26|26 27 60 7c) 	slbmfee r3,r4
++.*:	(7c 61 27 26|26 27 61 7c) 	slbmfee r3,r4,1
++.*:	(7c 80 2e a6|a6 2e 80 7c) 	slbmfev r4,r5
++.*:	(7c 80 2e a6|a6 2e 80 7c) 	slbmfev r4,r5
++.*:	(7c 81 2e a6|a6 2e 81 7c) 	slbmfev r4,r5,1
++.*:	(7c 80 1a 64|64 1a 80 7c) 	tlbie   r3,r4
++.*:	(7c 80 1a 64|64 1a 80 7c) 	tlbie   r3,r4
++.*:	(7c 8f 1a 64|64 1a 8f 7c) 	tlbie   r3,r4,3,1,1
++.*:	(7c 00 1a 24|24 1a 00 7c) 	tlbiel  r3
++.*:	(7c 00 1a 24|24 1a 00 7c) 	tlbiel  r3
++.*:	(7c 8f 1a 24|24 1a 8f 7c) 	tlbiel  r3,r4,3,1,1
++.*:	(7c 0c 6e 0c|0c 6e 0c 7c) 	copy    r12,r13
++.*:	(7c 2c 6e 0c|0c 6e 2c 7c) 	copy_first r12,r13
++.*:	(7c 2c 6e 0c|0c 6e 2c 7c) 	copy_first r12,r13
++.*:	(7c 0a 5f 0c|0c 5f 0a 7c) 	paste   r10,r11
++.*:	(7c 0a 5f 0c|0c 5f 0a 7c) 	paste   r10,r11
++.*:	(7c 2a 5f 0d|0d 5f 2a 7c) 	paste_last r10,r11
++.*:	(7c 2a 5f 0d|0d 5f 2a 7c) 	paste_last r10,r11
++.*:	(7c 00 06 8c|8c 06 00 7c) 	cp_abort
++.*:	(7c 00 04 ac|ac 04 00 7c) 	hwsync
++.*:	(7c 00 04 ac|ac 04 00 7c) 	hwsync
++.*:	(7c 00 04 ac|ac 04 00 7c) 	hwsync
++.*:	(7c 20 04 ac|ac 04 20 7c) 	lwsync
++.*:	(7c 20 04 ac|ac 04 20 7c) 	lwsync
++.*:	(7c 40 04 ac|ac 04 40 7c) 	ptesync
++.*:	(7c 40 04 ac|ac 04 40 7c) 	ptesync
++.*:	(7c 07 04 ac|ac 04 07 7c) 	sync    0,7
++.*:	(7c 28 04 ac|ac 04 28 7c) 	sync    1,8
++.*:	(7e 80 04 cc|cc 04 80 7e) 	ldat    r20,0,0
++.*:	(7e 8a e4 cc|cc e4 8a 7e) 	ldat    r20,r10,28
++.*:	(7e a0 04 8c|8c 04 a0 7e) 	lwat    r21,0,0
++.*:	(7e ab e4 8c|8c e4 ab 7e) 	lwat    r21,r11,28
++.*:	(7e c0 05 cc|cc 05 c0 7e) 	stdat   r22,0,0
++.*:	(7e cc e5 cc|cc e5 cc 7e) 	stdat   r22,r12,28
++.*:	(7e e0 05 8c|8c 05 e0 7e) 	stwat   r23,0,0
++.*:	(7e ed e5 8c|8c e5 ed 7e) 	stwat   r23,r13,28
++.*:	(4c 00 02 64|64 02 00 4c) 	urfid
++.*:	(7c 00 f6 e4|e4 f6 00 7c) 	rmieg   r30
++.*:	(7d 40 7a 6a|6a 7a 40 7d) 	ldmx    r10,0,r15
++.*:	(7d 43 7a 6a|6a 7a 43 7d) 	ldmx    r10,r3,r15
++.*:	(4c 00 02 e4|e4 02 00 4c) 	stop
++.*:	(7c 00 00 3c|3c 00 00 7c) 	wait    
++.*:	(7c 00 00 3c|3c 00 00 7c) 	wait    
++.*:	(7c 60 05 e6|e6 05 60 7c) 	darn    r3,0
++.*:	(7c 61 05 e6|e6 05 61 7c) 	darn    r3,1
++.*:	(7c 62 05 e6|e6 05 62 7c) 	darn    r3,2
++.*:	(7c 00 04 80|80 04 00 7c) 	mcrxrx  cr0
++.*:	(7f 80 04 80|80 04 80 7f) 	mcrxrx  cr7
++.*:	(12 95 b7 44|44 b7 95 12) 	vslv    v20,v21,v22
++.*:	(12 f8 cf 04|04 cf f8 12) 	vsrv    v23,v24,v25
++.*:	(7c 00 06 ec|ec 06 00 7c) 	msgsync
++.*:	(f3 c8 90 1e|1e 90 c8 f3) 	xscmpeqdp vs30,vs40,vs50
++.*:	(f3 e9 98 5e|5e 98 e9 f3) 	xscmpgtdp vs31,vs41,vs51
++.*:	(f0 0a a0 9f|9f a0 0a f0) 	xscmpgedp vs32,vs42,vs52
++.*:	(f0 4c b4 47|47 b4 4c f0) 	xsmincdp vs34,vs44,vs54
++.*:	(f0 6d bc 07|07 bc 6d f0) 	xsmaxcdp vs35,vs45,vs55
++.*:	(f0 8e c4 c7|c7 c4 8e f0) 	xsminjdp vs36,vs46,vs56
++.*:	(f0 af cc 87|87 cc af f0) 	xsmaxjdp vs37,vs47,vs57
++#pass
+--- /dev/null	2016-05-23 09:42:50.354737742 +0100
++++ binutils-2.25.1/gas/testsuite/gas/ppc/power9.s	2016-05-23 12:43:22.791946574 +0100
+@@ -0,0 +1,376 @@
++	.text
++power9:
++	cnttzd      3,13
++	cnttzd.     4,14
++	cnttzw      5,15
++	cnttzw.     6,16
++	modsd       10,20,21
++	modsw       11,21,22
++	modud       12,22,23
++	moduw       13,23,24
++	bcdcfn.     3,4,0
++	bcdcfn.     3,4,1
++	bcdcfsq.    4,5,0
++	bcdcfsq.    4,5,1
++	bcdcfz.     5,6,0
++	bcdcfz.     5,6,1
++	bcdcpsgn.   6,7,8
++	bcdctn.     7,8
++	bcdctsq.    8,9
++	bcdctz.     9,10,0
++	bcdctz.     9,10,1
++	bcdsetsgn.  10,11,0
++	bcdsetsgn.  10,11,1
++	bcdsr.      11,12,13,0
++	bcdsr.      11,12,13,1
++	bcds.       12,13,14,0
++	bcds.       12,13,14,1
++	bcdtrunc.   13,14,15,0
++	bcdtrunc.   13,14,15,1
++	bcdus.      14,15,16
++	bcdutrunc.  15,16,17
++	lxvll       20,0,21
++	lxvll       20,10,21
++	stxvll      21,0,11
++	stxvll      21,10,11
++	vmul10cuq   22,23
++	vmul10ecuq  23,24,25
++	vmul10euq   24,25,26
++	vmul10uq    25,26
++	xsaddqp     10,11,12
++	xsaddqpo    11,12,12
++	xsrqpi      0,20,30,0
++	xsrqpi      1,20,30,0
++	xsrqpi      0,20,30,3
++	xsrqpi      1,20,30,3
++	xsrqpix     0,21,31,0
++	xsrqpix     1,21,31,0
++	xsrqpix     0,21,31,3
++	xsrqpix     1,21,31,3
++	xsmulqp     12,13,14
++	xsmulqpo    13,14,15
++	xsrqpxp     0,22,23,0
++	xsrqpxp     1,22,23,0
++	xsrqpxp     0,22,23,3
++	xsrqpxp     1,22,23,3
++	xscpsgnqp   14,15,16
++	xscmpoqp    0,15,16
++	xscmpoqp    7,15,16
++	xscmpexpqp  0,16,17
++	xscmpexpqp  7,16,17
++	xsmaddqp    17,18,19
++	xsmaddqpo   18,19,20
++	xsmsubqp    19,20,21
++	xsmsubqpo   20,21,22
++	xsnmaddqp   21,22,23
++	xsnmaddqpo  22,23,24
++	xsnmsubqp   23,24,25
++	xsnmsubqpo  24,25,26
++	xssubqp     25,26,27
++	xssubqpo    26,27,28
++	xsdivqp     27,28,29
++	xsdivqpo    28,29,30
++	xscmpuqp    0,29,30
++	xscmpuqp    7,29,30
++	xststdcqp   0,30,0
++	xststdcqp   7,30,0
++	xststdcqp   0,31,0x7f
++	xststdcqp   7,31,0x7f
++	xsabsqp     10,11
++	xsxexpqp    11,12
++	xsnabsqp    12,13
++	xsnegqp     13,14
++	xsxsigqp    14,15
++	xssqrtqp    15,16
++	xssqrtqpo   16,17
++	xscvqpuwz   17,18
++	xscvudqp    18,19
++	xscvqpswz   19,20
++	xscvsdqp    20,21
++	xscvqpudz   21,22
++	xscvqpdp    22,23
++	xscvqpdpo   23,24
++	xscvdpqp    24,25
++	xscvqpsdz   25,26
++	xsiexpqp    26,27,28
++	vpermr      4,5,6,7
++	vextractub  5,6,0
++	vextractub  5,6,0xf
++	vextractuh  6,7,0
++	vextractuh  6,7,0xf
++	vextractuw  7,8,0
++	vextractuw  7,8,0xf
++	vextractd   8,9,0
++	vextractd   8,9,0xf
++	vinsertb    9,10,0
++	vinsertb    9,10,0xf
++	vinserth    10,11,0
++	vinserth    10,11,0xf
++	vinsertw    11,12,0
++	vinsertw    11,12,0xf
++	vinsertd    12,13,0
++	vinsertd    12,13,0xf
++	mfvsrld     20,45
++	mtvsrws     46,21
++	mtvsrdd     47,0,23
++	mtvsrdd     47,22,23
++	lxvx        50,0,11
++	lxvx        0,10,11
++	lxvwsx      51,0,12
++	lxvwsx      1,10,12
++	lxvh8x      52,0,13
++	lxvh8x      2,10,13
++	lxvb16x     53,0,14
++	lxvb16x     3,10,14
++	stxvx       54,0,15
++	stxvx       4,20,15
++	stxvh8x     55,0,16
++	stxvh8x     5,20,16
++	stxvb16x    56,0,17
++	stxvb16x    6,20,17
++	xxextractuw 4,5,0x0
++	xxextractuw 40,50,0xf
++	xxspltib    4,0x0
++	xxspltib    4,-128
++	xxspltib    41,255
++	xxspltib    41,-1
++	xxinsertw   5,6,0
++	xxinsertw   50,60,0xf
++	xxbrh       6,7
++	xxbrh       56,57
++	xxbrw       7,8
++	xxbrw       57,58
++	xxbrd       8,9
++	xxbrd       58,59
++	xxbrq       9,10
++	xxbrq       59,60
++	lxsd        20,0(0)
++	lxsd        20,0(10)
++	lxsd        20,8(0)
++	lxsd        20,8(10)
++	lxsd        20,-8(0)
++	lxsd        20,-8(10)
++	lxsd        20,32764(0)
++	lxsd        20,32764(10)
++	lxsd        20,-32768(0)
++	lxsd        20,-32768(10)
++	lxssp       30,0(0)
++	lxssp       30,0(11)
++	lxssp       30,8(0)
++	lxssp       30,8(11)
++	lxssp       30,-8(0)
++	lxssp       30,-8(11)
++	lxssp       30,32764(0)
++	lxssp       30,32764(11)
++	lxssp       30,-32768(0)
++	lxssp       30,-32768(11)
++	lxv         40,0(0)
++	lxv         40,0(12)
++	lxv         40,16(0)
++	lxv         40,16(12)
++	lxv         40,-16(0)
++	lxv         10,-16(12)
++	lxv         10,32752(0)
++	lxv         10,32752(12)
++	lxv         10,-32768(0)
++	lxv         10,-32768(12)
++	stxsd       21,0(0)
++	stxsd       21,0(10)
++	stxsd       21,8(0)
++	stxsd       21,8(10)
++	stxsd       21,-8(0)
++	stxsd       21,-8(10)
++	stxsd       21,32764(0)
++	stxsd       21,32764(10)
++	stxsd       21,-32768(0)
++	stxsd       21,-32768(10)
++	stxssp      31,0(0)
++	stxssp      31,0(11)
++	stxssp      31,8(0)
++	stxssp      31,8(11)
++	stxssp      31,-8(0)
++	stxssp      31,-8(11)
++	stxssp      31,32764(0)
++	stxssp      31,32764(11)
++	stxssp      31,-32768(0)
++	stxssp      31,-32768(11)
++	stxv        41,0(0)
++	stxv        41,0(12)
++	stxv        41,16(0)
++	stxv        41,16(12)
++	stxv        41,-16(0)
++	stxv        11,-16(12)
++	stxv        11,32752(0)
++	stxv        11,32752(12)
++	stxv        11,-32768(0)
++	stxv        11,-32768(12)
++	xxperm      20,22,24
++	xxperm      40,42,44
++	xxpermr     21,23,25
++	xxpermr     41,43,45
++	extswsli    12,20,0
++	extswsli    12,20,1
++	extswsli    12,20,63
++	extswsli.   13,21,0
++	extswsli.   13,21,1
++	extswsli.   13,21,63
++	vrlwmi      14,22,23
++	vrldmi      15,23,24
++	vrlwnm      16,24,25
++	vrldnm      17,25,26
++	vbpermd     18,26,27
++	vnegw       19,20
++	vnegd       20,21
++	vprtybw     21,22
++	vprtybd     22,23
++	vprtybq     23,24
++	vextsb2w    24,25
++	vextsh2w    25,26
++	vextsb2d    26,27
++	vextsh2d    27,28
++	vextsw2d    28,29
++	vctzb       29,30
++	vctzh       30,31
++	vctzw       31,30
++	vctzd       30,29
++	lxsibzx     10,0,20
++	lxsibzx     50,10,20
++	lxsihzx     11,0,21
++	lxsihzx     51,11,21
++	stxsibx     12,0,22
++	stxsibx     52,12,22
++	stxsihx     13,0,23
++	stxsihx     53,13,23
++	maddhd      10,11,12,13
++	maddhdu     20,21,22,23
++	maddld      2,3,4,5
++	xscmpexpdp  0,10,20
++	xscmpexpdp  7,40,50
++	xsiexpdp    41,11,21
++	xststdcdp   0,11,0x7f
++	xststdcdp   7,41,0x7f
++	xststdcsp   0,11,0x7f
++	xststdcsp   7,41,0x7f
++	xsxexpdp    13,43
++	xsxsigdp    14,44
++	xviexpdp    45,46,47
++	xviexpsp    46,47,48
++	xvtstdcdp   54,55,0
++	xvtstdcdp   54,55,0x7f
++	xvtstdcsp   55,56,0
++	xvtstdcsp   55,56,0x7f
++	xvxexpdp    57,58
++	xvxexpsp    58,59
++	xvxsigdp    59,60
++	xvxsigsp    60,61
++	cmpeqb      0,6,7
++	cmpeqb      7,6,7
++	cmprb       0,0,8,9
++	cmprb       7,0,8,9
++	cmprb       0,1,8,9
++	cmprb       7,1,8,9
++	setb        15,0
++	setb        15,7
++	lxvl        26,0,10
++	lxvl        56,20,10
++	stxvl       27,0,11
++	stxvl       57,21,11
++	vclzlsbb    20,30
++	vctzlsbb    21,31
++	vcmpneb     10,11,12
++	vcmpneb.    20,21,22
++	vcmpneh     11,12,13
++	vcmpneh.    21,22,23
++	vcmpnew     12,13,14
++	vcmpnew.    22,23,24
++	vcmpnezb    13,14,15
++	vcmpnezb.   23,24,25
++	vcmpnezh    14,15,16
++	vcmpnezh.   24,25,26
++	vcmpnezw    15,16,17
++	vcmpnezw.   25,26,27
++	vextublx    16,17,10
++	vextubrx    17,18,11
++	vextuhlx    18,19,12
++	vextuhrx    19,20,13
++	vextuwlx    20,21,14
++	vextuwrx    21,22,15
++	dtstsfi     0,0,3
++	dtstsfi     7,0x3f,3
++	dtstsfiq    0,0,4
++	dtstsfiq    7,0x3f,4
++	xscvhpdp    40,50
++	xscvdphp    41,51
++	xvcvhpsp    42,52
++	xvcvsphp    43,53
++	addpcis     3,0
++	subpcis     3,0
++	addpcis     4,1
++	subpcis     4,-1
++	addpcis     5,-2
++	subpcis     5,2
++	addpcis     6,0x7fff
++	subpcis     6,-0x7fff
++	addpcis     7,-0x8000
++	subpcis     7,0x8000
++	slbsync
++	slbieg      10,11
++	slbmfee     3,4
++	slbmfee     3,4,0
++	slbmfee     3,4,1
++	slbmfev     4,5
++	slbmfev     4,5,0
++	slbmfev     4,5,1
++	tlbie       3,4
++	tlbie       3,4,0,0,0
++	tlbie       3,4,3,1,1
++	tlbiel      3
++	tlbiel      3,0,0,0,0
++	tlbiel      3,4,3,1,1
++	copy        12,13,0
++	copy_first  12,13
++	copy        12,13,1
++	paste       10,11,0
++	paste       10,11
++	paste.      10,11,1
++	paste_last  10,11
++	cp_abort
++	hwsync
++	sync
++	sync        0,0x0
++	lwsync
++	sync        1,0x0
++	ptesync
++	sync        2,0x0
++	sync	    0,0x7
++	sync	    1,0x8
++	ldat        20,0,0x0
++	ldat        20,10,0x1c
++	lwat        21,0,0x0
++	lwat        21,11,0x1c
++	stdat       22,0,0x0
++	stdat       22,12,0x1c
++	stwat       23,0,0x0
++	stwat       23,13,0x1c
++	urfid
++	rmieg       30
++	ldmx        10,0,15
++	ldmx        10,3,15
++	stop
++	wait
++	wait        0
++	darn        3,0
++	darn        3,1
++	darn        3,2
++	mcrxrx      0
++	mcrxrx      7
++	vslv        20,21,22
++	vsrv        23,24,25
++	msgsync
++	xscmpeqdp   30,40,50
++	xscmpgtdp   31,41,51
++	xscmpgedp   32,42,52
++	xsmincdp    34,44,54
++	xsmaxcdp    35,45,55
++	xsminjdp    36,46,56
++	xsmaxjdp    37,47,57
+--- /dev/null	2016-05-23 09:42:50.354737742 +0100
++++ binutils-2.25.1/gas/testsuite/gas/ppc/vsx3.s	2016-05-23 12:43:15.656909113 +0100
+@@ -0,0 +1,123 @@
++        .text
++vsx3:
++	lxvx         34,6,25
++	lxvx         20,0,10
++	lxvl         20,24,10
++	lxvl         54,0,29
++	lxvll        24,20,19
++	lxvll        34,0,14
++	mfvsrld      2,22
++	lxvwsx       58,26,25
++	lxvwsx       55,0,29
++	stxvx        14,21,4
++	stxvx        30,0,22
++	stxvl        0,26,4
++	stxvl        37,0,22
++	mtvsrws      24,10
++	stxvll       30,21,15
++	stxvll       39,0,14
++	mtvsrdd      12,6,5
++	mtvsrdd      38,0,21
++	lxsibzx      59,28,6
++	lxsibzx      30,0,8
++	lxvh8x       42,23,17
++	lxvh8x       36,0,5
++	lxsihzx      12,9,11
++	lxsihzx      49,0,13
++	lxvb16x      37,3,19
++	lxvb16x      0,0,30
++	stxsibx      2,30,6
++	stxsibx      12,0,13
++	stxvh8x      16,29,8
++	stxvh8x      55,0,10
++	stxsihx      34,2,23
++	stxsihx      60,0,23
++	stxvb16x     23,14,12
++	stxvb16x     19,0,5
++	lxsd         24,0(0)
++	lxsd         15,16(21)
++	lxssp        6,0(0)
++	lxssp        23,16(9)
++	xscmpeqdp    18,51,33
++	xscmpgtdp    2,26,34
++	xscmpgedp    5,26,20
++	xxperm       44,10,43
++	xxpermr      41,20,5
++	xscmpexpdp   4,18,55
++	xxextractuw  23,37,3
++	xxspltib     54,235
++	xxinsertw    15,30,4
++	xsmaxcdp     12,11,7
++	xsmincdp     32,25,24
++	xsmaxjdp     25,53,12
++	xststdcsp    2,36,127
++	xsminjdp     32,21,45
++	xsxexpdp     17,50
++	xsxsigdp     7,40
++	xscvhpdp     54,34
++	xscvdphp     58,54
++	xststdcdp    0,38,127
++	xvtstdcsp    56,53,127
++	xviexpsp     54,20,52
++	xsiexpdp     57,28,29
++	xvxexpdp     1,20
++	xvxsigdp     54,59
++	xxbrh        18,37
++	xvxexpsp     14,1
++	xvxsigsp     52,13
++	xxbrw        19,5
++	xxbrd        51,55
++	xvcvhpsp     35,17
++	xvcvsphp     15,45
++	xxbrq        17,31
++	xvtstdcdp    16,12,127
++	xviexpdp     27,9,8
++	lxv          4,0(0)
++	lxv          40,16(20)
++	stxv         50,0(0)
++	stxv         8,16(16)
++	stxsd        3,0(0)
++	stxsd        17,16(2)
++	stxssp       13,0(0)
++	stxssp       17,16(13)
++	xsaddqp      8,10,18
++	xsaddqpo     5,1,29
++	xsrqpi       0,12,18,3
++	xsrqpix      1,31,19,0
++	xsmulqp      14,1,6
++	xsmulqpo     17,7,27
++	xsrqpxp      0,4,11,0
++	xscpsgnqp    29,23,28
++	xscmpoqp     7,13,27
++	xscmpexpqp   5,21,6
++	xsmaddqp     2,19,4
++	xsmaddqpo    30,7,16
++	xsmsubqp     21,30,15
++	xsmsubqpo    12,17,30
++	xsnmaddqp    6,30,12
++	xsnmaddqpo   12,22,12
++	xsnmsubqp    10,29,27
++	xsnmsubqpo   29,29,13
++	xssubqp      19,27,4
++	xssubqpo     13,8,1
++	xsdivqp      8,3,27
++	xsdivqpo     24,20,27
++	xscmpuqp     7,14,4
++	xststdcqp    4,2,127
++	xsabsqp      31,22
++	xsxexpqp     25,3
++	xsnabsqp     10,28
++	xsnegqp      19,31
++	xsxsigqp     11,13
++	xssqrtqp     13,14
++	xssqrtqpo    1,27
++	xscvqpuwz    3,7
++	xscvudqp     20,18
++	xscvqpswz    29,29
++	xscvsdqp     2,28
++	xscvqpudz    23,4
++	xscvqpdp     3,20
++	xscvqpdpo    1,3
++	xscvdpqp     19,12
++	xscvqpsdz    13,4
++	xsiexpqp     7,24,7
+--- /dev/null	2016-05-23 09:42:50.354737742 +0100
++++ binutils-2.25.1/gas/testsuite/gas/ppc/vsx3.d	2016-05-23 12:38:42.113472905 +0100
+@@ -0,0 +1,133 @@
++#as: -mpower9
++#objdump: -dr -Mpower9
++#name: VSX ISA 3.0 instructions
++
++.*
++
++
++Disassembly of section \.text:
++
++0+00 <vsx3>:
++
++.*:	(7c 46 ca 19|19 ca 46 7c) 	lxvx    vs34,r6,r25
++.*:	(7e 80 52 18|18 52 80 7e) 	lxvx    vs20,0,r10
++.*:	(7e 98 52 1a|1a 52 98 7e) 	lxvl    vs20,r24,r10
++.*:	(7e c0 ea 1b|1b ea c0 7e) 	lxvl    vs54,0,r29
++.*:	(7f 14 9a 5a|5a 9a 14 7f) 	lxvll   vs24,r20,r19
++.*:	(7c 40 72 5b|5b 72 40 7c) 	lxvll   vs34,0,r14
++.*:	(7e c2 02 66|66 02 c2 7e) 	mfvsrld r2,vs22
++.*:	(7f 5a ca d9|d9 ca 5a 7f) 	lxvwsx  vs58,r26,r25
++.*:	(7e e0 ea d9|d9 ea e0 7e) 	lxvwsx  vs55,0,r29
++.*:	(7d d5 23 18|18 23 d5 7d) 	stxvx   vs14,r21,r4
++.*:	(7f c0 b3 18|18 b3 c0 7f) 	stxvx   vs30,0,r22
++.*:	(7c 1a 23 1a|1a 23 1a 7c) 	stxvl   vs0,r26,r4
++.*:	(7c a0 b3 1b|1b b3 a0 7c) 	stxvl   vs37,0,r22
++.*:	(7f 0a 03 26|26 03 0a 7f) 	mtvsrws vs24,r10
++.*:	(7f d5 7b 5a|5a 7b d5 7f) 	stxvll  vs30,r21,r15
++.*:	(7c e0 73 5b|5b 73 e0 7c) 	stxvll  vs39,0,r14
++.*:	(7d 86 2b 66|66 2b 86 7d) 	mtvsrdd vs12,r6,r5
++.*:	(7c c0 ab 67|67 ab c0 7c) 	mtvsrdd vs38,0,r21
++.*:	(7f 7c 36 1b|1b 36 7c 7f) 	lxsibzx vs59,r28,r6
++.*:	(7f c0 46 1a|1a 46 c0 7f) 	lxsibzx vs30,0,r8
++.*:	(7d 57 8e 59|59 8e 57 7d) 	lxvh8x  vs42,r23,r17
++.*:	(7c 80 2e 59|59 2e 80 7c) 	lxvh8x  vs36,0,r5
++.*:	(7d 89 5e 5a|5a 5e 89 7d) 	lxsihzx vs12,r9,r11
++.*:	(7e 20 6e 5b|5b 6e 20 7e) 	lxsihzx vs49,0,r13
++.*:	(7c a3 9e d9|d9 9e a3 7c) 	lxvb16x vs37,r3,r19
++.*:	(7c 00 f6 d8|d8 f6 00 7c) 	lxvb16x vs0,0,r30
++.*:	(7c 5e 37 1a|1a 37 5e 7c) 	stxsibx vs2,r30,r6
++.*:	(7d 80 6f 1a|1a 6f 80 7d) 	stxsibx vs12,0,r13
++.*:	(7e 1d 47 58|58 47 1d 7e) 	stxvh8x vs16,r29,r8
++.*:	(7e e0 57 59|59 57 e0 7e) 	stxvh8x vs55,0,r10
++.*:	(7c 42 bf 5b|5b bf 42 7c) 	stxsihx vs34,r2,r23
++.*:	(7f 80 bf 5b|5b bf 80 7f) 	stxsihx vs60,0,r23
++.*:	(7e ee 67 d8|d8 67 ee 7e) 	stxvb16x vs23,r14,r12
++.*:	(7e 60 2f d8|d8 2f 60 7e) 	stxvb16x vs19,0,r5
++.*:	(e7 00 00 02|02 00 00 e7) 	lxsd    v24,0\(0\)
++.*:	(e5 f5 00 12|12 00 f5 e5) 	lxsd    v15,16\(r21\)
++.*:	(e4 c0 00 03|03 00 c0 e4) 	lxssp   v6,0\(0\)
++.*:	(e6 e9 00 13|13 00 e9 e6) 	lxssp   v23,16\(r9\)
++.*:	(f2 53 08 1e|1e 08 53 f2) 	xscmpeqdp vs18,vs51,vs33
++.*:	(f0 5a 10 5a|5a 10 5a f0) 	xscmpgtdp vs2,vs26,vs34
++.*:	(f0 ba a0 98|98 a0 ba f0) 	xscmpgedp vs5,vs26,vs20
++.*:	(f1 8a 58 d3|d3 58 8a f1) 	xxperm  vs44,vs10,vs43
++.*:	(f1 34 29 d1|d1 29 34 f1) 	xxpermr vs41,vs20,vs5
++.*:	(f2 12 b9 da|da b9 12 f2) 	xscmpexpdp cr4,vs18,vs55
++.*:	(f2 e3 2a 96|96 2a e3 f2) 	xxextractuw vs23,vs37,3
++.*:	(f2 c7 5a d1|d1 5a c7 f2) 	xxspltib vs54,235
++.*:	(f1 e4 f2 d4|d4 f2 e4 f1) 	xxinsertw vs15,vs30,4
++.*:	(f1 8b 3c 00|00 3c 8b f1) 	xsmaxcdp vs12,vs11,vs7
++.*:	(f0 19 c4 41|41 c4 19 f0) 	xsmincdp vs32,vs25,vs24
++.*:	(f3 35 64 84|84 64 35 f3) 	xsmaxjdp vs25,vs53,vs12
++.*:	(f1 7f 24 aa|aa 24 7f f1) 	xststdcsp cr2,vs36,127
++.*:	(f0 15 6c c3|c3 6c 15 f0) 	xsminjdp vs32,vs21,vs45
++.*:	(f2 20 95 6e|6e 95 20 f2) 	xsxexpdp r17,vs50
++.*:	(f0 e1 45 6e|6e 45 e1 f0) 	xsxsigdp r7,vs40
++.*:	(f2 d0 15 6f|6f 15 d0 f2) 	xscvhpdp vs54,vs34
++.*:	(f3 51 b5 6f|6f b5 51 f3) 	xscvdphp vs58,vs54
++.*:	(f0 7f 35 aa|aa 35 7f f0) 	xststdcdp cr0,vs38,127
++.*:	(f3 1f ae ef|ef ae 1f f3) 	xvtstdcsp vs56,vs53,127
++.*:	(f2 d4 a6 c3|c3 a6 d4 f2) 	xviexpsp vs54,vs20,vs52
++.*:	(f3 3c ef 2d|2d ef 3c f3) 	xsiexpdp vs57,r28,r29
++.*:	(f0 20 a7 6c|6c a7 20 f0) 	xvxexpdp vs1,vs20
++.*:	(f2 c1 df 6f|6f df c1 f2) 	xvxsigdp vs54,vs59
++.*:	(f2 47 2f 6e|6e 2f 47 f2) 	xxbrh   vs18,vs37
++.*:	(f1 c8 0f 6c|6c 0f c8 f1) 	xvxexpsp vs14,vs1
++.*:	(f2 89 6f 6d|6d 6f 89 f2) 	xvxsigsp vs52,vs13
++.*:	(f2 6f 2f 6c|6c 2f 6f f2) 	xxbrw   vs19,vs5
++.*:	(f2 77 bf 6f|6f bf 77 f2) 	xxbrd   vs51,vs55
++.*:	(f0 78 8f 6d|6d 8f 78 f0) 	xvcvhpsp vs35,vs17
++.*:	(f1 f9 6f 6e|6e 6f f9 f1) 	xvcvsphp vs15,vs45
++.*:	(f2 3f ff 6c|6c ff 3f f2) 	xxbrq   vs17,vs31
++.*:	(f2 1f 67 ec|ec 67 1f f2) 	xvtstdcdp vs16,vs12,127
++.*:	(f3 69 47 c0|c0 47 69 f3) 	xviexpdp vs27,vs9,vs8
++.*:	(f4 80 00 01|01 00 80 f4) 	lxv     vs4,0\(0\)
++.*:	(f5 14 00 19|19 00 14 f5) 	lxv     vs40,16\(r20\)
++.*:	(f6 40 00 0d|0d 00 40 f6) 	stxv    vs50,0\(0\)
++.*:	(f5 10 00 15|15 00 10 f5) 	stxv    vs8,16\(r16\)
++.*:	(f4 60 00 02|02 00 60 f4) 	stxsd   v3,0\(0\)
++.*:	(f6 22 00 12|12 00 22 f6) 	stxsd   v17,16\(r2\)
++.*:	(f5 a0 00 03|03 00 a0 f5) 	stxssp  v13,0\(0\)
++.*:	(f6 2d 00 13|13 00 2d f6) 	stxssp  v17,16\(r13\)
++.*:	(fd 0a 90 08|08 90 0a fd) 	xsaddqp v8,v10,v18
++.*:	(fc a1 e8 09|09 e8 a1 fc) 	xsaddqpo v5,v1,v29
++.*:	(fd 80 96 0a|0a 96 80 fd) 	xsrqpi  0,v12,v18,3
++.*:	(ff e1 98 0b|0b 98 e1 ff) 	xsrqpix 1,v31,v19,0
++.*:	(fd c1 30 48|48 30 c1 fd) 	xsmulqp v14,v1,v6
++.*:	(fe 27 d8 49|49 d8 27 fe) 	xsmulqpo v17,v7,v27
++.*:	(fc 80 58 4a|4a 58 80 fc) 	xsrqpxp 0,v4,v11,0
++.*:	(ff b7 e0 c8|c8 e0 b7 ff) 	xscpsgnqp v29,v23,v28
++.*:	(ff 8d d9 08|08 d9 8d ff) 	xscmpoqp cr7,v13,v27
++.*:	(fe 95 31 48|48 31 95 fe) 	xscmpexpqp cr5,v21,v6
++.*:	(fc 53 23 08|08 23 53 fc) 	xsmaddqp v2,v19,v4
++.*:	(ff c7 83 09|09 83 c7 ff) 	xsmaddqpo v30,v7,v16
++.*:	(fe be 7b 48|48 7b be fe) 	xsmsubqp v21,v30,v15
++.*:	(fd 91 f3 49|49 f3 91 fd) 	xsmsubqpo v12,v17,v30
++.*:	(fc de 63 88|88 63 de fc) 	xsnmaddqp v6,v30,v12
++.*:	(fd 96 63 89|89 63 96 fd) 	xsnmaddqpo v12,v22,v12
++.*:	(fd 5d db c8|c8 db 5d fd) 	xsnmsubqp v10,v29,v27
++.*:	(ff bd 6b c9|c9 6b bd ff) 	xsnmsubqpo v29,v29,v13
++.*:	(fe 7b 24 08|08 24 7b fe) 	xssubqp v19,v27,v4
++.*:	(fd a8 0c 09|09 0c a8 fd) 	xssubqpo v13,v8,v1
++.*:	(fd 03 dc 48|48 dc 03 fd) 	xsdivqp v8,v3,v27
++.*:	(ff 14 dc 49|49 dc 14 ff) 	xsdivqpo v24,v20,v27
++.*:	(ff 8e 25 08|08 25 8e ff) 	xscmpuqp cr7,v14,v4
++.*:	(fe 7f 15 88|88 15 7f fe) 	xststdcqp cr4,v2,127
++.*:	(ff e0 b6 48|48 b6 e0 ff) 	xsabsqp v31,v22
++.*:	(ff 22 1e 48|48 1e 22 ff) 	xsxexpqp v25,v3
++.*:	(fd 48 e6 48|48 e6 48 fd) 	xsnabsqp v10,v28
++.*:	(fe 70 fe 48|48 fe 70 fe) 	xsnegqp v19,v31
++.*:	(fd 72 6e 48|48 6e 72 fd) 	xsxsigqp v11,v13
++.*:	(fd bb 76 48|48 76 bb fd) 	xssqrtqp v13,v14
++.*:	(fc 3b de 49|49 de 3b fc) 	xssqrtqpo v1,v27
++.*:	(fc 61 3e 88|88 3e 61 fc) 	xscvqpuwz v3,v7
++.*:	(fe 82 96 88|88 96 82 fe) 	xscvudqp v20,v18
++.*:	(ff a9 ee 88|88 ee a9 ff) 	xscvqpswz v29,v29
++.*:	(fc 4a e6 88|88 e6 4a fc) 	xscvsdqp v2,v28
++.*:	(fe f1 26 88|88 26 f1 fe) 	xscvqpudz v23,v4
++.*:	(fc 74 a6 88|88 a6 74 fc) 	xscvqpdp v3,v20
++.*:	(fc 34 1e 89|89 1e 34 fc) 	xscvqpdpo v1,v3
++.*:	(fe 76 66 88|88 66 76 fe) 	xscvdpqp v19,v12
++.*:	(fd b9 26 88|88 26 b9 fd) 	xscvqpsdz v13,v4
++.*:	(fc f8 3e c8|c8 3e f8 fc) 	xsiexpqp v7,v24,v7
++#pass
+--- /dev/null	2016-05-23 09:42:50.354737742 +0100
++++ binutils-2.25.1/gas/testsuite/gas/ppc/altivec3.s	2016-05-23 12:43:37.765025189 +0100
+@@ -0,0 +1,69 @@
++	.text
++start:
++	vmul10cuq    11,30
++	vcmpneb      30,1,23
++	vpermr       30,19,30,29
++	vmul10ecuq   20,20,17
++	vcmpneh      27,19,31
++	vrlwmi       6,9,23
++	vcmpnew      22,26,1
++	vrldmi       24,30,25
++	vcmpnezb     19,29,22
++	vcmpnezh     8,23,19
++	vrlwnm       27,24,11
++	vcmpnezw     21,13,10
++	vrldnm       5,20,29
++	vmul10uq     30,19
++	vextractub   24,21,12
++	vmul10euq    0,19,28
++	vextractuh   10,3,12
++	vextractuw   28,12,7
++	vextractd    30,27,1
++	vinsertb     25,31,4
++	bcdcpsgn.    21,14,30
++	vinserth     22,18,5
++	vinsertw     29,22,1
++	vinsertd     29,13,7
++	vcmpneb.     22,25,8
++	vcmpneh.     16,15,21
++	bcdus.       22,21,31
++	vcmpnew.     1,12,12
++	bcds.        5,3,8,1
++	bcdtrunc.    27,22,1,0
++	vcmpnezb.    2,26,0
++	bcdutrunc.   26,14,7
++	vcmpnezh.    16,5,12
++	bcdctsq.     24,5
++	bcdcfsq.     7,0,0
++	bcdctz.      30,12,1
++	bcdctn.      17,23
++	bcdcfz.      4,15,1
++	bcdcfn.      29,5,1
++	bcdsetsgn.   27,12,0
++	vcmpnezw.    14,28,25
++	bcdsr.       2,2,6,1
++	vbpermd      25,0,5
++	vclzlsbb     28,25
++	vctzlsbb     2,24
++	vnegw        21,11
++	vnegd        17,27
++	vprtybw      31,23
++	vprtybd      21,23
++	vprtybq      21,18
++	vextsb2w     30,4
++	vextsh2w     3,26
++	vextsb2d     11,17
++	vextsh2d     5,10
++	vextsw2d     13,25
++	vctzb        25,2
++	vctzh        0,3
++	vctzw        22,6
++	vctzd        26,24
++	vextublx     6,31,2
++	vextuhlx     13,0,18
++	vextuwlx     14,30,31
++	vsrv         15,12,14
++	vextubrx     20,10,30
++	vslv         21,21,2
++	vextuhrx     15,9,1
++	vextuwrx     21,17,16
+--- /dev/null	2016-05-23 09:42:50.354737742 +0100
++++ binutils-2.25.1/gas/testsuite/gas/ppc/altivec3.d	2016-05-23 12:38:21.541364893 +0100
+@@ -0,0 +1,79 @@
++#as: -mpower9
++#objdump: -dr -Mpower9
++#name: Altivec ISA 3.0 instructions
++
++.*
++
++
++Disassembly of section \.text:
++
++0+00 <start>:
++
++.*:	(11 7e 00 01|01 00 7e 11) 	vmul10cuq v11,v30
++.*:	(13 c1 b8 07|07 b8 c1 13) 	vcmpneb v30,v1,v23
++.*:	(13 d3 f7 7b|7b f7 d3 13) 	vpermr  v30,v19,v30,v29
++.*:	(12 94 88 41|41 88 94 12) 	vmul10ecuq v20,v20,v17
++.*:	(13 73 f8 47|47 f8 73 13) 	vcmpneh v27,v19,v31
++.*:	(10 c9 b8 85|85 b8 c9 10) 	vrlwmi  v6,v9,v23
++.*:	(12 da 08 87|87 08 da 12) 	vcmpnew v22,v26,v1
++.*:	(13 1e c8 c5|c5 c8 1e 13) 	vrldmi  v24,v30,v25
++.*:	(12 7d b1 07|07 b1 7d 12) 	vcmpnezb v19,v29,v22
++.*:	(11 17 99 47|47 99 17 11) 	vcmpnezh v8,v23,v19
++.*:	(13 78 59 85|85 59 78 13) 	vrlwnm  v27,v24,v11
++.*:	(12 ad 51 87|87 51 ad 12) 	vcmpnezw v21,v13,v10
++.*:	(10 b4 e9 c5|c5 e9 b4 10) 	vrldnm  v5,v20,v29
++.*:	(13 d3 02 01|01 02 d3 13) 	vmul10uq v30,v19
++.*:	(13 0c aa 0d|0d aa 0c 13) 	vextractub v24,v21,12
++.*:	(10 13 e2 41|41 e2 13 10) 	vmul10euq v0,v19,v28
++.*:	(11 4c 1a 4d|4d 1a 4c 11) 	vextractuh v10,v3,12
++.*:	(13 87 62 8d|8d 62 87 13) 	vextractuw v28,v12,7
++.*:	(13 c1 da cd|cd da c1 13) 	vextractd v30,v27,1
++.*:	(13 24 fb 0d|0d fb 24 13) 	vinsertb v25,v31,4
++.*:	(12 ae f3 41|41 f3 ae 12) 	bcdcpsgn\. v21,v14,v30
++.*:	(12 c5 93 4d|4d 93 c5 12) 	vinserth v22,v18,5
++.*:	(13 a1 b3 8d|8d b3 a1 13) 	vinsertw v29,v22,1
++.*:	(13 a7 6b cd|cd 6b a7 13) 	vinsertd v29,v13,7
++.*:	(12 d9 44 07|07 44 d9 12) 	vcmpneb\. v22,v25,v8
++.*:	(12 0f ac 47|47 ac 0f 12) 	vcmpneh\. v16,v15,v21
++.*:	(12 d5 fc 81|81 fc d5 12) 	bcdus\.  v22,v21,v31
++.*:	(10 2c 64 87|87 64 2c 10) 	vcmpnew\. v1,v12,v12
++.*:	(10 a3 46 c1|c1 46 a3 10) 	bcds\.   v5,v3,v8,1
++.*:	(13 76 0d 01|01 0d 76 13) 	bcdtrunc\. v27,v22,v1,0
++.*:	(10 5a 05 07|07 05 5a 10) 	vcmpnezb\. v2,v26,v0
++.*:	(13 4e 3d 41|41 3d 4e 13) 	bcdutrunc\. v26,v14,v7
++.*:	(12 05 65 47|47 65 05 12) 	vcmpnezh\. v16,v5,v12
++.*:	(13 00 2d 81|81 2d 00 13) 	bcdctsq\. v24,v5
++.*:	(10 e2 05 81|81 05 e2 10) 	bcdcfsq\. v7,v0,0
++.*:	(13 c4 67 81|81 67 c4 13) 	bcdctz\. v30,v12,1
++.*:	(12 25 bd 81|81 bd 25 12) 	bcdctn\. v17,v23
++.*:	(10 86 7f 81|81 7f 86 10) 	bcdcfz\. v4,v15,1
++.*:	(13 a7 2f 81|81 2f a7 13) 	bcdcfn\. v29,v5,1
++.*:	(13 7f 65 81|81 65 7f 13) 	bcdsetsgn\. v27,v12,0
++.*:	(11 dc cd 87|87 cd dc 11) 	vcmpnezw\. v14,v28,v25
++.*:	(10 42 37 c1|c1 37 42 10) 	bcdsr\.  v2,v2,v6,1
++.*:	(13 20 2d cc|cc 2d 20 13) 	vbpermd v25,v0,v5
++.*:	(13 80 ce 02|02 ce 80 13) 	vclzlsbb r28,v25
++.*:	(10 41 c6 02|02 c6 41 10) 	vctzlsbb r2,v24
++.*:	(12 a6 5e 02|02 5e a6 12) 	vnegw   v21,v11
++.*:	(12 27 de 02|02 de 27 12) 	vnegd   v17,v27
++.*:	(13 e8 be 02|02 be e8 13) 	vprtybw v31,v23
++.*:	(12 a9 be 02|02 be a9 12) 	vprtybd v21,v23
++.*:	(12 aa 96 02|02 96 aa 12) 	vprtybq v21,v18
++.*:	(13 d0 26 02|02 26 d0 13) 	vextsb2w v30,v4
++.*:	(10 71 d6 02|02 d6 71 10) 	vextsh2w v3,v26
++.*:	(11 78 8e 02|02 8e 78 11) 	vextsb2d v11,v17
++.*:	(10 b9 56 02|02 56 b9 10) 	vextsh2d v5,v10
++.*:	(11 ba ce 02|02 ce ba 11) 	vextsw2d v13,v25
++.*:	(13 3c 16 02|02 16 3c 13) 	vctzb   v25,v2
++.*:	(10 1d 1e 02|02 1e 1d 10) 	vctzh   v0,v3
++.*:	(12 de 36 02|02 36 de 12) 	vctzw   v22,v6
++.*:	(13 5f c6 02|02 c6 5f 13) 	vctzd   v26,v24
++.*:	(10 df 16 0d|0d 16 df 10) 	vextublx r6,r31,v2
++.*:	(11 a0 96 4d|4d 96 a0 11) 	vextuhlx r13,r0,v18
++.*:	(11 de fe 8d|8d fe de 11) 	vextuwlx r14,r30,v31
++.*:	(11 ec 77 04|04 77 ec 11) 	vsrv    v15,v12,v14
++.*:	(12 8a f7 0d|0d f7 8a 12) 	vextubrx r20,r10,v30
++.*:	(12 b5 17 44|44 17 b5 12) 	vslv    v21,v21,v2
++.*:	(11 e9 0f 4d|4d 0f e9 11) 	vextuhrx r15,r9,v1
++.*:	(12 b1 87 8d|8d 87 b1 12) 	vextuwrx r21,r17,v16
++#pass
+--- binutils-2.25.1.orig/gas/config/tc-ppc.c	2016-05-23 12:32:10.521418850 +0100
++++ binutils-2.25.1/gas/config/tc-ppc.c	2016-05-23 13:06:03.205071781 +0100
+@@ -1789,17 +1789,15 @@ ppc_insert_operand (unsigned long insn,
+ 
+   if ((operand->flags & PPC_OPERAND_SIGNOPT) != 0)
+     {
+-      /* Extend the allowed range for addis to [-65536, 65535].
+-	 Similarly for some VLE high part insns.  For 64-bit it
+-	 would be good to disable this for signed fields since the
++      /* Extend the allowed range for addis to [-32768, 65535].
++	 Similarly for cmpli and some VLE high part insns.  For 64-bit
++	 it would be good to disable this for signed fields since the
+ 	 value is sign extended into the high 32 bits of the register.
+ 	 If the value is, say, an address, then we might care about
+ 	 the high bits.  However, gcc as of 2014-06 uses unsigned
+ 	 values when loading the high part of 64-bit constants using
+-	 lis.
+-	 Use the same extended range for cmpli, to allow at least
+-	 [-32768, 65535].  */
+-      min = ~max & -right;
++	 lis.  */
++      min = ~(max >> 1) & -right;
+     }
+   else if ((operand->flags & PPC_OPERAND_SIGNED) != 0)
+     {
+--- binutils-2.25.1/opcodes/ppc-opc.c	2016-05-23 13:31:49.197326214 +0100
++++ binutils-2.25.1.new/opcodes/ppc-opc.c	2016-05-23 13:31:41.584284927 +0100
+@@ -942,7 +942,7 @@ const struct powerpc_operand powerpc_ope
+ 
+   /* The 8-bit IMM8 field in a XX1 form instruction.  */
+ #define IMM8 IH + 1
+-  { 0xff, 11, NULL, NULL, 0 },
++  { 0xff, 11, NULL, NULL, PPC_OPERAND_SIGNOPT },
+ };
+ 
+ const unsigned int num_powerpc_operands = (sizeof (powerpc_operands)
+--- /dev/null	2016-05-23 09:42:50.354737742 +0100
++++ binutils-2.25.1/ld/testsuite/ld-powerpc/addpcis.s	2016-05-23 13:35:22.514483075 +0100
+@@ -0,0 +1,12 @@
++ .text
++ .global _start
++_start:
++ addpcis 3,(ext1-0f)@ha
++0: addi 3,3,(ext1-0b)@l
++ addpcis 4,(ext2-0f)@ha
++0: addi 4,4,(ext2-0b)@l
++ addpcis 5,(forw-0f)@ha
++0: addi 5,5,(forw-0b)@l
++ .space 32764
++forw:
++ nop
+--- /dev/null	2016-05-23 09:42:50.354737742 +0100
++++ binutils-2.25.1/ld/testsuite/ld-powerpc/addpcis.d	2016-05-23 13:35:22.514483075 +0100
+@@ -0,0 +1,20 @@
++#source: addpcis.s
++#as: -a64 -mpower9
++#ld: -melf64ppc -Ttext=0x10000000 --defsym ext1=0 --defsym ext2=0x8fff0000
++#objdump: -d -Mpower9
++
++.*:     file format .*
++
++Disassembly of section \.text:
++
++0+10000000 <_start>:
++    10000000:	(4c 60 f0 04|04 f0 60 4c) 	addpcis r3,-4096
++    10000004:	(38 63 ff fc|fc ff 63 38) 	addi    r3,r3,-4
++    10000008:	(4c 9f 7f c5|c5 7f 9f 4c) 	addpcis r4,32767
++    1000000c:	(38 84 ff f4|f4 ff 84 38) 	addi    r4,r4,-12
++    10000010:	(4c a0 00 05|05 00 a0 4c) 	addpcis r5,1
++    10000014:	(38 a5 80 00|00 80 a5 38) 	addi    r5,r5,-32768
++	\.\.\.
++
++0+10008014 <forw>:
++    10008014:	(60 00 00 00|00 00 00 60) 	nop
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/ppc/altivec3.d binutils-2.25.1/gas/testsuite/gas/ppc/altivec3.d
+--- binutils-2.25.1.orig/gas/testsuite/gas/ppc/altivec3.d	2016-06-01 11:11:35.135312565 +0100
++++ binutils-2.25.1/gas/testsuite/gas/ppc/altivec3.d	2016-06-01 11:11:45.425376884 +0100
+@@ -76,4 +76,5 @@ Disassembly of section \.text:
+ .*:	(12 b5 17 44|44 17 b5 12) 	vslv    v21,v21,v2
+ .*:	(11 e9 0f 4d|4d 0f e9 11) 	vextuhrx r15,r9,v1
+ .*:	(12 b1 87 8d|8d 87 b1 12) 	vextuwrx r21,r17,v16
++.*:	(12 95 b5 e3|e3 b5 95 12) 	vmsumudm v20,v21,v22,v23
+ #pass
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/ppc/altivec3.s binutils-2.25.1/gas/testsuite/gas/ppc/altivec3.s
+--- binutils-2.25.1.orig/gas/testsuite/gas/ppc/altivec3.s	2016-06-01 11:11:35.135312565 +0100
++++ binutils-2.25.1/gas/testsuite/gas/ppc/altivec3.s	2016-06-01 11:11:45.425376884 +0100
+@@ -67,3 +67,4 @@ start:
+ 	vslv         21,21,2
+ 	vextuhrx     15,9,1
+ 	vextuwrx     21,17,16
++	vmsumudm     20,21,22,23
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/ppc/power9.d binutils-2.25.1/gas/testsuite/gas/ppc/power9.d
+--- binutils-2.25.1.orig/gas/testsuite/gas/ppc/power9.d	2016-06-01 11:11:35.135312565 +0100
++++ binutils-2.25.1/gas/testsuite/gas/ppc/power9.d	2016-06-01 11:11:45.425376884 +0100
+@@ -365,6 +365,8 @@ Disassembly of section \.text:
+ .*:	(7c 00 f6 e4|e4 f6 00 7c) 	rmieg   r30
+ .*:	(7d 40 7a 6a|6a 7a 40 7d) 	ldmx    r10,0,r15
+ .*:	(7d 43 7a 6a|6a 7a 43 7d) 	ldmx    r10,r3,r15
++.*:	(7d 60 83 6a|6a 83 60 7d) 	lwzmx   r11,0,r16
++.*:	(7d 63 83 6a|6a 83 63 7d) 	lwzmx   r11,r3,r16
+ .*:	(4c 00 02 e4|e4 02 00 4c) 	stop
+ .*:	(7c 00 00 3c|3c 00 00 7c) 	wait    
+ .*:	(7c 00 00 3c|3c 00 00 7c) 	wait    
+@@ -383,4 +385,11 @@ Disassembly of section \.text:
+ .*:	(f0 6d bc 07|07 bc 6d f0) 	xsmaxcdp vs35,vs45,vs55
+ .*:	(f0 8e c4 c7|c7 c4 8e f0) 	xsminjdp vs36,vs46,vs56
+ .*:	(f0 af cc 87|87 cc af f0) 	xsmaxjdp vs37,vs47,vs57
++.*:	(12 95 b5 e3|e3 b5 95 12) 	vmsumudm v20,v21,v22,v23
++.*:	(7d 6c 69 54|54 69 6c 7d) 	addex   r11,r12,r13,0
++.*:	(7d 6c 6b 54|54 6b 6c 7d) 	addex   r11,r12,r13,1
++.*:	(7d 6c 6d 54|54 6d 6c 7d) 	addex   r11,r12,r13,2
++.*:	(7e b6 b9 55|55 b9 b6 7e) 	addex\.  r21,r22,r23,0
++.*:	(7e b6 bb 55|55 bb b6 7e) 	addex\.  r21,r22,r23,1
++.*:	(7e b6 bd 55|55 bd b6 7e) 	addex\.  r21,r22,r23,2
+ #pass
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/ppc/power9.s binutils-2.25.1/gas/testsuite/gas/ppc/power9.s
+--- binutils-2.25.1.orig/gas/testsuite/gas/ppc/power9.s	2016-06-01 11:11:35.135312565 +0100
++++ binutils-2.25.1/gas/testsuite/gas/ppc/power9.s	2016-06-01 11:11:45.425376884 +0100
+@@ -356,6 +356,8 @@ power9:
+ 	rmieg       30
+ 	ldmx        10,0,15
+ 	ldmx        10,3,15
++	lwzmx       11,0,16
++	lwzmx       11,3,16
+ 	stop
+ 	wait
+ 	wait        0
+@@ -374,3 +376,10 @@ power9:
+ 	xsmaxcdp    35,45,55
+ 	xsminjdp    36,46,56
+ 	xsmaxjdp    37,47,57
++	vmsumudm    20,21,22,23
++	addex       11,12,13,0
++	addex       11,12,13,1
++	addex       11,12,13,2
++	addex.      21,22,23,0
++	addex.      21,22,23,1
++	addex.      21,22,23,2
+diff -rup binutils-2.25.1.orig/opcodes/ppc-opc.c binutils-2.25.1/opcodes/ppc-opc.c
+--- binutils-2.25.1.orig/opcodes/ppc-opc.c	2016-06-01 11:11:36.347320141 +0100
++++ binutils-2.25.1/opcodes/ppc-opc.c	2016-06-01 11:13:15.306938696 +0100
+@@ -807,7 +807,9 @@ const struct powerpc_operand powerpc_ope
+ #define X_R A_L
+   { 0x1, 16, NULL, NULL, PPC_OPERAND_OPTIONAL },
+ 
++  /* The RMC or CY field in a Z23 form instruction.  */
+ #define RMC A_L + 1
++#define CY RMC
+   { 0x3, 9, NULL, NULL, 0 },
+ 
+ #define R RMC + 1
+@@ -3137,6 +3139,7 @@ const struct powerpc_opcode powerpc_opco
+ {"vmhaddshs",	VXA(4,	32),	VXA_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB, VC}},
+ {"vmhraddshs",	VXA(4,	33),	VXA_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB, VC}},
+ {"vmladduhm",	VXA(4,	34),	VXA_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB, VC}},
++{"vmsumudm",	VXA(4,	35),	VXA_MASK,    PPCVEC3,	PPCNONE,	{VD, VA, VB, VC}},
+ {"ps_div",	A  (4,	18,0),	AFRC_MASK,   PPCPS,	PPCNONE,	{FRT, FRA, FRB}},
+ {"vmsumubm",	VXA(4,	36),	VXA_MASK,    PPCVEC|PPCVLE, PPCNONE,	{VD, VA, VB, VC}},
+ {"ps_div.",	A  (4,	18,1),	AFRC_MASK,   PPCPS,	PPCNONE,	{FRT, FRA, FRB}},
+@@ -4970,6 +4973,9 @@ const struct powerpc_opcode powerpc_opco
+ {"stvehx",	X(31,167),	X_MASK,      PPCVEC,	PPCNONE,	{VS, RA0, RB}},
+ {"sthfcmx",	APU(31,167,0), 	APU_MASK,    PPC405,	PPCNONE,	{FCRT, RA, RB}},
+ 
++{"addex",	ZRC(31,170,0),	Z2_MASK,     POWER9,	PPCNONE,	{RT, RA, RB, CY}},
++{"addex.",	ZRC(31,170,1),	Z2_MASK,     POWER9,	PPCNONE,	{RT, RA, RB, CY}},
++
+ {"msgclrp",	XRTRA(31,174,0,0), XRTRA_MASK, POWER8,	PPCNONE,	{RB}},
+ {"dcbtlse",	X(31,174),	X_MASK,      PPCCHLK,	E500MC,		{CT, RA0, RB}},
+ 
+@@ -5494,6 +5500,8 @@ const struct powerpc_opcode powerpc_opco
+ 
+ {"mtvsrdd",	X(31,435),	XX1_MASK,    PPCVSX3,	PPCNONE,	{XT6, RA0, RB}},
+ 
++{"lwzmx",	X(31,437),	X_MASK,      POWER9,	PPCNONE,  	{RT, RA0, RB}},
++
+ {"ecowx",	X(31,438),	X_MASK,      PPC,	TITAN,  	{RT, RA0, RB}},
+ 
+ {"sthux",	X(31,439),	X_MASK,      COM|PPCVLE, PPCNONE,	{RS, RAS, RB}},
+Only in binutils-2.25.1/opcodes: ppc-opc.c.orig
+Only in binutils-2.25.1/opcodes: ppc-opc.c.rej
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/ppc/power9.d binutils-2.25.1/gas/testsuite/gas/ppc/power9.d
+--- binutils-2.25.1.orig/gas/testsuite/gas/ppc/power9.d	2016-06-24 11:54:57.332446713 +0100
++++ binutils-2.25.1/gas/testsuite/gas/ppc/power9.d	2016-06-24 11:55:03.189482911 +0100
+@@ -280,6 +280,14 @@ Disassembly of section \.text:
+ .*:	(7f a8 49 80|80 49 a8 7f) 	cmprb   cr7,1,r8,r9
+ .*:	(7d e0 01 00|00 01 e0 7d) 	setb    r15,cr0
+ .*:	(7d fc 01 00|00 01 fc 7d) 	setb    r15,cr7
++.*:	(7e 00 01 01|01 01 00 7e) 	setbool r16,lt
++.*:	(7e 01 01 01|01 01 01 7e) 	setbool r16,gt
++.*:	(7e 02 01 01|01 01 02 7e) 	setbool r16,eq
++.*:	(7e 03 01 01|01 01 03 7e) 	setbool r16,so
++.*:	(7e 1c 01 01|01 01 1c 7e) 	setbool r16,4\*cr7\+lt
++.*:	(7e 1d 01 01|01 01 1d 7e) 	setbool r16,4\*cr7\+gt
++.*:	(7e 1e 01 01|01 01 1e 7e) 	setbool r16,4\*cr7\+eq
++.*:	(7e 1f 01 01|01 01 1f 7e) 	setbool r16,4\*cr7\+so
+ .*:	(7f 40 52 1a|1a 52 40 7f) 	lxvl    vs26,0,r10
+ .*:	(7f 14 52 1b|1b 52 14 7f) 	lxvl    vs56,r20,r10
+ .*:	(7f 60 5b 1a|1a 5b 60 7f) 	stxvl   vs27,0,r11
+@@ -392,4 +400,22 @@ Disassembly of section \.text:
+ .*:	(7e b6 b9 55|55 b9 b6 7e) 	addex\.  r21,r22,r23,0
+ .*:	(7e b6 bb 55|55 bb b6 7e) 	addex\.  r21,r22,r23,1
+ .*:	(7e b6 bd 55|55 bd b6 7e) 	addex\.  r21,r22,r23,2
++.*:	(ff 20 04 8e|8e 04 20 ff) 	mffs    f25
++.*:	(ff 20 04 8f|8f 04 20 ff) 	mffs\.   f25
++.*:	(ff 41 04 8e|8e 04 41 ff) 	mffsce  f26
++.*:	(ff 74 a4 8e|8e a4 74 ff) 	mffscdrn f27,f20
++.*:	(ff 95 04 8e|8e 04 95 ff) 	mffscdrni f28,0
++.*:	(ff 95 3c 8e|8e 3c 95 ff) 	mffscdrni f28,7
++.*:	(ff b6 ac 8e|8e ac b6 ff) 	mffscrn f29,f21
++.*:	(ff d7 04 8e|8e 04 d7 ff) 	mffscrni f30,0
++.*:	(ff d7 1c 8e|8e 1c d7 ff) 	mffscrni f30,3
++.*:	(ff f8 04 8e|8e 04 f8 ff) 	mffsl   f31
++.*:	(7e 8a 01 76|76 01 8a 7e) 	brd     r10,r20
++.*:	(7e ab 01 b6|b6 01 ab 7e) 	brh     r11,r21
++.*:	(7e cc 01 36|36 01 cc 7e) 	brw     r12,r22
++.*:	(11 6a 63 77|77 63 6a 11) 	nandxor r10,r11,r12,r13
++.*:	(12 b4 b5 f6|f6 b5 b4 12) 	xor3    r20,r21,r22,r23
++.*:	(11 6a 60 34|34 60 6a 11) 	rldixor r10,r11,0,r12
++.*:	(11 6a 66 f4|f4 66 6a 11) 	rldixor r10,r11,27,r12
++.*:	(11 6a 67 f5|f5 67 6a 11) 	rldixor r10,r11,63,r12
+ #pass
+diff -rup binutils-2.25.1.orig/gas/testsuite/gas/ppc/power9.s binutils-2.25.1/gas/testsuite/gas/ppc/power9.s
+--- binutils-2.25.1.orig/gas/testsuite/gas/ppc/power9.s	2016-06-24 11:54:57.332446713 +0100
++++ binutils-2.25.1/gas/testsuite/gas/ppc/power9.s	2016-06-24 11:55:03.190482917 +0100
+@@ -271,6 +271,14 @@ power9:
+ 	cmprb       7,1,8,9
+ 	setb        15,0
+ 	setb        15,7
++	setbool     16,0
++	setbool     16,1
++	setbool     16,2
++	setbool     16,3
++	setbool     16,28
++	setbool     16,29
++	setbool     16,30
++	setbool     16,31
+ 	lxvl        26,0,10
+ 	lxvl        56,20,10
+ 	stxvl       27,0,11
+@@ -383,3 +391,21 @@ power9:
+ 	addex.      21,22,23,0
+ 	addex.      21,22,23,1
+ 	addex.      21,22,23,2
++	mffs        25
++	mffs.       25
++	mffsce      26
++	mffscdrn    27,20
++	mffscdrni   28,0
++	mffscdrni   28,7
++	mffscrn     29,21
++	mffscrni    30,0
++	mffscrni    30,3
++	mffsl       31
++	brd         10,20
++	brh         11,21
++	brw         12,22
++	nandxor     10,11,12,13
++	xor3        20,21,22,23
++	rldixor     10,11,0,12
++	rldixor     10,11,27,12
++	rldixor     10,11,63,12
+diff -rup binutils-2.25.1.orig/opcodes/ppc-opc.c binutils-2.25.1/opcodes/ppc-opc.c
+--- binutils-2.25.1.orig/opcodes/ppc-opc.c	2016-06-24 11:54:57.531447943 +0100
++++ binutils-2.25.1/opcodes/ppc-opc.c	2016-06-24 11:59:33.621162408 +0100
+@@ -238,7 +238,11 @@ const struct powerpc_operand powerpc_ope
+ #define BOE BO + 1
+   { 0x1e, 21, insert_boe, extract_boe, 0 },
+ 
+-#define BH BOE + 1
++  /* The RM field in an X form instruction.  */
++#define RM BOE + 1
++  { 0x3, 11, NULL, NULL, 0 },
++
++#define BH RM + 1
+   { 0x3, 11, NULL, NULL, PPC_OPERAND_OPTIONAL },
+ 
+   /* The BT field in an X or XL form instruction.  */
+@@ -778,8 +782,9 @@ const struct powerpc_operand powerpc_ope
+ #define EVUIMM_8 EVUIMM_4 + 1
+   { 0xf8, 8, NULL, NULL, PPC_OPERAND_PARENS },
+ 
+-  /* The WS field.  */
++  /* The WS or DRM field in an X form instruction.  */
+ #define WS EVUIMM_8 + 1
++#define DRM WS
+   { 0x7, 11, NULL, NULL, 0 },
+ 
+   /* PowerPC paired singles extensions.  */
+@@ -2009,7 +2014,11 @@ insert_sh6 (unsigned long insn,
+ 	    ppc_cpu_t dialect ATTRIBUTE_UNUSED,
+ 	    const char **errmsg ATTRIBUTE_UNUSED)
+ {
+-  return insn | ((value & 0x1f) << 11) | ((value & 0x20) >> 4);
++  /* SH6 operand in the rldixor instruction.  */
++  if (PPC_OP (insn) == 4)
++    return insn | ((value & 0x1f) << 6) | ((value & 0x20) >> 5);
++  else
++    return insn | ((value & 0x1f) << 11) | ((value & 0x20) >> 4);
+ }
+ 
+ static long
+@@ -2017,7 +2026,11 @@ extract_sh6 (unsigned long insn,
+ 	     ppc_cpu_t dialect ATTRIBUTE_UNUSED,
+ 	     int *invalid ATTRIBUTE_UNUSED)
+ {
+-  return ((insn >> 11) & 0x1f) | ((insn << 4) & 0x20);
++  /* SH6 operand in the rldixor instruction.  */
++  if (PPC_OP (insn) == 4)
++    return ((insn >> 6) & 0x1f) | ((insn << 5) & 0x20);
++  else
++    return ((insn >> 11) & 0x1f) | ((insn << 4) & 0x20);
+ }
+ 
+ /* The SPR field in an XFX form instruction.  This is flipped--the
+@@ -2600,6 +2613,9 @@ extract_vleil (unsigned long insn,
+ /* A VX form instruction with a VA tertiary opcode.  */
+ #define VXVA(op, xop, vaop) (VX(op,xop) | (((vaop) & 0x1f) << 16))
+ 
++#define VXASH(op, xop) (OP (op) | ((((unsigned long)(xop)) & 0x1f) << 1))
++#define VXASH_MASK VXASH (0x3f, 0x1f)
++
+ /* An X form instruction.  */
+ #define X(op, xop) (OP (op) | ((((unsigned long)(xop)) & 0x3ff) << 1))
+ 
+@@ -2636,6 +2652,9 @@ extract_vleil (unsigned long insn,
+ /* A X form instruction for Quad-Precision FP Instructions with RC bit.  */
+ #define XVARC(op, xop, vaop, rc) (XVA ((op), (xop), (vaop)) | ((rc) & 1))
+ 
++/* An X form instruction with the RA bits specified as two ops.  */
++#define XMMF(op, xop, mop0, mop1) (X ((op), (xop)) | ((mop0) & 3) << 19 | ((mop1) & 7) << 16)
++
+ /* A Z form instruction with the RC bit specified.  */
+ #define ZRC(op, xop, rc) (Z ((op), (xop)) | ((rc) & 1))
+ 
+@@ -2688,6 +2707,9 @@ extract_vleil (unsigned long insn,
+ /* An X form wait instruction with everything filled in except the WC field.  */
+ #define XWC_MASK (XRC (0x3f, 0x3ff, 1) | (7 << 23) | RA_MASK | RB_MASK)
+ 
++/* The mask for an XMMF form instruction.  */
++#define XMMF_MASK (XMMF (0x3f, 0x3ff, 3, 7) | (1))
++
+ /* The mask for a Z form instruction.  */
+ #define Z_MASK ZRC (0x3f, 0x1ff, 1)
+ #define Z2_MASK ZRC (0x3f, 0xff, 1)
+@@ -3132,6 +3154,7 @@ const struct powerpc_opcode powerpc_opco
+ {"machhwu.",	XO (4,	12,0,1),XO_MASK,     MULHW|PPCVLE, PPCNONE,	{RT, RA, RB}},
+ {"ps_muls1",	A  (4,	13,0),	AFRB_MASK,   PPCPS,	PPCNONE,	{FRT, FRA, FRC}},
+ {"ps_muls1.",	A  (4,	13,1),	AFRB_MASK,   PPCPS,	PPCNONE,	{FRT, FRA, FRC}},
++{"rldixor",	VXASH(4,26),	VXASH_MASK,  POWER9,	0,		{RA, RS, SH6, RB}},
+ {"ps_madds0",	A  (4,	14,0),	A_MASK,      PPCPS,	PPCNONE,	{FRT, FRA, FRC, FRB}},
+ {"ps_madds0.",	A  (4,	14,1),	A_MASK,      PPCPS,	PPCNONE,	{FRT, FRA, FRC, FRB}},
+ {"ps_madds1",	A  (4,	15,0),	A_MASK,      PPCPS,	PPCNONE,	{FRT, FRA, FRC, FRB}},
+@@ -3173,6 +3196,8 @@ const struct powerpc_opcode powerpc_opco
+ {"ps_msub.",	A  (4,	28,1),	A_MASK,      PPCPS,	PPCNONE,	{FRT, FRA, FRC, FRB}},
+ {"ps_madd",	A  (4,	29,0),	A_MASK,      PPCPS,	PPCNONE,	{FRT, FRA, FRC, FRB}},
+ {"ps_madd.",	A  (4,	29,1),	A_MASK,      PPCPS,	PPCNONE,	{FRT, FRA, FRC, FRB}},
++{"xor3",	VXA(4,	54),	VXA_MASK,    POWER9,	0,		{RA, RS, RB, RC}},
++{"nandxor",	VXA(4,	55),	VXA_MASK,    POWER9,	0,		{RA, RS, RB, RC}},
+ {"ps_nmsub",	A  (4,	30,0),	A_MASK,      PPCPS,	PPCNONE,	{FRT, FRA, FRC, FRB}},
+ {"ps_nmsub.",	A  (4,	30,1),	A_MASK,      PPCPS,	PPCNONE,	{FRT, FRA, FRC, FRB}},
+ {"ps_nmadd",	A  (4,	31,0),	A_MASK,      PPCPS,	PPCNONE,	{FRT, FRA, FRC, FRB}},
+@@ -4912,7 +4937,8 @@ const struct powerpc_opcode powerpc_opco
+ 
+ {"dcbfep",	XRT(31,127,0),	XRT_MASK,    E500MC|PPCA2|PPCVLE, PPCNONE, {RA0, RB}},
+  
+-{"setb",	X(31,128),	XRB_MASK|(3<<16), POWER9, PPCNONE,	{RT, BFA}},
++{"setb",	VX(31,256),  VXVB_MASK|(3<<16), POWER9,	0,		{RT, BFA}},
++{"setbool",	VX(31,257),  VXVB_MASK,         POWER9,	0,		{RT, BA}},
+ 
+ {"wrtee",	X(31,131),	XRARB_MASK,  PPC403|BOOKE|PPCA2|PPC476|PPCVLE, PPCNONE, {RS}},
+  
+@@ -4962,6 +4988,8 @@ const struct powerpc_opcode powerpc_opco
+ 
+ {"prtyw",	X(31,154),	XRB_MASK, POWER6|PPCA2|PPC476, PPCNONE,	{RA, RS}},
+ 
++{"brw",		X(31,155),	XRB_MASK,    POWER9,	0,		{RA, RS}},
++
+ {"stdepx",	X(31,157),	X_MASK,	     E500MC|PPCA2|PPCVLE, PPCNONE, {RS, RA0, RB}},
+  
+ {"stwepx",	X(31,159),	X_MASK,	     E500MC|PPCA2|PPCVLE, PPCNONE, {RS, RA0, RB}},
+@@ -4999,6 +5027,8 @@ const struct powerpc_opcode powerpc_opco
+ 
+ {"prtyd",	X(31,186),	XRB_MASK, POWER6|PPCA2,	PPCNONE,	{RA, RS}},
+ 
++{"brd",		X(31,187),	XRB_MASK,    POWER9,	0,		{RA, RS}},
++
+ {"cmprb",	X(31,192),	XCMP_MASK,   POWER9,	PPCNONE,	{BF, L, RA, RB}},
+ 
+ {"icblq.",	XRC(31,198,1),	X_MASK,      E6500,	PPCNONE,	{CT, RA0, RB}},
+@@ -5037,6 +5067,8 @@ const struct powerpc_opcode powerpc_opco
+ {"sleq",	XRC(31,217,0),	X_MASK,      M601,	PPCNONE,	{RA, RS, RB}},
+ {"sleq.",	XRC(31,217,1),	X_MASK,      M601,	PPCNONE,	{RA, RS, RB}},
+ 
++{"brh",		X(31,219),	XRB_MASK,    POWER9,	0,		{RA, RS}},
++
+ {"stbepx",	X(31,223),	X_MASK,      E500MC|PPCA2|PPCVLE, PPCNONE, {RS, RA0, RB}},
+  
+ {"cmpeqb",	X(31,224),	XCMPL_MASK,   POWER9,	PPCNONE,	{BF, RA, RB}},
+@@ -6909,6 +6941,13 @@ const struct powerpc_opcode powerpc_opco
+ {"mffs",	XRC(63,583,0),	XRARB_MASK,  COM,	PPCEFS,		{FRT}},
+ {"mffs.",	XRC(63,583,1),	XRARB_MASK,  COM,	PPCEFS,		{FRT}},
+ 
++{"mffsce",	XMMF(63,583,0,1), XMMF_MASK|RB_MASK, POWER9, PPCVLE,	{FRT}},
++{"mffscdrn",	XMMF(63,583,2,4), XMMF_MASK,         POWER9, PPCVLE,	{FRT, FRB}},
++{"mffscdrni",	XMMF(63,583,2,5), XMMF_MASK|(3<<14), POWER9, PPCVLE,	{FRT, DRM}},
++{"mffscrn",	XMMF(63,583,2,6), XMMF_MASK,         POWER9, PPCVLE,	{FRT, FRB}},
++{"mffscrni",	XMMF(63,583,2,7), XMMF_MASK|(7<<13), POWER9, PPCVLE,	{FRT, RM}},
++{"mffsl",	XMMF(63,583,3,0), XMMF_MASK|RB_MASK, POWER9, PPCVLE,	{FRT}},
++
+ {"dcmpuq",	X(63,642),	X_MASK,      POWER6,	PPCNONE,	{BF, FRAp, FRBp}},
+ 
+ {"xscmpuqp",	X(63,644),      XBF_MASK,    PPCVSX3,	PPCNONE,	{BF, VA, VB}},
+Only in binutils-2.25.1/opcodes: ppc-opc.c.orig
+Only in binutils-2.25.1/opcodes: ppc-opc.c.rej

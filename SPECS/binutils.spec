@@ -18,23 +18,24 @@
 
 Summary: A GNU collection of binary utilities
 Name: %{?cross}binutils%{?_with_debug:-debug}
-Version: 2.23.52.0.1
-Release: 55%{?dist}
+Version: 2.25.1
+# Note: The Release string *must* be different from that used by any of the 
+# devtoolset binutils associated with this release.  That is why ".base"
+# has been appended here.  See BZ 1337617 for more details.
+Release: 22.base%{?dist}
 License: GPLv3+
 Group: Development/Tools
 URL: http://sources.redhat.com/binutils
 
 Source: ftp://ftp.kernel.org/pub/linux/devel/binutils/binutils-%{version}.tar.bz2
-# The ftp.kernel.org/pub/linux/devel/binutils/ page is (temporarily) unavailable
-# so we use the GNU site instead.
-# Source: http://ftp.gnu.org/gnu/binutils/binutils-%{version}.tar.bz2
 Source2: binutils-2.19.50.0.1-output-format.sed
+
 Patch01: binutils-2.20.51.0.2-libtool-lib64.patch
 Patch02: binutils-2.20.51.0.10-ppc64-pie.patch
 Patch03: binutils-2.20.51.0.2-ia64-lib64.patch
 Patch04: binutils-2.20.51.0.2-version.patch
 Patch05: binutils-2.20.51.0.2-set-long-long.patch
-Patch06: binutils-2.20.51.0.10-copy-osabi.patch
+# Patch06: binutils-2.20.51.0.10-copy-osabi.patch
 Patch07: binutils-2.20.51.0.10-sec-merge-emit.patch
 # Enable -zrelro by default: BZ #621983
 Patch08: binutils-2.22.52.0.1-relro-on-by-default.patch
@@ -42,123 +43,40 @@ Patch08: binutils-2.22.52.0.1-relro-on-by-default.patch
 Patch09: binutils-2.22.52.0.1-export-demangle.h.patch
 # Disable checks that config.h has been included before system headers.  BZ #845084
 Patch10: binutils-2.22.52.0.4-no-config-h-check.patch
-# Fix the creation of the index table in 64-bit thin archives.
-Patch11: binutils-2.23.52.0.1-64-bit-thin-archives.patch
-# Fix errors reported by version 5.0 of texinfo
-Patch12: binutils-2.23.52.0.1-as-doc-texinfo-fixes.patch
-# Revert HJ's patch for  PR15149.  This stops the reporting of weak DT_NEEDED symbols.
-Patch13: binutils-2.23.52.0.1-revert-pr15149.patch
-# Fix search paths for 64-bit linux aarch64 targets.
-Patch14: binutils-2.23.52.0.1-aarch64-lib64.patch
-# Check regular references without non-GOT references when building shared libraries.
-Patch15: binutils-2.23.52.0.1-check-regular-ifunc-refs.patch
-# Add support to BFD library for debug information held in alternate files.
-Patch16: binutils-2.23.52.0.1-dwz-alt-debuginfo.patch
-# Remainder of power8 support
-Patch17: binutils-rh731883.patch
-# Add support for TDB notes section
-Patch18: binutils-rh805115-1.patch
-# Fix length operands for cdzt, cxzt, czdt, czxt
-Patch19: binutils-rh805115-2.patch
-# Add AVX3, MPX and SHA ISA support
-Patch20: binutils-2.23.52.0.1-avx512-mpx-sha.patch
-# Add support for x86-64 -mcmodel=large -fpic TLS transitions.  BZ #994244
-Patch21: binutils-2.23.52.0.1-x86-64-mcmodel=large-tls.patch
-# Avoid bogus -Wuninitialized problem when building with -O3
-Patch22: binutils-rh1048848.patch
-# Avoids bogus DT_NEEDED entries
-Patch23: binutils-rh1128280.patch
-# Missing PPC opcodes
-Patch24: binutils-rh1090618.patch
-# Fixes PPC kernel failure
-Patch25: binutils-rh1130479.patch
-# Add support for Intel AVX-512VL, AVX-512BW, AVX-512DQ and SGX
-Patch26: binutils-2.23.52.0.1-avx512vlbwdq-sgx.patch
-# Change PPC commonpagesize to 64k
-Patch27: binutils-ppc-pgsz.patch
-# RELRO fixes
-Patch28: binutils-rh1200138-1.patch
-Patch29: binutils-rh1200138-2.patch
-# Fix to PIE support on s390
-Patch30: binutils-rh872148.patch
 # Enable RELRO on AArch64
-Patch31: binutils-rh1203449.patch
-# Improve RELRO on PPC64
-Patch32: binutils-rh1175624.patch
+Patch11: binutils-rh1203449.patch
+# Fix a seg-fault in readelf parsing a corrupt binary.
+Patch12: binutils-rh1260158.patch
+# Update s390x linker test case to match latest objdump output.
+Patch13: binutils-rh1300734.patch
+# Improve AArch64 *_NC relocs so that they issue more helpful warning messages when they overflow.
+Patch14: binutils-2.25.1-aarch64-overflow-warnings.patch
+Patch15: binutils-2.25-aarch64-pr18668.patch
+# Set the default page size (for AArch64) to 0x10000
+Patch16: binutils-2.25.1-aarch64-pagesize.patch
+# Ignore duplicate FDE entries
+Patch17: binutils-rh1300603.patch
+# Add support for Intel Memory Protection Key instructions.
+Patch18: binutils-rh1304451.patch
+# Fix linker testsuite failures for PPC64.
+Patch19: binutils-rh1312876.patch
+# Enhance the location of separate debug info files
+Patch20: binutils-2.23.52.0.1-find-separate-debug-file.patch
+# Add support for the Zepplin x86 variant.
+Patch21: binutils-2.25.1-x86-Zepplin.patch
+Patch22: binutils-2.25.1-power9.patch
+Patch23: binutils-2.25.1-x86-mwaitx.patch
+# Close a memory leak in ar.
+Patch24: binutils-rh1162655.patch
+# Add support for the .arch_extension pseudo op to the AArch64 port of gas.
+Patch25: binutils-2.25.1-aarch64-arch-extension.patch
+# Add support for the Z13 extensions to IBM's S390 architecture
+Patch26: binutils-2.25.1-s390-z13.patch
 
-Patch100: binutils-rh1066712.patch
-Patch101: binutils-rh1075827.patch
-Patch102: binutils-aa64-tls-relax-gdesc-ie.patch
-
-Patch110: binutils-aa64-elf_backend_can_gc_sections.patch
-Patch111: binutils-aa64-elf_backend_default_execstack.patch
-Patch112: binutils-aa64-emit-DF_STATIC_TLS-when-relaxing-to-ie.patch
-Patch113: binutils-aa64-increase-commonpagesize-to-64k.patch
-Patch114: binutils-aa64-fix-placement-of-DYNAMIC.patch
-Patch115: binutils-aa64-fix-creation-of-_got.patch
-Patch116: binutils-aa64-full-sysreg-range.patch
-Patch117: binutils-aa64-ifunc.patch
-Patch118: binutils-aa64-gas-movi.patch
-Patch119: binutils-aa64-dwarf2.patch
-Patch120: binutils-rh1179810.patch
-Patch121: binutils-rh1182111.patch
-
-# ppc64 little endian support
-Patch201: binutils-ppc64le-1.patch
-Patch202: binutils-ppc64le-2.patch
-Patch203: binutils-ppc64le-3.patch
-Patch204: binutils-ppc64le-4.patch
-Patch205: binutils-ppc64le-5.patch
-Patch206: binutils-ppc64le-6.patch
-Patch207: binutils-ppc64le-7.patch
-Patch208: binutils-ppc64le-8.patch
-Patch209: binutils-ppc64le-9.patch
-Patch210: binutils-ppc64le-10.patch
-Patch211: binutils-ppc64le-11.patch
-Patch212: binutils-rh1194164.patch
-
-Patch300: binutils-rh1182153.patch
-# Undo unnecessary and problematic Gold changes applied in
-# binutils-ppc64le-1.patch above (Gold isn't built on ppc64le).
-Patch301: binutils-ppc64le-1.1.patch
-
-# Enable conflicting changes to BFD for powerpc only via #ifdefs.
-Patch302: bfd-ppc64le.patch
-# Bug 1172766 - ppc64: segv in libbfd
-Patch303: binutils-rh1172766.patch
-
-# Fixes minor testsuite issues after PPC64 merge
-Patch304: binutils-rh1183838.patch
-
-# Tweak for 1172766 ppc64: segv in libbfd.
-Patch305: binutils-rh1172766-1.patch
-
-# Fix segfault building libhugetlbfs when bogus 
-# max-page-size is passed to ld.
-Patch306: binutils-rh1203449-2.patch
-
-# Don't discard stap probe note sections on aarch64
-Patch307: binutils-rh1225091.patch
-
-# Fixes ld crash with -oformat binary
-Patch308: binutils-rh1226864.patch
-
-# Avoid reading beyond function boundary when disassembling
-Patch309: binutils-rh1060282.patch
-
-# Patches related to BZ 1168302 - security flaws in the BFD
-# library:
-Patch400: binutils-rh1157276.patch
-Patch401: binutils-rh1162594.patch
-Patch402: binutils-rh1162607.patch
-Patch403: binutils-rh1162621.patch
-Patch404: binutils-rh1162655.patch
-Patch405: binutils-rh1162666.patch
-
-# Fix incorrectly generated ELF binaries and DSOs
-Patch406: binutils-rh1247126.patch
-# AArch64: Create GOT entries for local symbols: BZ #1238783
-Patch407: binutils-2.23.52.0.1-aarch64-local-GOT-entries.patch
+# A *temporary* patch to disable checking for valid PowerPC64 TLBIE
+# instructions.  This allows the PPC kernel to be built.  See:
+# https://sourceware.org/ml/binutils/2015-05/msg00133.html
+Patch999: binutils-SUPPRESS-PPC-TLBIE-CHECK.patch
 
 Provides: bundled(libiberty)
 
@@ -258,52 +176,16 @@ using libelf instead of BFD.
 %patch03 -p0 -b .ia64-lib64~
 %endif
 %endif
-%patch04 -p0 -b .version~
+%patch04 -p1 -b .version~
 %patch05 -p0 -b .set-long-long~
-%patch06 -p0 -b .copy-osabi~
+# %patch06 -p0 -b .copy-osabi~
 %patch07 -p0 -b .sec-merge-emit~
 %if 0%{?fedora} >= 18 || 0%{?rhel} >= 7
 %patch08 -p0 -b .relro~
 %endif
 %patch09 -p0 -b .export-demangle-h~
 %patch10 -p0 -b .no-config-h-check~
-%patch11 -p0 -b .64bit-thin-archives~
-%patch12 -p0 -b .gas-texinfo~
-%patch13 -p0 -b .revert-pr15149~
-%patch14 -p0 -b .aarch64-lib64~
-%patch15 -p0 -b .check-ifunc~
-%patch16 -p0 -b .dwz~
-%patch17 -p1 -b .power8~
-%patch18 -p1 -b .tdb~
-%patch19 -p1 -b .s390~
-%patch20 -p0 -b .avx512-mpx-sha~
-%patch21 -p0 -b .x86-64-mcmodel=large-tls~
-%patch22 -p1 -b .uninit~
-%patch23 -p1 -b .soname~
-%patch24 -p1 -b .ppcopcodes~
-%patch25 -p1 -b .symmerge~
-%patch26 -p0 -b .avx512-isa~
-%patch27 -p1 -b .ppc-pgsz~
-%patch28 -p1 -b .relro1~
-%patch29 -p1 -b .relro2~
-%patch30 -p1 -b .s390pie~
-%patch31 -p0 -b .aarch64relro~
-%patch32 -p1 -b .ppc64relro~
-%patch100 -p0 -b .aarch64-fpintfix~
-%patch101 -p1 -b .aarch64-101~
-%patch102 -p1 -b .aarch64-102~
-%patch110 -p1 -b .aarch64-110~
-%patch111 -p1 -b .aarch64-111~
-%patch112 -p1 -b .aarch64-112~
-%patch113 -p1 -b .aarch64-113~
-%patch114 -p1 -b .aarch64-114~
-%patch115 -p1 -b .aarch64-115~
-%patch116 -p1 -b .aarch64-116~
-%patch117 -p1 -b .aarch64-117~
-%patch118 -p1 -b .aarch64-118~
-%patch119 -p1 -b .aarch64-119~
-%patch120 -p1 -b .aarch64-120~
-%patch121 -p1 -b .aarch64-121~
+%patch11 -p0 -b .aarch64relro~
 
 # We cannot run autotools as there is an exact requirement of autoconf-2.59.
 
@@ -326,66 +208,26 @@ do
 done
 touch */configure
 
-%patch201 -p1
-%patch202 -p1
-%patch203 -p1
-%patch204 -p1
-%patch205 -p1
-%patch206 -p1
-%patch207 -p1
-%patch208 -p1
-%patch209 -p1
-%patch210 -p1
-%patch211 -p1
-%patch212 -p1
+%patch12 -p1
+%patch13 -p1
+%patch14 -p1
+%patch15 -p1
+%patch16 -p1
+%patch17 -p1
+%patch18 -p1
+%patch19 -p1
+%patch20 -p1
 
-%patch300 -p1
-# Revert bad changes made in patch201.
-%patch301 -p1
-# Guard BFD changes with __PPC__.
-%patch302 -p1
+%patch21 -p1
+%patch22 -p1
+%patch23 -p1
+%patch24 -p1
+%patch25 -p1
+%patch26 -p1
 
-# Fix segfault in bfd for ppc64
-%patch303 -p1
+# TEMPORARY patch.
+%patch999 -p1
 
-# Minor testsuite issues after PPC merge
-%patch304 -p1
-
-# Tweak for 1172766 ppc64: segv in libbfd.
-%patch305 -p1
-
-# Fix segfault building libhugetlbfs when bogus 
-# max-page-size is passed to ld.
-%patch306 -p1
-
-# Don't discard stap probe note sections on aarch64
-%patch307 -p1
-
-# Fix ld segfault with --oformat binary
-%patch308 -p1
-
-# Avoid reading beyond function boundary when disassembling
-%patch309 -p1
-
-# Change the strings program to default to -a.
-# Fix parsing corrupt ELF group sections.
-%patch400 -p1
-# Fix parsing corrupt PE binaries.
-%patch401 -p1
-# Fix parsing corrupt iHex files.
-%patch402 -p1
-# Fix parsing corrupt SREC files.
-%patch403 -p1
-# Fix directory traversal vulnerability.
-%patch404 -p1
-# Fix memory corruption parsing a fuzzed archive.
-%patch405 -p1
-
-# Fix incorrectly generated ELF binaries and DSOs.
-%patch406 -p1
-
-# Fix generation of GOT entries for local symbols on AArch64
-%patch407 -p1 -b .aarch64-local-GOT
 
 %ifarch %{power64} ppc64le
 %define _target_platform %{_arch}-%{_vendor}-%{_host_os}
@@ -603,8 +445,6 @@ then
   /sbin/install-info --info-dir=%{_infodir} %{_infodir}/binutils.info.gz
   /sbin/install-info --info-dir=%{_infodir} %{_infodir}/gprof.info.gz
   /sbin/install-info --info-dir=%{_infodir} %{_infodir}/ld.info.gz
-  /sbin/install-info --info-dir=%{_infodir} %{_infodir}/standards.info.gz
-  /sbin/install-info --info-dir=%{_infodir} %{_infodir}/configure.info.gz
 fi
 %endif # %{isnative}
 exit 0
@@ -624,8 +464,6 @@ if [ $1 = 0 ]; then
     /sbin/install-info --delete --info-dir=%{_infodir} %{_infodir}/binutils.info.gz
     /sbin/install-info --delete --info-dir=%{_infodir} %{_infodir}/gprof.info.gz
     /sbin/install-info --delete --info-dir=%{_infodir} %{_infodir}/ld.info.gz
-    /sbin/install-info --delete --info-dir=%{_infodir} %{_infodir}/standards.info.gz
-    /sbin/install-info --delete --info-dir=%{_infodir} %{_infodir}/configure.info.gz
   fi
 fi
 %endif
@@ -667,6 +505,109 @@ exit 0
 %endif # %{isnative}
 
 %changelog
+* Mon Aug 08 2016 Nick Clifton <nickc@redhat.com> 2.25.1-22-base
+- Fix date format bug in changelog which was preventing package build.
+
+* Mon Aug 08 2016 Nick Clifton <nickc@redhat.com> 2.25.1-21-base
+- Add support for Z13 extensions to IBMs s390 architecture.
+  (#1364516)
+
+* Fri Jun 24 2016 Nick Clifton <nickc@redhat.com> 2.25.1-20-base
+- Import new PPC ISA 3.0 patch from FSF binutils.
+  (#1341730)
+
+* Mon Jun 13 2016 Nick Clifton <nickc@redhat.com> 2.25.1-19-base
+- Add support for the .arch_extension pseudo-op to the AArch64 port of GAS.
+  (#1276755)
+
+* Mon Jun 13 2016 Nick Clifton <nickc@redhat.com> 2.25.1-18-base
+- Update patch to fix AArch64 stub generation.
+  (#1243559)
+
+* Thu Jun 02 2016 Nick Clifton <nickc@redhat.com> 2.25.1-17-base
+- Close memory leak in "ar" archiver program.
+  (#1162655)
+- Retire the copy-osabi patch.
+  (#1252066)
+
+* Thu Jun 02 2016 Nick Clifton <nickc@redhat.com> 2.25.1-16-base
+- Version bump to allow adding  1300543 to the errata.
+  (#1300543)
+    
+* Wed Jun 01 2016 Nick Clifton <nickc@redhat.com> 2.25.1-15-base
+- Extend Power9 patch to add new ISA 3.0 instructions.
+  (#1341730)
+    
+* Wed May 25 2016 Nick Clifton <nickc@redhat.com> 2.25.1-14-base
+- Extend Release string to include ".base" thus ensuring that it
+  will not collide with a DTS release which might otherwise have
+  the same name.
+  (#1337617)
+
+* Mon May 23 2016 Nick Clifton <nickc@redhat.com> 2.25.1-13
+- Add support for Zeppelin x86 extensions.
+- Add support for the AMD MWAITX extension.
+- Add support for the PowerPC Power9 architecture.
+- Remove spurious binutils document references.
+  (#1335313)
+  (#1335684)
+  (#1333305)
+
+* Wed Apr 13 2016 Nick Clifton <nickc@redhat.com> 2.25.1-10
+- Allow the BFD library to locate debug info files below the /usr/lib/debug directory.
+  (#1311352)
+
+* Mon Apr 11 2016 Nick Clifton <nickc@redhat.com> 2.25.1-9
+- Housekeeping: Delete unused patches.  Renumber existing patches.
+
+* Tue Mar 01 2016 Nick Clifton <nickc@redhat.com> 2.25.1-8
+- Fix PowerPC gas and ld testsuite failures.
+  (#1312876)
+
+* Tue Feb 23 2016 Nick Clifton <nickc@redhat.com> 2.25.1-7
+- Extend fix for AArch64 call veneers.
+  (#1243559)
+
+* Wed Feb 17 2016 Nick Clifton <nickc@redhat.com> 2.25.1-6
+- Add support for Intel Memory Protection Key instructions.
+  (#1304451)
+
+* Mon Feb 08 2016 Nick Clifton <nickc@redhat.com> 2.25.1-4
+- Improve warning message for overflowing AArch64 relocs.
+- Import patch to fix PR18668.
+- Ignore warning messages about duplicate FDE entries
+  (#1300543)
+  (#1300603)
+  (#1285614)
+  (#1243559)
+
+* Fri Jan 29 2016 Nick Clifton <nickc@redhat.com> 2.25.1-3
+- Experimental rebase on FSF 2.25.1 sources.
+  (#1341730)
+- Retire: patch11, patch12, patch13, patch14, patch15,
+  patch16, patch17, patch18, patch19, patch20, patch21,
+  patch22, patch23, patch24, patch25, patch26, patch27,
+  patch28, patch29, patch30, patch32, patch100, patch101,
+  patch102, patch110, patch111, patch112, patch113, patch114,
+  patch115, patch116, patch117, patch118, patch119, patch120,
+  patch121, patch201, patch202, patch203, patch204, patch205,
+  patch206, patch207, patch208, patch209, patch210, patch211,
+  patch212, patch300, patch301, patch302, patch303, patch304,
+  patch305, patch306, patch307, patch308, patch309, patch400,
+  patch401, patch402, patch403, patch404, patch405, patch406,
+  patch407, patch501
+- Add patch to suppress checking of PPC64 TLBIE instruction.  [TEMPORARY]
+- Add fix for FSF PR 18879
+- Add fix for s390x linker testsuite failure.
+  (#1276755)
+  (#1260158)
+  (#1300734)
+  (#1288068)
+
+* Thu Jan 14 2016 Nick Clifton <nickc@redhat.com> 2.23.52.0.1-56
+- Remove __PPC__ checks from BFD library.
+  (#1261016)
+
 * Tue Oct 13 2015 Nick Clifton <nickc@redhat.com> 2.23.52.0.1-55
 - Add missing delta to patch that fixes parsing corrupted archives.
   (#1162666)
@@ -711,7 +652,7 @@ exit 0
   elf_elfheader.  (#1226864)
 
 * Thu May 28 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-43
-- Don't discard stap probe note sections on aarch64 (#1225091)
+- Do not discard stap probe note sections on aarch64 (#1225091)
 
 * Tue May 26 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-42
 - Clamp maxpagesize at 1 (rather than 0) to avoid segfaults
@@ -736,7 +677,7 @@ exit 0
 
 * Mon May 4 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-37
 - Andreas's backport of z13 and dependent fixes for s390,
-  including tesetcase fix from Apr 27, 2015.  (#1182153)
+  including tesetcase fix from Apr 27, 2015.'  (#1182153)
 
 * Tue Apr 7 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-35
 - Fixup testsuite for AArch64 (#1182111)
@@ -746,7 +687,7 @@ exit 0
 - Do not install windmc(1) man page (#850832)
 
 * Fri Mar 27 2015 Jeff Law <law@redhat.com> - 2.23.52.0.1-33
-- Don't replace R_390_TLS_LE{32,64} with R_390_TLS_TPOFF for PIE
+- Do not replace R_390_TLS_LE{32,64} with R_390_TLS_TPOFF for PIE
   (#872148)
 - Enable relro by default for arm and aarch64 (#1203449)
 - Backport 3 RELRO improvements for ppc64/ppc64le from upstream
@@ -775,7 +716,7 @@ exit 0
   (#1140375)
 
 * Wed Aug 27 2014 Jeff Law <law@redhat.com> - 2.23.52.0.1-25.9
-Revert this change (handled elsewhere): 
+  Revert this change (handled elsewhere): 
 - Additional patch from Alan to fix problems with ld --defsym.
   (#1132732)
 

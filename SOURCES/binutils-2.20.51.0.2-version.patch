@@ -1,61 +1,44 @@
-diff -rcp ../binutils-2.20.51.0.7.original/bfd/Makefile.am ./bfd/Makefile.am
-*** ../binutils-2.20.51.0.7.original/bfd/Makefile.am	2010-04-08 15:07:55.000000000 +0100
---- ./bfd/Makefile.am	2010-04-08 15:23:14.000000000 +0100
-*************** bfdver.h: $(srcdir)/version.h $(srcdir)/
-*** 953,964 ****
-  	report_bugs_to="\"$(REPORT_BUGS_TO)\"" ;\
-  	if test "x$(RELEASE)" = x ; then \
-  	  bfd_version_date=`sed -n -e 's/.*DATE //p' < $(srcdir)/version.h` ;\
-! 	  bfd_version_string="\"$(VERSION).$${bfd_version_date}\"" ;\
-! 	  bfd_soversion="$(VERSION).$${bfd_version_date}" ;\
-  	fi ;\
-  	sed -e "s,@bfd_version@,$$bfd_version," \
-  	    -e "s,@bfd_version_string@,$$bfd_version_string," \
-! 	    -e "s,@bfd_version_package@,$$bfd_version_package," \
-  	    -e "s,@report_bugs_to@,$$report_bugs_to," \
-  	    < $(srcdir)/version.h > $@; \
-  	echo "$${bfd_soversion}" > libtool-soversion
---- 953,964 ----
-  	report_bugs_to="\"$(REPORT_BUGS_TO)\"" ;\
-  	if test "x$(RELEASE)" = x ; then \
-  	  bfd_version_date=`sed -n -e 's/.*DATE //p' < $(srcdir)/version.h` ;\
-! 	  bfd_version_string="\"$(VERSION)-%{release} $${bfd_version_date}\"" ;\
-! 	  bfd_soversion="$(VERSION)-%{release}" ;\
-  	fi ;\
-  	sed -e "s,@bfd_version@,$$bfd_version," \
-  	    -e "s,@bfd_version_string@,$$bfd_version_string," \
-! 	    -e "s,@bfd_version_package@,\"version \"," \
-  	    -e "s,@report_bugs_to@,$$report_bugs_to," \
-  	    < $(srcdir)/version.h > $@; \
-  	echo "$${bfd_soversion}" > libtool-soversion
-diff -rcp ../binutils-2.20.51.0.7.original/bfd/Makefile.in ./bfd/Makefile.in
-*** ../binutils-2.20.51.0.7.original/bfd/Makefile.in	2010-04-08 15:07:55.000000000 +0100
---- ./bfd/Makefile.in	2010-04-08 15:23:14.000000000 +0100
-*************** bfdver.h: $(srcdir)/version.h $(srcdir)/
-*** 1982,1993 ****
-  	report_bugs_to="\"$(REPORT_BUGS_TO)\"" ;\
-  	if test "x$(RELEASE)" = x ; then \
-  	  bfd_version_date=`sed -n -e 's/.*DATE //p' < $(srcdir)/version.h` ;\
-! 	  bfd_version_string="\"$(VERSION).$${bfd_version_date}\"" ;\
-! 	  bfd_soversion="$(VERSION).$${bfd_version_date}" ;\
-  	fi ;\
-  	sed -e "s,@bfd_version@,$$bfd_version," \
-  	    -e "s,@bfd_version_string@,$$bfd_version_string," \
-! 	    -e "s,@bfd_version_package@,$$bfd_version_package," \
-  	    -e "s,@report_bugs_to@,$$report_bugs_to," \
-  	    < $(srcdir)/version.h > $@; \
-  	echo "$${bfd_soversion}" > libtool-soversion
---- 1982,1993 ----
-  	report_bugs_to="\"$(REPORT_BUGS_TO)\"" ;\
-  	if test "x$(RELEASE)" = x ; then \
-  	  bfd_version_date=`sed -n -e 's/.*DATE //p' < $(srcdir)/version.h` ;\
-! 	  bfd_version_string="\"$(VERSION)-%{release} $${bfd_version_date}\"" ;\
-! 	  bfd_soversion="$(VERSION)-%{release}" ;\
-  	fi ;\
-  	sed -e "s,@bfd_version@,$$bfd_version," \
-  	    -e "s,@bfd_version_string@,$$bfd_version_string," \
-! 	    -e "s,@bfd_version_package@,\"version \"," \
-  	    -e "s,@report_bugs_to@,$$report_bugs_to," \
-  	    < $(srcdir)/version.h > $@; \
-  	echo "$${bfd_soversion}" > libtool-soversion
-
+--- binutils-2.25.1.orig/bfd/Makefile.am	2016-01-26 10:26:30.112472163 +0000
++++ binutils-2.25.1/bfd/Makefile.am	2016-01-26 10:33:42.062113771 +0000
+@@ -1025,8 +1025,8 @@ DISTCLEANFILES = $(BUILD_CFILES) $(BUILD
+ bfdver.h: $(srcdir)/version.h $(srcdir)/development.sh $(srcdir)/Makefile.in
+ 	@echo "creating $@"
+ 	@bfd_version=`echo "$(VERSION)" | sed -e 's/\([^\.]*\)\.*\([^\.]*\)\.*\([^\.]*\)\.*\([^\.]*\)\.*\([^\.]*\).*/\1.00\2.00\3.00\4.00\5/' -e 's/\([^\.]*\)\..*\(..\)\..*\(..\)\..*\(..\)\..*\(..\)$$/\1\2\3\4\5/'` ;\
+-	bfd_version_string="\"$(VERSION)\"" ;\
+-	bfd_soversion="$(VERSION)" ;\
++	bfd_version_string="\"$(VERSION)-%{release} $${bfd_version_date}\"" ;\
++	bfd_soversion="$(VERSION)-%{release}" ;\
+ 	bfd_version_package="\"$(PKGVERSION)\"" ;\
+ 	report_bugs_to="\"$(REPORT_BUGS_TO)\"" ;\
+ 	. $(srcdir)/development.sh ;\
+@@ -1037,7 +1037,7 @@ bfdver.h: $(srcdir)/version.h $(srcdir)/
+ 	fi ;\
+ 	sed -e "s,@bfd_version@,$$bfd_version," \
+ 	    -e "s,@bfd_version_string@,$$bfd_version_string," \
+-	    -e "s,@bfd_version_package@,$$bfd_version_package," \
++	    -e "s,@bfd_version_package@,\"version \"," \
+ 	    -e "s,@report_bugs_to@,$$report_bugs_to," \
+ 	    < $(srcdir)/version.h > $@; \
+ 	echo "$${bfd_soversion}" > libtool-soversion
+--- binutils-2.25.1.orig/bfd/Makefile.in	2016-01-26 10:26:30.112472163 +0000
++++ binutils-2.25.1/bfd/Makefile.in	2016-01-26 10:34:15.945320255 +0000
+@@ -2085,8 +2085,8 @@ stmp-lcoff-h: $(LIBCOFF_H_FILES)
+ bfdver.h: $(srcdir)/version.h $(srcdir)/development.sh $(srcdir)/Makefile.in
+ 	@echo "creating $@"
+ 	@bfd_version=`echo "$(VERSION)" | sed -e 's/\([^\.]*\)\.*\([^\.]*\)\.*\([^\.]*\)\.*\([^\.]*\)\.*\([^\.]*\).*/\1.00\2.00\3.00\4.00\5/' -e 's/\([^\.]*\)\..*\(..\)\..*\(..\)\..*\(..\)\..*\(..\)$$/\1\2\3\4\5/'` ;\
+-	bfd_version_string="\"$(VERSION)\"" ;\
+-	bfd_soversion="$(VERSION)" ;\
++	bfd_version_string="\"$(VERSION)-%{release} $${bfd_version_date}\"" ;\
++	bfd_soversion="$(VERSION)-%{release}" ;\
+ 	bfd_version_package="\"$(PKGVERSION)\"" ;\
+ 	report_bugs_to="\"$(REPORT_BUGS_TO)\"" ;\
+ 	. $(srcdir)/development.sh ;\
+@@ -2097,7 +2097,7 @@ bfdver.h: $(srcdir)/version.h $(srcdir)/
+ 	fi ;\
+ 	sed -e "s,@bfd_version@,$$bfd_version," \
+ 	    -e "s,@bfd_version_string@,$$bfd_version_string," \
+-	    -e "s,@bfd_version_package@,$$bfd_version_package," \
++	    -e "s,@bfd_version_package@,\"version \"," \
+ 	    -e "s,@report_bugs_to@,$$report_bugs_to," \
+ 	    < $(srcdir)/version.h > $@; \
+ 	echo "$${bfd_soversion}" > libtool-soversion
