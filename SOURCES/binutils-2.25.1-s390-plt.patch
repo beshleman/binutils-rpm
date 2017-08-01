@@ -1,0 +1,110 @@
+diff -rup binutils.orig/bfd/elf32-s390.c binutils-2.25.1/bfd/elf32-s390.c
+--- binutils.orig/bfd/elf32-s390.c	2017-05-09 11:06:34.741540539 +0100
++++ binutils-2.25.1/bfd/elf32-s390.c	2017-05-09 11:08:21.140239839 +0100
+@@ -2728,7 +2728,7 @@ elf_s390_relocate_section (bfd *output_b
+ 	      && s390_is_ifunc_symbol_p (h)
+ 	      && h->def_regular)
+ 	    {
+-	      if (!info->shared || !h->non_got_ref)
++	      if (!info->shared)
+ 		{
+ 		  /* For a non-shared object STT_GNU_IFUNC symbol must
+ 		     go through PLT.  */
+diff -rup binutils.orig/bfd/elf64-s390.c binutils-2.25.1/bfd/elf64-s390.c
+--- binutils.orig/bfd/elf64-s390.c	2017-05-09 11:06:34.711540906 +0100
++++ binutils-2.25.1/bfd/elf64-s390.c	2017-05-09 11:09:23.495477558 +0100
+@@ -2693,10 +2693,11 @@ elf_s390_relocate_section (bfd *output_b
+ 	      && s390_is_ifunc_symbol_p (h)
+ 	      && h->def_regular)
+ 	    {
+-	      if (!info->shared || !h->non_got_ref)
++	      if (!info->shared)
+ 		{
+-		  /* For a non-shared object STT_GNU_IFUNC symbol must
+-		     go through PLT.  */
++		  /* For a non-shared object the symbol will not
++		     change.  Hence we can write the address of the
++		     target IPLT slot now.  */
+ 		  relocation = (htab->elf.iplt->output_section->vma
+ 				+ htab->elf.iplt->output_offset
+ 				+ h ->plt.offset);
+diff -rup binutils.orig/bfd/elf-s390-common.c binutils-2.25.1/bfd/elf-s390-common.c
+--- binutils.orig/bfd/elf-s390-common.c	2017-05-09 11:06:34.715540857 +0100
++++ binutils-2.25.1/bfd/elf-s390-common.c	2017-05-09 11:07:34.079815141 +0100
+@@ -159,9 +159,7 @@ keep:
+       h->type = STT_FUNC;
+     }
+ 
+-  /* We need dynamic relocation for STT_GNU_IFUNC symbol only when
+-     there is a non-GOT reference in a shared object.  */
+-  if (!info->shared || !h->non_got_ref)
++  if (!info->shared)
+     *head = NULL;
+ 
+   /* Finally, allocate space.  */
+diff -rupN binutils.orig/ld/testsuite/ld-s390/pltoffset-1.dd binutils-2.25.1/ld/testsuite/ld-s390/pltoffset-1.dd
+--- binutils.orig/ld/testsuite/ld-s390/pltoffset-1.dd	1970-01-01 01:00:00.000000000 +0100
++++ binutils-2.25.1/ld/testsuite/ld-s390/pltoffset-1.dd	2017-05-09 11:16:02.644598050 +0100
+@@ -0,0 +1,8 @@
++tmpdir/pltoffset-1:     file format elf64-s390
++
++Disassembly of section .text:
++
++.* <.text>:
++.*:	00 00 00 00 [	 ]*.long	0x00000000
++.*:	e3 10 f0 38 00 24 [	 ]*stg	%r1,56\(%r15\)
++.*:	c0 10 00 00 00 27 [	 ]*larl	%r1,58 <_GLOBAL_OFFSET_TABLE_>
+diff -rupN binutils.orig/ld/testsuite/ld-s390/pltoffset-1.ld binutils-2.25.1/ld/testsuite/ld-s390/pltoffset-1.ld
+--- binutils.orig/ld/testsuite/ld-s390/pltoffset-1.ld	1970-01-01 01:00:00.000000000 +0100
++++ binutils-2.25.1/ld/testsuite/ld-s390/pltoffset-1.ld	2017-05-09 11:16:02.644598050 +0100
+@@ -0,0 +1,34 @@
++SECTIONS
++{
++	.text : {
++		. = . + 4;
++		*(.plt)
++	}
++	.test : {
++		*(.text)
++		*(.got)
++		*(.got.plt)
++		*(.rodata)
++		*(.eh_frame)
++		*(.interp)
++		*(.data)
++		*(.bss)
++	}
++
++	/* For old binutils which otherwise complain about nonrepresentable
++	   sections.  */
++	.dynsym : { *(.dynsym) }
++	.gnu.version : { *(.gnu.version) }
++
++	/DISCARD/ : {
++		*(.rela.text)
++		*(.rela.plt)
++		*(.rela.got.plt)
++		*(.rela.data)
++		*(.rela.rodata)
++		*(.rela.bss)
++		*(.rela.text)
++		*(.comment*)
++		*(.note*)
++	}
++}
+diff -rupN binutils.orig/ld/testsuite/ld-s390/pltoffset-1.s binutils-2.25.1/ld/testsuite/ld-s390/pltoffset-1.s
+--- binutils.orig/ld/testsuite/ld-s390/pltoffset-1.s	1970-01-01 01:00:00.000000000 +0100
++++ binutils-2.25.1/ld/testsuite/ld-s390/pltoffset-1.s	2017-05-09 11:16:02.645598038 +0100
+@@ -0,0 +1,12 @@
++	.file	"hello.c"
++.text
++	.align	8
++.globl main
++	.type	main, @function
++main:
++	brasl	%r5,foo@PLT
++	br	%r4
++	.size	main, .-main
++
++.globl foo
++foo:	.long	123

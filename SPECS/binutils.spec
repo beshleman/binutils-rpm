@@ -22,7 +22,7 @@ Version: 2.25.1
 # Note: The Release string *must* be different from that used by any of the 
 # devtoolset binutils associated with this release.  That is why ".base"
 # has been appended here.  See BZ 1337617 for more details.
-Release: 22.base%{?dist}
+Release: 31.base%{?dist}
 License: GPLv3+
 Group: Development/Tools
 URL: http://sources.redhat.com/binutils
@@ -72,6 +72,16 @@ Patch24: binutils-rh1162655.patch
 Patch25: binutils-2.25.1-aarch64-arch-extension.patch
 # Add support for the Z13 extensions to IBM's S390 architecture
 Patch26: binutils-2.25.1-s390-z13.patch
+# Make linking fail when PIE and non-PIE S390 binaries are combined.
+Patch27: binutils-rh1406430.patch
+# Stop GOLD from warning about references to hidden symbols in shared links.
+Patch28: binutils-2.25.1-gold-resolving-to-hidden-symbols.patch
+# Speed up combining source code listings with disassembly output.
+Patch29: binutils-2.25.1-objdump-speedup.patch
+# Fix counting PowerPC stubs.
+Patch30: binutils-2.25.1-ppc-stub-counting.patch
+# Fix s390 PLT entry allocation.
+Patch31: binutils-2.25.1-s390-plt.patch
 
 # A *temporary* patch to disable checking for valid PowerPC64 TLBIE
 # instructions.  This allows the PPC kernel to be built.  See:
@@ -224,6 +234,11 @@ touch */configure
 %patch24 -p1
 %patch25 -p1
 %patch26 -p1
+# %patch27 -p1
+%patch28 -p1
+%patch29 -p1
+%patch30 -p1
+%patch31 -p1
 
 # TEMPORARY patch.
 %patch999 -p1
@@ -505,6 +520,35 @@ exit 0
 %endif # %{isnative}
 
 %changelog
+* Tue May 09 2017 Nick Clifton <nickc@redhat.com> 2.25.1-31.base
+- Fix generation of PLT entries for s390 binaries.
+  (#1440168)
+
+* Thu May 04 2017 Nick Clifton <nickc@redhat.com> 2.25.1-28-base
+- Disable fix for 1406430.  It breaks building real s390 executables.
+  (#1447209)
+  (#1406430)
+
+* Thu Apr 27 2017 Nick Clifton <nickc@redhat.com> 2.25.1-27-base
+- Fix infnite loop in linker when counting PowerPC stubs.
+  (#1406498)
+
+* Mon Jan 16 2017 Nick Clifton <nickc@redhat.com> 2.25.1-26-base
+- Speed up displaying disassembly when mixed with source code.
+  (#1311352)
+
+* Mon Jan 16 2017 Nick Clifton <nickc@redhat.com> 2.25.1-25-base
+- Fix GOLD so that it will not warn about references to hidden symbols in shared objects.
+  (#1326710)
+
+* Fri Jan 06 2017 Nick Clifton <nickc@redhat.com> 2.25.1-24-base
+- Fix thinko in previous patch.
+  (#1406430)
+
+* Fri Jan 06 2017 Nick Clifton <nickc@redhat.com> 2.25.1-23-base
+- Add code to detect attempts to link PIE and non-PIE S390 binaries.
+  (#1406430)
+
 * Mon Aug 08 2016 Nick Clifton <nickc@redhat.com> 2.25.1-22-base
 - Fix date format bug in changelog which was preventing package build.
 
