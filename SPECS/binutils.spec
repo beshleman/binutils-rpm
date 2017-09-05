@@ -22,7 +22,7 @@ Version: 2.25.1
 # Note: The Release string *must* be different from that used by any of the 
 # devtoolset binutils associated with this release.  That is why ".base"
 # has been appended here.  See BZ 1337617 for more details.
-Release: 31.base%{?dist}
+Release: 32.base%{?dist}.1
 License: GPLv3+
 Group: Development/Tools
 URL: http://sources.redhat.com/binutils
@@ -82,6 +82,8 @@ Patch29: binutils-2.25.1-objdump-speedup.patch
 Patch30: binutils-2.25.1-ppc-stub-counting.patch
 # Fix s390 PLT entry allocation.
 Patch31: binutils-2.25.1-s390-plt.patch
+# Revert parts of patch29 that were preventing proper function name lookup.
+Patch32: binutils-2.25.1-remove-dwarf2-minmax.patch
 
 # A *temporary* patch to disable checking for valid PowerPC64 TLBIE
 # instructions.  This allows the PPC kernel to be built.  See:
@@ -239,8 +241,9 @@ touch */configure
 %patch29 -p1
 %patch30 -p1
 %patch31 -p1
+%patch32 -p1
 
-# TEMPORARY patch.
+# TEMPORARY patch - do not propogate to RHEL 8.
 %patch999 -p1
 
 
@@ -520,6 +523,14 @@ exit 0
 %endif # %{isnative}
 
 %changelog
+* Wed Aug 09 2017 Nick Clifton <nickc@redhat.com> 2.25.1-32.base.1
+- Revert part of the objdump speed up patch which was preventing proper function name lookup.
+  (#1479773)
+
+* Fri Jun 30 2017 Nick Clifton <nickc@redhat.com> 2.25.1-32.base
+- Revert part of the objdump speed up patch which was preventing proper function name lookup.
+  (#1465318)
+
 * Tue May 09 2017 Nick Clifton <nickc@redhat.com> 2.25.1-31.base
 - Fix generation of PLT entries for s390 binaries.
   (#1440168)
