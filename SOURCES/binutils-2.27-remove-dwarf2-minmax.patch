@@ -1,6 +1,5 @@
-diff -rup binutils.orig/bfd/dwarf2.c binutils-2.25.1/bfd/dwarf2.c
---- binutils.orig/bfd/dwarf2.c	2017-06-29 16:40:13.563084821 +0100
-+++ binutils-2.25.1/bfd/dwarf2.c	2017-06-30 08:15:33.634862399 +0100
+--- binutils.orig/bfd/dwarf2.c	2017-08-08 17:40:39.084385407 +0100
++++ binutils-2.27/bfd/dwarf2.c	2017-08-08 17:41:34.237754733 +0100
 @@ -215,9 +215,6 @@ struct comp_unit
    /* Linked list of the low and high address ranges contained in this
       compilation unit as specified in the compilation unit header.  */
@@ -30,7 +29,7 @@ diff -rup binutils.orig/bfd/dwarf2.c binutils-2.25.1/bfd/dwarf2.c
    /* Next see if we can cheaply extend an existing range.  */
    arange = first_arange;
    do
-@@ -3143,9 +3135,6 @@ comp_unit_contains_address (struct comp_
+@@ -3151,9 +3143,6 @@ comp_unit_contains_address (struct comp_
    if (unit->error)
      return FALSE;
  

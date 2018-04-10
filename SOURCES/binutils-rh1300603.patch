@@ -1,19 +1,20 @@
---- binutils-2.25.1.orig/bfd/elf-eh-frame.c	2016-02-10 13:48:48.202376358 +0000
-+++ binutils-2.25.1/bfd/elf-eh-frame.c	2016-02-10 13:54:05.549132194 +0000
-@@ -1861,7 +1861,15 @@ _bfd_elf_write_section_eh_frame_hdr (bfd
- 		  (_("%X%P: .eh_frame_hdr table[%u] FDE overflow.\n"), i);
- 	      bfd_put_32 (abfd, val, contents + EH_FRAME_HDR_SIZE + i * 8 + 8);
- 
--	      if (i != 0
-+	      if (i > 0
-+		  && hdr_info->array[i].initial_loc
-+		  == hdr_info->array[i-1].initial_loc
-+		  && hdr_info->array[i].range
-+		  == hdr_info->array[i - 1].range)
-+		/* Duplicate FDE entry.  We should probably discard it
-+		   but for now just ignore it.  */
-+		;
-+	      else if (i != 0
- 		  && (hdr_info->array[i].initial_loc
- 		      < (hdr_info->array[i - 1].initial_loc
- 			 + hdr_info->array[i - 1].range)))
+diff -rup binutils-2.27.orig/bfd/elf-eh-frame.c binutils-2.27/bfd/elf-eh-frame.c
+--- binutils-2.27.orig/bfd/elf-eh-frame.c	2017-01-16 17:27:46.411632857 +0000
++++ binutils-2.27/bfd/elf-eh-frame.c	2017-01-16 17:30:03.663437755 +0000
+@@ -2296,7 +2296,15 @@ write_dwarf_eh_frame_hdr (bfd *abfd, str
+ 		  != sec->output_section->vma + val))
+ 	    overflow = TRUE;
+ 	  bfd_put_32 (abfd, val, contents + EH_FRAME_HDR_SIZE + i * 8 + 8);
+-	  if (i != 0
++	  if (i > 0
++	      && hdr_info->u.dwarf.array[i].initial_loc
++	      == hdr_info->u.dwarf.array[i - 1].initial_loc
++	      && hdr_info->u.dwarf.array[i].range
++	      == hdr_info->u.dwarf.array[i - 1].range)
++	    /* Duplicate FDE entry.  We should probably discard it
++	       but for now just ignore it.  */
++	    ;
++	  else if (i != 0
+ 	      && (hdr_info->u.dwarf.array[i].initial_loc
+ 		  < (hdr_info->u.dwarf.array[i - 1].initial_loc
+ 		     + hdr_info->u.dwarf.array[i - 1].range)))

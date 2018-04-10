@@ -1,0 +1,43 @@
+--- binutils.orig/bfd/elf64-s390.c	2017-09-06 09:03:23.142216202 +0100
++++ binutils-2.27/bfd/elf64-s390.c	2017-09-06 09:11:05.209080947 +0100
+@@ -3895,8 +3895,13 @@ elf_s390_additional_program_headers (bfd
+ {
+   struct elf_s390_link_hash_table *htab;
+ 
+-  htab = elf_s390_hash_table (info);
+-  return htab->params->pgste;
++  if (info)
++    {
++      htab = elf_s390_hash_table (info);
++      if (htab)
++	return htab->params->pgste;
++    }
++  return 0;
+ }
+ 
+ 
+@@ -3909,6 +3914,9 @@ elf_s390_modify_segment_map (bfd *abfd A
+   struct elf_s390_link_hash_table *htab;
+   struct elf_segment_map *m, *pm = NULL;
+ 
++  if (!abfd || !info)
++    return TRUE;
++
+   htab = elf_s390_hash_table (info);
+   if (!htab->params->pgste)
+     return TRUE;
+@@ -3944,8 +3952,12 @@ bfd_elf_s390_set_options (struct bfd_lin
+ {
+   struct elf_s390_link_hash_table *htab;
+ 
+-  htab = elf_s390_hash_table (info);
+-  htab->params = params;
++  if (info)
++    {
++      htab = elf_s390_hash_table (info);
++      if (htab)
++	htab->params = params;
++    }
+ 
+   return TRUE;
+ }

@@ -92,15 +92,6 @@ diff -rup binutils.orig/bfd/dwarf2.c binutils-2.25.1/bfd/dwarf2.c
        bfd_set_error (bfd_error_bad_value);
        return FALSE;
      }
-@@ -1005,7 +1015,7 @@ read_attribute_value (struct attribute *
- 
-   if (info_ptr >= info_ptr_end)
-     {
--      (*_bfd_error_handler) (_("Dwarf Error: Info pointer extends beyond end of attributes"));
-+      _bfd_error_handler (_("Dwarf Error: Info pointer extends beyond end of attributes"));
-       bfd_set_error (bfd_error_bad_value);
-       return info_ptr;
-     }
 @@ -1157,8 +1167,8 @@ read_attribute_value (struct attribute *
        info_ptr = read_attribute_value (attr, form, unit, info_ptr, info_ptr_end);
        break;
@@ -718,15 +709,6 @@ diff -rup binutils.orig/bfd/dwarf2.c binutils-2.25.1/bfd/dwarf2.c
  	  BFD_ASSERT (!unit->cached);
  
  	  if (func->tag == DW_TAG_inlined_subroutine)
-@@ -2757,7 +2980,7 @@ parse_comp_unit (struct dwarf2_debug *st
- 
-   if (version != 2 && version != 3 && version != 4)
-     {
--      (*_bfd_error_handler)
-+      _bfd_error_handler
- 	(_("Dwarf Error: found dwarf version '%u', this reader"
- 	   " only handles version 2, 3 and 4 information."), version);
-       bfd_set_error (bfd_error_bad_value);
 @@ -2766,7 +2989,8 @@ parse_comp_unit (struct dwarf2_debug *st
  
    if (addr_size > sizeof (bfd_vma))
@@ -746,17 +728,6 @@ diff -rup binutils.orig/bfd/dwarf2.c binutils-2.25.1/bfd/dwarf2.c
  	("Dwarf Error: found address size '%u', this reader"
  	 " can only handle address sizes '2', '4' and '8'.", addr_size);
        bfd_set_error (bfd_error_bad_value);
-@@ -2802,8 +3026,8 @@ parse_comp_unit (struct dwarf2_debug *st
-   abbrev = lookup_abbrev (abbrev_number, abbrevs);
-   if (! abbrev)
-     {
--      (*_bfd_error_handler) (_("Dwarf Error: Could not find abbrev number %u."),
--			     abbrev_number);
-+      _bfd_error_handler (_("Dwarf Error: Could not find abbrev number %u."),
-+			  abbrev_number);
-       bfd_set_error (bfd_error_bad_value);
-       return 0;
-     }
 @@ -2845,7 +3069,7 @@ parse_comp_unit (struct dwarf2_debug *st
  	  low_pc = attr.u.val;
  	  /* If the compilation unit DIE has a DW_AT_low_pc attribute,

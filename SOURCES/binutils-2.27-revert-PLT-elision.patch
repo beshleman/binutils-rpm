@@ -1,0 +1,76 @@
+diff -rup binutils.orig/bfd/elf32-i386.c binutils-2.27/bfd/elf32-i386.c
+--- binutils.orig/bfd/elf32-i386.c	2017-05-17 11:22:32.393303573 +0100
++++ binutils-2.27/bfd/elf32-i386.c	2017-05-17 11:25:33.097138811 +0100
+@@ -2322,8 +2322,7 @@ do_size:
+       if (use_plt_got
+ 	  && h != NULL
+ 	  && h->plt.refcount > 0
+-	  && (((info->flags & DF_BIND_NOW) && !h->pointer_equality_needed)
+-	      || h->got.refcount > 0)
++	  && h->got.refcount > 0
+ 	  && htab->plt_got == NULL)
+ 	{
+ 	  /* Create the GOT procedure linkage table.  */
+@@ -2672,16 +2671,6 @@ elf_i386_allocate_dynrelocs (struct elf_
+ 	 if PLT is used.  */
+       eh->func_pointer_refcount = 0;
+ 
+-      if ((info->flags & DF_BIND_NOW) && !h->pointer_equality_needed)
+-	{
+-	  /* Don't use the regular PLT for DF_BIND_NOW. */
+-	  h->plt.offset = (bfd_vma) -1;
+-
+-	  /* Use the GOT PLT.  */
+-	  h->got.refcount = 1;
+-	  eh->plt_got.refcount = 1;
+-	}
+-
+       use_plt_got = eh->plt_got.refcount > 0;
+ 
+       /* Make sure this symbol is output as a dynamic symbol.
+diff -rup binutils.orig/bfd/elf64-x86-64.c binutils-2.27/bfd/elf64-x86-64.c
+--- binutils.orig/bfd/elf64-x86-64.c	2017-05-17 11:22:32.396303537 +0100
++++ binutils-2.27/bfd/elf64-x86-64.c	2017-05-17 11:26:00.250813521 +0100
+@@ -2722,8 +2722,7 @@ do_size:
+       if (use_plt_got
+ 	  && h != NULL
+ 	  && h->plt.refcount > 0
+-	  && (((info->flags & DF_BIND_NOW) && !h->pointer_equality_needed)
+-	      || h->got.refcount > 0)
++	  && h->got.refcount > 0
+ 	  && htab->plt_got == NULL)
+ 	{
+ 	  /* Create the GOT procedure linkage table.  */
+@@ -3094,16 +3093,6 @@ elf_x86_64_allocate_dynrelocs (struct el
+ 	 if PLT is used.  */
+       eh->func_pointer_refcount = 0;
+ 
+-      if ((info->flags & DF_BIND_NOW) && !h->pointer_equality_needed)
+-	{
+-	  /* Don't use the regular PLT for DF_BIND_NOW. */
+-	  h->plt.offset = (bfd_vma) -1;
+-
+-	  /* Use the GOT PLT.  */
+-	  h->got.refcount = 1;
+-	  eh->plt_got.refcount = 1;
+-	}
+-
+       use_plt_got = eh->plt_got.refcount > 0;
+ 
+       /* Make sure this symbol is output as a dynamic symbol.
+diff -rup binutils.orig/ld/testsuite/ld-i386/pr17689now.rd binutils-2.27/ld/testsuite/ld-i386/pr17689now.rd
+--- binutils.orig/ld/testsuite/ld-i386/pr17689now.rd	2017-05-17 11:22:32.677300171 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/pr17689now.rd	2017-05-17 11:39:36.097021963 +0100
+@@ -1,4 +1,3 @@
+-#failif
+ #...
+ [0-9a-f ]+R_386_JUMP_SLOT +0+.*
+ #...
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr17689now.rd binutils-2.27/ld/testsuite/ld-x86-64/pr17689now.rd
+--- binutils.orig/ld/testsuite/ld-x86-64/pr17689now.rd	2017-05-17 11:22:32.734299489 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr17689now.rd	2017-05-17 11:39:53.071818174 +0100
+@@ -1,4 +1,3 @@
+-#failif
+ #...
+ [0-9a-f ]+R_X86_64_JUMP_SLOT +0+ +.*
+ #...

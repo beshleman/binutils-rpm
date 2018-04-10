@@ -1,0 +1,1515 @@
+--- binutils.orig/gas/config/tc-i386.c	2017-10-25 12:52:19.977290474 +0100
++++ binutils-2.27/gas/config/tc-i386.c	2017-10-25 15:09:15.572415126 +0100
+@@ -10655,14 +10655,7 @@ i386_validate_fix (fixS *fixp)
+ 	    {
+ 	      if (!object_64bit)
+ 		abort ();
+-#if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
+-	      if (fixp->fx_tcbit2)
+-		fixp->fx_r_type = (fixp->fx_tcbit
+-				   ? BFD_RELOC_X86_64_REX_GOTPCRELX
+-				   : BFD_RELOC_X86_64_GOTPCRELX);
+-	      else
+-#endif
+-		fixp->fx_r_type = BFD_RELOC_X86_64_GOTPCREL;
++	      fixp->fx_r_type = BFD_RELOC_X86_64_GOTPCREL;
+ 	    }
+ 	  else
+ 	    {
+@@ -10674,14 +10667,6 @@ i386_validate_fix (fixS *fixp)
+ 	  fixp->fx_subsy = 0;
+ 	}
+     }
+-#if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
+-  else if (!object_64bit)
+-    {
+-      if (fixp->fx_r_type == BFD_RELOC_386_GOT32
+-	  && fixp->fx_tcbit2)
+-	fixp->fx_r_type = BFD_RELOC_386_GOT32X;
+-    }
+-#endif
+ }
+ 
+ arelent *
+diff -rup binutils.orig/gas/testsuite/gas/i386/got.d binutils-2.27/gas/testsuite/gas/i386/got.d
+--- binutils.orig/gas/testsuite/gas/i386/got.d	2017-10-25 12:52:20.045289685 +0100
++++ binutils-2.27/gas/testsuite/gas/i386/got.d	2017-10-25 15:19:02.458621604 +0100
+@@ -8,23 +8,23 @@ Disassembly of section .text:
+ 
+ 0+ <_start>:
+ [ 	]*[a-f0-9]+:	b8 00 00 00 00       	mov    \$0x0,%eax	1: R_386_GOT32	foo
+-[ 	]*[a-f0-9]+:	8b 05 00 00 00 00    	mov    0x0,%eax	7: R_386_GOT32X	foo
+-[ 	]*[a-f0-9]+:	8b 80 00 00 00 00    	mov    0x0\(%eax\),%eax	d: R_386_GOT32X	foo
++[ 	]*[a-f0-9]+:	8b 05 00 00 00 00    	mov    0x0,%eax	7: R_386_GOT32	foo
++[ 	]*[a-f0-9]+:	8b 80 00 00 00 00    	mov    0x0\(%eax\),%eax	d: R_386_GOT32	foo
+ [ 	]*[a-f0-9]+:	05 00 00 00 00       	add    \$0x0,%eax	12: R_386_GOT32	foo
+-[ 	]*[a-f0-9]+:	03 05 00 00 00 00    	add    0x0,%eax	18: R_386_GOT32X	foo
+-[ 	]*[a-f0-9]+:	03 80 00 00 00 00    	add    0x0\(%eax\),%eax	1e: R_386_GOT32X	foo
+-[ 	]*[a-f0-9]+:	ff 15 00 00 00 00    	call   \*0x0	24: R_386_GOT32X	foo
+-[ 	]*[a-f0-9]+:	ff 90 00 00 00 00    	call   \*0x0\(%eax\)	2a: R_386_GOT32X	foo
+-[ 	]*[a-f0-9]+:	ff 25 00 00 00 00    	jmp    \*0x0	30: R_386_GOT32X	foo
+-[ 	]*[a-f0-9]+:	ff a0 00 00 00 00    	jmp    \*0x0\(%eax\)	36: R_386_GOT32X	foo
++[ 	]*[a-f0-9]+:	03 05 00 00 00 00    	add    0x0,%eax	18: R_386_GOT32	foo
++[ 	]*[a-f0-9]+:	03 80 00 00 00 00    	add    0x0\(%eax\),%eax	1e: R_386_GOT32	foo
++[ 	]*[a-f0-9]+:	ff 15 00 00 00 00    	call   \*0x0	24: R_386_GOT32	foo
++[ 	]*[a-f0-9]+:	ff 90 00 00 00 00    	call   \*0x0\(%eax\)	2a: R_386_GOT32	foo
++[ 	]*[a-f0-9]+:	ff 25 00 00 00 00    	jmp    \*0x0	30: R_386_GOT32	foo
++[ 	]*[a-f0-9]+:	ff a0 00 00 00 00    	jmp    \*0x0\(%eax\)	36: R_386_GOT32	foo
+ [ 	]*[a-f0-9]+:	b8 00 00 00 00       	mov    \$0x0,%eax	3b: R_386_GOT32	foo
+-[ 	]*[a-f0-9]+:	8b 05 00 00 00 00    	mov    0x0,%eax	41: R_386_GOT32X	foo
+-[ 	]*[a-f0-9]+:	8b 80 00 00 00 00    	mov    0x0\(%eax\),%eax	47: R_386_GOT32X	foo
++[ 	]*[a-f0-9]+:	8b 05 00 00 00 00    	mov    0x0,%eax	41: R_386_GOT32	foo
++[ 	]*[a-f0-9]+:	8b 80 00 00 00 00    	mov    0x0\(%eax\),%eax	47: R_386_GOT32	foo
+ [ 	]*[a-f0-9]+:	05 00 00 00 00       	add    \$0x0,%eax	4c: R_386_GOT32	foo
+-[ 	]*[a-f0-9]+:	03 05 00 00 00 00    	add    0x0,%eax	52: R_386_GOT32X	foo
+-[ 	]*[a-f0-9]+:	03 80 00 00 00 00    	add    0x0\(%eax\),%eax	58: R_386_GOT32X	foo
+-[ 	]*[a-f0-9]+:	ff 90 00 00 00 00    	call   \*0x0\(%eax\)	5e: R_386_GOT32X	foo
+-[ 	]*[a-f0-9]+:	ff 15 00 00 00 00    	call   \*0x0	64: R_386_GOT32X	foo
+-[ 	]*[a-f0-9]+:	ff a0 00 00 00 00    	jmp    \*0x0\(%eax\)	6a: R_386_GOT32X	foo
+-[ 	]*[a-f0-9]+:	ff 25 00 00 00 00    	jmp    \*0x0	70: R_386_GOT32X	foo
++[ 	]*[a-f0-9]+:	03 05 00 00 00 00    	add    0x0,%eax	52: R_386_GOT32	foo
++[ 	]*[a-f0-9]+:	03 80 00 00 00 00    	add    0x0\(%eax\),%eax	58: R_386_GOT32	foo
++[ 	]*[a-f0-9]+:	ff 90 00 00 00 00    	call   \*0x0\(%eax\)	5e: R_386_GOT32	foo
++[ 	]*[a-f0-9]+:	ff 15 00 00 00 00    	call   \*0x0	64: R_386_GOT32	foo
++[ 	]*[a-f0-9]+:	ff a0 00 00 00 00    	jmp    \*0x0\(%eax\)	6a: R_386_GOT32	foo
++[ 	]*[a-f0-9]+:	ff 25 00 00 00 00    	jmp    \*0x0	70: R_386_GOT32	foo
+ #pass
+diff -rup binutils.orig/gas/testsuite/gas/i386/got-no-relax.d binutils-2.27/gas/testsuite/gas/i386/got-no-relax.d
+--- binutils.orig/gas/testsuite/gas/i386/got-no-relax.d	2017-10-25 12:52:20.045289685 +0100
++++ binutils-2.27/gas/testsuite/gas/i386/got-no-relax.d	2017-10-25 15:18:30.398991961 +0100
+@@ -9,23 +9,23 @@ Disassembly of section .text:
+ 
+ 0+ <_start>:
+ [ 	]*[a-f0-9]+:	b8 00 00 00 00       	mov    \$0x0,%eax	1: R_386_GOT32	foo
+-[ 	]*[a-f0-9]+:	8b 05 00 00 00 00    	mov    0x0,%eax	7: R_386_GOT32X	foo
++[ 	]*[a-f0-9]+:	8b 05 00 00 00 00    	mov    0x0,%eax	7: R_386_GOT32	foo
+ [ 	]*[a-f0-9]+:	8b 80 00 00 00 00    	mov    0x0\(%eax\),%eax	d: R_386_GOT32	foo
+ [ 	]*[a-f0-9]+:	05 00 00 00 00       	add    \$0x0,%eax	12: R_386_GOT32	foo
+-[ 	]*[a-f0-9]+:	03 05 00 00 00 00    	add    0x0,%eax	18: R_386_GOT32X	foo
++[ 	]*[a-f0-9]+:	03 05 00 00 00 00    	add    0x0,%eax	18: R_386_GOT32	foo
+ [ 	]*[a-f0-9]+:	03 80 00 00 00 00    	add    0x0\(%eax\),%eax	1e: R_386_GOT32	foo
+-[ 	]*[a-f0-9]+:	ff 15 00 00 00 00    	call   \*0x0	24: R_386_GOT32X	foo
++[ 	]*[a-f0-9]+:	ff 15 00 00 00 00    	call   \*0x0	24: R_386_GOT32	foo
+ [ 	]*[a-f0-9]+:	ff 90 00 00 00 00    	call   \*0x0\(%eax\)	2a: R_386_GOT32	foo
+-[ 	]*[a-f0-9]+:	ff 25 00 00 00 00    	jmp    \*0x0	30: R_386_GOT32X	foo
++[ 	]*[a-f0-9]+:	ff 25 00 00 00 00    	jmp    \*0x0	30: R_386_GOT32	foo
+ [ 	]*[a-f0-9]+:	ff a0 00 00 00 00    	jmp    \*0x0\(%eax\)	36: R_386_GOT32	foo
+ [ 	]*[a-f0-9]+:	b8 00 00 00 00       	mov    \$0x0,%eax	3b: R_386_GOT32	foo
+-[ 	]*[a-f0-9]+:	8b 05 00 00 00 00    	mov    0x0,%eax	41: R_386_GOT32X	foo
++[ 	]*[a-f0-9]+:	8b 05 00 00 00 00    	mov    0x0,%eax	41: R_386_GOT32	foo
+ [ 	]*[a-f0-9]+:	8b 80 00 00 00 00    	mov    0x0\(%eax\),%eax	47: R_386_GOT32	foo
+ [ 	]*[a-f0-9]+:	05 00 00 00 00       	add    \$0x0,%eax	4c: R_386_GOT32	foo
+-[ 	]*[a-f0-9]+:	03 05 00 00 00 00    	add    0x0,%eax	52: R_386_GOT32X	foo
++[ 	]*[a-f0-9]+:	03 05 00 00 00 00    	add    0x0,%eax	52: R_386_GOT32	foo
+ [ 	]*[a-f0-9]+:	03 80 00 00 00 00    	add    0x0\(%eax\),%eax	58: R_386_GOT32	foo
+ [ 	]*[a-f0-9]+:	ff 90 00 00 00 00    	call   \*0x0\(%eax\)	5e: R_386_GOT32	foo
+-[ 	]*[a-f0-9]+:	ff 15 00 00 00 00    	call   \*0x0	64: R_386_GOT32X	foo
++[ 	]*[a-f0-9]+:	ff 15 00 00 00 00    	call   \*0x0	64: R_386_GOT32	foo
+ [ 	]*[a-f0-9]+:	ff a0 00 00 00 00    	jmp    \*0x0\(%eax\)	6a: R_386_GOT32	foo
+-[ 	]*[a-f0-9]+:	ff 25 00 00 00 00    	jmp    \*0x0	70: R_386_GOT32X	foo
++[ 	]*[a-f0-9]+:	ff 25 00 00 00 00    	jmp    \*0x0	70: R_386_GOT32	foo
+ #pass
+diff -rup binutils.orig/gas/testsuite/gas/i386/ilp32/x86-64-gotpcrel.d binutils-2.27/gas/testsuite/gas/i386/ilp32/x86-64-gotpcrel.d
+--- binutils.orig/gas/testsuite/gas/i386/ilp32/x86-64-gotpcrel.d	2017-10-25 12:52:20.047289662 +0100
++++ binutils-2.27/gas/testsuite/gas/i386/ilp32/x86-64-gotpcrel.d	2017-10-25 15:12:35.549099037 +0100
+@@ -2,6 +2,8 @@
+ #as: --x32 -mrelax-relocations=yes
+ #objdump: -dwr
+ #name: x86-64 (ILP32) gotpcrel
++#skip: *-*-*
++# SKIPed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/gas/testsuite/gas/i386/ilp32/x86-64-localpic.d binutils-2.27/gas/testsuite/gas/i386/ilp32/x86-64-localpic.d
+--- binutils.orig/gas/testsuite/gas/i386/ilp32/x86-64-localpic.d	2017-10-25 12:52:20.047289662 +0100
++++ binutils-2.27/gas/testsuite/gas/i386/ilp32/x86-64-localpic.d	2017-10-25 15:12:35.549099037 +0100
+@@ -2,6 +2,8 @@
+ #as: --x32 -mrelax-relocations=yes
+ #readelf: -rsW
+ #name: x86-64 (ILP32) local PIC
++#skip: *-*-*
++# SKIPed because generation of the R_X86_64_REX_GOTPCRELX reloc is currently suppressed.
+ 
+ Relocation section '.rela.text' at offset 0x[0-9a-f]+ contains 1 entries:
+  +Offset +Info +Type +Sym. Value +Symbol's Name \+ Addend
+diff -rup binutils.orig/gas/testsuite/gas/i386/localpic.d binutils-2.27/gas/testsuite/gas/i386/localpic.d
+--- binutils.orig/gas/testsuite/gas/i386/localpic.d	2017-10-25 12:52:20.049289639 +0100
++++ binutils-2.27/gas/testsuite/gas/i386/localpic.d	2017-10-25 15:18:13.799183724 +0100
+@@ -4,7 +4,7 @@
+ 
+ Relocation section '.rel.text' at offset 0x[0-9a-f]+ contains 1 entries:
+  Offset     Info    Type            Sym.Value  Sym. Name
+-[0-9a-f]+ +[0-9a-f]+ R_386_GOT32X +[0-9a-f]+ +foo
++[0-9a-f]+ +[0-9a-f]+ R_386_GOT32 +[0-9a-f]+ +foo
+ #...
+  +[0-9]+: +[0-9a-f]+ +[0-9a-f]+ +NOTYPE +LOCAL +DEFAULT +[0-9]+ +foo
+ #pass
+diff -rup binutils.orig/gas/testsuite/gas/i386/mixed-mode-reloc32.d binutils-2.27/gas/testsuite/gas/i386/mixed-mode-reloc32.d
+--- binutils.orig/gas/testsuite/gas/i386/mixed-mode-reloc32.d	2017-10-25 12:52:20.050289627 +0100
++++ binutils-2.27/gas/testsuite/gas/i386/mixed-mode-reloc32.d	2017-10-25 15:18:02.186317878 +0100
+@@ -7,9 +7,9 @@
+ 
+ RELOCATION RECORDS FOR \[.text\]:
+ OFFSET[ 	]+TYPE[ 	]+VALUE[ 	]*
+-[0-9a-f]+[ 	]+R_386_GOT32X[ 	]+xtrn[ 	]*
++[0-9a-f]+[ 	]+R_386_GOT32[ 	]+xtrn[ 	]*
+ [0-9a-f]+[ 	]+R_386_PLT32[ 	]+xtrn[ 	]*
+-[0-9a-f]+[ 	]+R_386_GOT32X[ 	]+xtrn[ 	]*
++[0-9a-f]+[ 	]+R_386_GOT32[ 	]+xtrn[ 	]*
+ [0-9a-f]+[ 	]+R_386_PLT32[ 	]+xtrn[ 	]*
+-[0-9a-f]+[ 	]+R_386_GOT32X[ 	]+xtrn[ 	]*
++[0-9a-f]+[ 	]+R_386_GOT32[ 	]+xtrn[ 	]*
+ [0-9a-f]+[ 	]+R_386_PLT32[ 	]+xtrn[ 	]*
+diff -rup binutils.orig/gas/testsuite/gas/i386/reloc32.d binutils-2.27/gas/testsuite/gas/i386/reloc32.d
+--- binutils.orig/gas/testsuite/gas/i386/reloc32.d	2017-10-25 12:52:20.052289604 +0100
++++ binutils-2.27/gas/testsuite/gas/i386/reloc32.d	2017-10-25 15:16:06.161659763 +0100
+@@ -19,7 +19,7 @@ Disassembly of section \.text:
+ .*[ 	]+R_386_PC32[ 	]+xtrn
+ .*[ 	]+R_386_PC8[ 	]+xtrn
+ .*[ 	]+R_386_GOT32[ 	]+xtrn
+-.*[ 	]+R_386_GOT32X[ 	]+xtrn
++.*[ 	]+R_386_GOT32[ 	]+xtrn
+ .*[ 	]+R_386_GOTOFF[ 	]+xtrn
+ .*[ 	]+R_386_GOTOFF[ 	]+xtrn
+ .*[ 	]+R_386_GOTPC[ 	]+_GLOBAL_OFFSET_TABLE_
+diff -rup binutils.orig/gas/testsuite/gas/i386/x86-64-gotpcrel.d binutils-2.27/gas/testsuite/gas/i386/x86-64-gotpcrel.d
+--- binutils.orig/gas/testsuite/gas/i386/x86-64-gotpcrel.d	2017-10-25 12:52:20.063289476 +0100
++++ binutils-2.27/gas/testsuite/gas/i386/x86-64-gotpcrel.d	2017-10-25 15:12:35.549099037 +0100
+@@ -1,5 +1,7 @@
+ #as: -mrelax-relocations=yes
+ #objdump: -dwr
++#skip: *-*-*
++# SKIPed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/gas/testsuite/gas/i386/x86-64-localpic.d binutils-2.27/gas/testsuite/gas/i386/x86-64-localpic.d
+--- binutils.orig/gas/testsuite/gas/i386/x86-64-localpic.d	2017-10-25 12:52:20.064289465 +0100
++++ binutils-2.27/gas/testsuite/gas/i386/x86-64-localpic.d	2017-10-25 15:12:35.549099037 +0100
+@@ -1,6 +1,8 @@
+ #as: -mrelax-relocations=yes
+ #readelf: -rsW
+ #name: x86-64 local PIC
++#skip: *-*-*
++# SKIPed because generation of the R_X86_64_REX_GOTPCRELX reloc is currently suppressed.
+ 
+ Relocation section '.rela.text' at offset 0x[0-9a-f]+ contains 1 entries:
+  +Offset +Info +Type +Symbol's Value +Symbol's Name \+ Addend
+diff -rup binutils.orig/ld/testsuite/ld-cdtest/cdtest-foo.cc binutils-2.27/ld/testsuite/ld-cdtest/cdtest-foo.cc
+--- binutils.orig/ld/testsuite/ld-cdtest/cdtest-foo.cc	2017-10-25 12:52:20.549283841 +0100
++++ binutils-2.27/ld/testsuite/ld-cdtest/cdtest-foo.cc	2017-10-25 15:12:35.549099037 +0100
+@@ -8,7 +8,7 @@
+ #if (__GNUG__ == 2)
+ typedef __SIZE_TYPE__ size_t;
+ #else
+-typedef unsigned int size_t;
++typedef unsigned long size_t;
+ #endif
+ 
+ extern "C" {
+diff -rup binutils.orig/ld/testsuite/ld-elf/shared.exp binutils-2.27/ld/testsuite/ld-elf/shared.exp
+--- binutils.orig/ld/testsuite/ld-elf/shared.exp	2017-10-25 12:52:20.578283504 +0100
++++ binutils-2.27/ld/testsuite/ld-elf/shared.exp	2017-10-25 15:45:58.374968233 +0100
+@@ -483,10 +483,10 @@ set build_cxx_tests {
+    "-shared -Wl,--dynamic-list-cpp-typeinfo" "-fPIC"
+    {dl3.cc} {} "libdl3c.so" "c++"}
+   {"Build libdnew1a.so with --Bsymbolic-functions --dynamic-list-cpp-new"
+-   "-shared -Wl,-Bsymbolic-functions,--dynamic-list-cpp-new" "-fPIC"
++   "-shared -Wl,-Bsymbolic-functions,--dynamic-list-cpp-new" "-fPIC -ansi"
+    {del.cc new.cc} {} "libnew1a.so" "c++"}
+   {"Build libdnew1b.so with --dynamic-list-data --dynamic-list-cpp-new"
+-   "-shared -Wl,--dynamic-list-data,--dynamic-list-cpp-new" "-fPIC"
++   "-shared -Wl,--dynamic-list-data,--dynamic-list-cpp-new" "-fPIC -ansi"
+    {del.cc new.cc} {} "libnew1b.so" "c++"}
+ }
+ 
+@@ -503,10 +503,10 @@ set run_cxx_tests {
+      {dl3main.cc} "dl3c" "dl3a.out" "" "c++"}
+     {"Run with libnew1a.so"
+      "tmpdir/libnew1a.so" ""
+-     {dl5.cc} "dl5a" "dl5.out" "" "c++"}
++     {dl5.cc} "dl5a" "dl5.out" "-ansi" "c++"}
+     {"Run with libnew1b.so"
+      "tmpdir/libnew1b.so" ""
+-     {dl5.cc} "dl5b" "dl5.out" "" "c++"}
++     {dl5.cc} "dl5b" "dl5.out" "-ansi" "c++"}
+ }
+ 
+ run_cc_link_tests $build_cxx_tests
+diff -rup binutils.orig/ld/testsuite/ld-i386/branch1.d binutils-2.27/ld/testsuite/ld-i386/branch1.d
+--- binutils.orig/ld/testsuite/ld-i386/branch1.d	2017-10-25 12:52:20.657282588 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/branch1.d	2017-10-25 15:26:26.015497567 +0100
+@@ -1,6 +1,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -melf_i386
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/call1.d binutils-2.27/ld/testsuite/ld-i386/call1.d
+--- binutils.orig/ld/testsuite/ld-i386/call1.d	2017-10-25 12:52:20.658282576 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/call1.d	2017-10-25 15:26:33.407412174 +0100
+@@ -1,3 +1,5 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -shared -melf_i386
+ #error: direct GOT relocation R_386_GOT32X against `foo' without base register can not be used when making a shared object
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+diff -rup binutils.orig/ld/testsuite/ld-i386/call2.d binutils-2.27/ld/testsuite/ld-i386/call2.d
+--- binutils.orig/ld/testsuite/ld-i386/call2.d	2017-10-25 12:52:20.658282576 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/call2.d	2017-10-25 15:26:43.024301080 +0100
+@@ -1,3 +1,5 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -shared -melf_i386
+ #error: direct GOT relocation R_386_GOT32X against `foo' without base register can not be used when making a shared object
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+diff -rup binutils.orig/ld/testsuite/ld-i386/call3a.d binutils-2.27/ld/testsuite/ld-i386/call3a.d
+--- binutils.orig/ld/testsuite/ld-i386/call3a.d	2017-10-25 12:52:20.658282576 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/call3a.d	2017-10-25 15:29:17.042521838 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -melf_i386
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/call3b.d binutils-2.27/ld/testsuite/ld-i386/call3b.d
+--- binutils.orig/ld/testsuite/ld-i386/call3b.d	2017-10-25 12:52:20.658282576 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/call3b.d	2017-10-25 15:29:21.756467382 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -melf_i386 -z call-nop=prefix-addr
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/call3c.d binutils-2.27/ld/testsuite/ld-i386/call3c.d
+--- binutils.orig/ld/testsuite/ld-i386/call3c.d	2017-10-25 12:52:20.658282576 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/call3c.d	2017-10-25 15:29:26.457413076 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -melf_i386 -z call-nop=prefix-nop
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/call3d.d binutils-2.27/ld/testsuite/ld-i386/call3d.d
+--- binutils.orig/ld/testsuite/ld-i386/call3d.d	2017-10-25 12:52:20.658282576 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/call3d.d	2017-10-25 15:29:30.925361461 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -melf_i386 -z call-nop=suffix-nop
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/call3e.d binutils-2.27/ld/testsuite/ld-i386/call3e.d
+--- binutils.orig/ld/testsuite/ld-i386/call3e.d	2017-10-25 12:52:20.658282576 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/call3e.d	2017-10-25 15:29:38.894269403 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -melf_i386 -z call-nop=prefix-0x67
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/call3f.d binutils-2.27/ld/testsuite/ld-i386/call3f.d
+--- binutils.orig/ld/testsuite/ld-i386/call3f.d	2017-10-25 12:52:20.658282576 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/call3f.d	2017-10-25 15:29:47.134174215 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -melf_i386 -z call-nop=prefix-0x90
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/call3g.d binutils-2.27/ld/testsuite/ld-i386/call3g.d
+--- binutils.orig/ld/testsuite/ld-i386/call3g.d	2017-10-25 12:52:20.658282576 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/call3g.d	2017-10-25 15:29:52.341114063 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -melf_i386 -z call-nop=suffix-0x90
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/call3h.d binutils-2.27/ld/testsuite/ld-i386/call3h.d
+--- binutils.orig/ld/testsuite/ld-i386/call3h.d	2017-10-25 12:52:20.658282576 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/call3h.d	2017-10-25 15:29:57.237057504 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -melf_i386 -z call-nop=suffix-144
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/i386.exp binutils-2.27/ld/testsuite/ld-i386/i386.exp
+--- binutils.orig/ld/testsuite/ld-i386/i386.exp	2017-10-25 12:52:20.661282542 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/i386.exp	2017-10-25 15:42:06.083647050 +0100
+@@ -133,13 +133,6 @@ set i386tests {
+      {{readelf -Ssrl tlspic.rd} {objdump -drj.text tlspic.dd}
+       {objdump -sj.got tlspic.sd} {objdump -sj.tdata tlspic.td}}
+       "libtlspic.so"}
+-    {"TLS -fpic -shared transitions without PLT"
+-     "-shared -melf_i386 --no-ld-generated-unwind-info" ""
+-     "-mrelax-relocations=yes --32"
+-     {tlspic3.s tlspic2.s}
+-     {{readelf -Ssrl tlspic2.rd} {objdump -drj.text tlspic2.dd}
+-      {objdump -sj.got tlspic2.sd} {objdump -sj.tdata tlspic2.td}}
+-      "libtlspic2.so"}
+     {"TLS descriptor -fpic -shared transitions"
+      "-shared -melf_i386 --no-ld-generated-unwind-info" ""
+      "--32" {tlsdesc.s tlspic2.s}
+@@ -154,13 +147,6 @@ set i386tests {
+      {{readelf -Ssrl tlsbin.rd} {objdump -drj.text tlsbin.dd}
+       {objdump -sj.got tlsbin.sd} {objdump -sj.tdata tlsbin.td}}
+       "tlsbin"}
+-    {"TLS -fpic and -fno-pic exec transitions without PLT"
+-     "-melf_i386 tmpdir/libtlslib.so --no-ld-generated-unwind-info" ""
+-     "-mrelax-relocations=yes --32"
+-     {tlsbinpic2.s tlsbin.s}
+-     {{readelf -Ssrl tlsbin2.rd} {objdump -drj.text tlsbin2.dd}
+-      {objdump -sj.got tlsbin2.sd} {objdump -sj.tdata tlsbin2.td}}
+-      "tlsbin2"}
+     {"TLS descriptor -fpic and -fno-pic exec transitions"
+      "-melf_i386 tmpdir/libtlslib.so --no-ld-generated-unwind-info" ""
+      "--32" {tlsbindesc.s tlsbin.s}
+@@ -191,17 +177,9 @@ set i386tests {
+     {"TLS GD->LE transition" "-melf_i386" ""
+      "--32" {tlsgd1.s}
+      {{objdump -dwr tlsgd1.dd}} "tlsgd1"}
+-    {"TLS GD->LE transition without PLT" "-melf_i386" ""
+-     "-mrelax-relocations=yes --32"
+-     {tlsgd3.s}
+-     {{objdump -dwr tlsgd3.dd}} "tlsgd3"}
+     {"TLS LD->LE transition" "-melf_i386" ""
+      "--32" {tlsld1.s}
+      {{objdump -dwr tlsld1.dd}} "tlsld1"}
+-    {"TLS LD->LE transition without PLT" "-melf_i386" ""
+-     "-mrelax-relocations=yes --32"
+-     {tlsld2.s}
+-     {{objdump -dwr tlsld2.dd}} "tlsld2"}
+     {"TLS IE->LE transition" "-melf_i386" ""
+      "--32" {tlsie1.s}
+      {{objdump -dwr tlsie1.dd}} "tlsie1"}
+diff -rup binutils.orig/ld/testsuite/ld-i386/jmp1.d binutils-2.27/ld/testsuite/ld-i386/jmp1.d
+--- binutils.orig/ld/testsuite/ld-i386/jmp1.d	2017-10-25 12:52:20.661282542 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/jmp1.d	2017-10-25 15:30:06.805946963 +0100
+@@ -1,3 +1,5 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -shared -melf_i386
+ #error: direct GOT relocation R_386_GOT32X against `foo' without base register can not be used when making a shared object
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+diff -rup binutils.orig/ld/testsuite/ld-i386/jmp2.d binutils-2.27/ld/testsuite/ld-i386/jmp2.d
+--- binutils.orig/ld/testsuite/ld-i386/jmp2.d	2017-10-25 12:52:20.662282530 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/jmp2.d	2017-10-25 15:30:14.181861755 +0100
+@@ -1,3 +1,5 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -shared -melf_i386
+ #error: direct GOT relocation R_386_GOT32X against `foo' without base register can not be used when making a shared object
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+diff -rup binutils.orig/ld/testsuite/ld-i386/lea1a.d binutils-2.27/ld/testsuite/ld-i386/lea1a.d
+--- binutils.orig/ld/testsuite/ld-i386/lea1a.d	2017-10-25 12:52:20.662282530 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/lea1a.d	2017-10-25 15:25:33.592103171 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -Bsymbolic -shared -melf_i386
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/lea1b.d binutils-2.27/ld/testsuite/ld-i386/lea1b.d
+--- binutils.orig/ld/testsuite/ld-i386/lea1b.d	2017-10-25 12:52:20.662282530 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/lea1b.d	2017-10-25 15:25:39.289037359 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -pie -melf_i386
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/lea1c.d binutils-2.27/ld/testsuite/ld-i386/lea1c.d
+--- binutils.orig/ld/testsuite/ld-i386/lea1c.d	2017-10-25 12:52:20.662282530 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/lea1c.d	2017-10-25 15:25:46.777950846 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -melf_i386
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/lea1d.d binutils-2.27/ld/testsuite/ld-i386/lea1d.d
+--- binutils.orig/ld/testsuite/ld-i386/lea1d.d	2017-10-25 12:52:20.662282530 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/lea1d.d	2017-10-25 15:25:55.802846589 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -Bsymbolic -shared -melf_i386
+ #readelf: -Sw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ #failif
+ #...
+diff -rup binutils.orig/ld/testsuite/ld-i386/lea1e.d binutils-2.27/ld/testsuite/ld-i386/lea1e.d
+--- binutils.orig/ld/testsuite/ld-i386/lea1e.d	2017-10-25 12:52:20.662282530 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/lea1e.d	2017-10-25 15:26:03.115762109 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -pie -melf_i386
+ #readelf: -Sw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ #failif
+ #...
+diff -rup binutils.orig/ld/testsuite/ld-i386/lea1f.d binutils-2.27/ld/testsuite/ld-i386/lea1f.d
+--- binutils.orig/ld/testsuite/ld-i386/lea1f.d	2017-10-25 12:52:20.662282530 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/lea1f.d	2017-10-25 15:26:09.485688523 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -melf_i386
+ #readelf: -Sw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ #failif
+ #...
+diff -rup binutils.orig/ld/testsuite/ld-i386/load1.d binutils-2.27/ld/testsuite/ld-i386/load1.d
+--- binutils.orig/ld/testsuite/ld-i386/load1.d	2017-10-25 12:52:20.662282530 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/load1.d	2017-10-25 15:30:23.543753605 +0100
+@@ -2,6 +2,8 @@
+ #ld: -melf_i386
+ #objdump: -dw --sym
+ #notarget: i?86-*-nacl* x86_64-*-nacl*
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/load2.d binutils-2.27/ld/testsuite/ld-i386/load2.d
+--- binutils.orig/ld/testsuite/ld-i386/load2.d	2017-10-25 12:52:20.662282530 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/load2.d	2017-10-25 15:31:10.090215894 +0100
+@@ -1,3 +1,3 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -melf_i386 -shared
+-#error: direct GOT relocation R_386_GOT32X against `foo' without base register can not be used when making a shared object
++#error: direct GOT relocation R_386_GOT32 against `foo' without base register can not be used when making a shared object
+diff -rup binutils.orig/ld/testsuite/ld-i386/load3.d binutils-2.27/ld/testsuite/ld-i386/load3.d
+--- binutils.orig/ld/testsuite/ld-i386/load3.d	2017-10-25 12:52:20.663282518 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/load3.d	2017-10-25 15:31:24.220052664 +0100
+@@ -1,3 +1,3 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -melf_i386 -shared
+-#error: direct GOT relocation R_386_GOT32X against `foo' without base register can not be used when making a shared object
++#error: direct GOT relocation R_386_GOT32 against `foo' without base register can not be used when making a shared object
+diff -rup binutils.orig/ld/testsuite/ld-i386/load4a.d binutils-2.27/ld/testsuite/ld-i386/load4a.d
+--- binutils.orig/ld/testsuite/ld-i386/load4a.d	2017-10-25 12:52:20.663282518 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/load4a.d	2017-10-25 15:31:33.802941960 +0100
+@@ -1,4 +1,4 @@
+ #source: load4.s
+ #as: --32 -mrelax-relocations=yes
+ #ld: -Bsymbolic -shared -melf_i386
+-#error: direct GOT relocation R_386_GOT32X against `foo' without base register can not be used when making a shared object
++#error: direct GOT relocation R_386_GOT32 against `foo' without base register can not be used when making a shared object
+diff -rup binutils.orig/ld/testsuite/ld-i386/load4b.d binutils-2.27/ld/testsuite/ld-i386/load4b.d
+--- binutils.orig/ld/testsuite/ld-i386/load4b.d	2017-10-25 12:52:20.663282518 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/load4b.d	2017-10-25 15:31:50.701746743 +0100
+@@ -2,6 +2,8 @@
+ #as: --32
+ #ld: -melf_i386
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/load5a.d binutils-2.27/ld/testsuite/ld-i386/load5a.d
+--- binutils.orig/ld/testsuite/ld-i386/load5a.d	2017-10-25 12:52:20.663282518 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/load5a.d	2017-10-25 15:31:59.182648770 +0100
+@@ -1,4 +1,4 @@
+ #source: load5.s
+ #as: --32 -mrelax-relocations=yes
+ #ld: -Bsymbolic -shared -melf_i386
+-#error: direct GOT relocation R_386_GOT32X against `foo' without base register can not be used when making a shared object
++#error: direct GOT relocation R_386_GOT32 against `foo' without base register can not be used when making a shared object
+diff -rup binutils.orig/ld/testsuite/ld-i386/load5b.d binutils-2.27/ld/testsuite/ld-i386/load5b.d
+--- binutils.orig/ld/testsuite/ld-i386/load5b.d	2017-10-25 12:52:20.663282518 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/load5b.d	2017-10-25 15:32:05.614574468 +0100
+@@ -2,6 +2,8 @@
+ #as: --32
+ #ld: -melf_i386
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/load7.d binutils-2.27/ld/testsuite/ld-i386/load7.d
+--- binutils.orig/ld/testsuite/ld-i386/load7.d	2017-10-25 12:52:20.663282518 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/load7.d	2017-10-25 15:32:15.231463372 +0100
+@@ -1,6 +1,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -shared -melf_i386 --version-script load7.map
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/mov1b.d binutils-2.27/ld/testsuite/ld-i386/mov1b.d
+--- binutils.orig/ld/testsuite/ld-i386/mov1b.d	2017-10-25 12:52:20.664282507 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/mov1b.d	2017-10-25 15:26:17.582594986 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -pie -melf_i386 --no-dynamic-linker
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/pr19175.d binutils-2.27/ld/testsuite/ld-i386/pr19175.d
+--- binutils.orig/ld/testsuite/ld-i386/pr19175.d	2017-10-25 12:52:20.671282426 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/pr19175.d	2017-10-25 15:34:05.638187937 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -Bsymbolic -shared -melf_i386 -T pr19175.t
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/pr19609-1a.d binutils-2.27/ld/testsuite/ld-i386/pr19609-1a.d
+--- binutils.orig/ld/testsuite/ld-i386/pr19609-1a.d	2017-10-25 12:52:20.672282414 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/pr19609-1a.d	2017-10-25 15:34:17.143055031 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -melf_i386
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/pr19609-1b.d binutils-2.27/ld/testsuite/ld-i386/pr19609-1b.d
+--- binutils.orig/ld/testsuite/ld-i386/pr19609-1b.d	2017-10-25 12:52:20.672282414 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/pr19609-1b.d	2017-10-25 15:34:25.735955848 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -pie -melf_i386 --no-dynamic-linker
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/pr19609-1d.d binutils-2.27/ld/testsuite/ld-i386/pr19609-1d.d
+--- binutils.orig/ld/testsuite/ld-i386/pr19609-1d.d	2017-10-25 12:52:20.673282403 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/pr19609-1d.d	2017-10-25 15:35:05.258500067 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -E -melf_i386 --no-dynamic-linker
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/pr19609-1f.d binutils-2.27/ld/testsuite/ld-i386/pr19609-1f.d
+--- binutils.orig/ld/testsuite/ld-i386/pr19609-1f.d	2017-10-25 12:52:20.673282403 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/pr19609-1f.d	2017-10-25 15:35:18.620345975 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -pie --dynamic-list-data -melf_i386 --no-dynamic-linker
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/pr19609-1g.d binutils-2.27/ld/testsuite/ld-i386/pr19609-1g.d
+--- binutils.orig/ld/testsuite/ld-i386/pr19609-1g.d	2017-10-25 12:52:20.673282403 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/pr19609-1g.d	2017-10-25 15:35:26.379256499 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -pie -E -melf_i386 --no-dynamic-linker
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/pr19609-1h.d binutils-2.27/ld/testsuite/ld-i386/pr19609-1h.d
+--- binutils.orig/ld/testsuite/ld-i386/pr19609-1h.d	2017-10-25 12:52:20.673282403 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/pr19609-1h.d	2017-10-25 15:35:33.308176593 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -pie -E -Bsymbolic-functions -melf_i386 --no-dynamic-linker
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/pr19609-2a.d binutils-2.27/ld/testsuite/ld-i386/pr19609-2a.d
+--- binutils.orig/ld/testsuite/ld-i386/pr19609-2a.d	2017-10-25 12:52:20.673282403 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/pr19609-2a.d	2017-10-25 15:35:46.253027313 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -melf_i386
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/pr20244-2d.d binutils-2.27/ld/testsuite/ld-i386/pr20244-2d.d
+--- binutils.orig/ld/testsuite/ld-i386/pr20244-2d.d	2017-10-25 12:52:20.677282356 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/pr20244-2d.d	2017-10-25 15:38:34.521086821 +0100
+@@ -1,4 +1,4 @@
+ #source: pr20244-2.s
+ #as: --32
+ #ld: -pie -m elf_i386
+-#error: direct GOT relocation R_386_GOT32X against `foo' without base register can not be used when making a shared object
++#error: direct GOT relocation R_386_GOT32 against `foo' without base register can not be used when making a shared object
+diff -rup binutils.orig/ld/testsuite/ld-i386/pr20253-4b.d binutils-2.27/ld/testsuite/ld-i386/pr20253-4b.d
+--- binutils.orig/ld/testsuite/ld-i386/pr20253-4b.d	2017-10-25 12:52:20.678282345 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/pr20253-4b.d	2017-10-25 15:36:45.185347695 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -pie -melf_i386
+ #readelf: -r --wide
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ Relocation section '.rel.dyn' at offset 0x[0-9a-f]+ contains 1 entries:
+  +Offset +Info +Type +Sym.* Value +Symbol's Name
+diff -rup binutils.orig/ld/testsuite/ld-i386/tlspie3a.d binutils-2.27/ld/testsuite/ld-i386/tlspie3a.d
+--- binutils.orig/ld/testsuite/ld-i386/tlspie3a.d	2017-10-25 12:52:20.682282298 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/tlspie3a.d	2017-10-25 15:25:02.726459735 +0100
+@@ -2,5 +2,7 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -melf_i386 -pie
+ #readelf: -r
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ There are no relocations in this file.
+diff -rup binutils.orig/ld/testsuite/ld-i386/tlspie3b.d binutils-2.27/ld/testsuite/ld-i386/tlspie3b.d
+--- binutils.orig/ld/testsuite/ld-i386/tlspie3b.d	2017-10-25 12:52:20.682282298 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/tlspie3b.d	2017-10-25 15:25:10.854365839 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -melf_i386 -pie
+ #objdump: -dwr
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-i386/tlspie3c.d binutils-2.27/ld/testsuite/ld-i386/tlspie3c.d
+--- binutils.orig/ld/testsuite/ld-i386/tlspie3c.d	2017-10-25 12:52:20.682282298 +0100
++++ binutils-2.27/ld/testsuite/ld-i386/tlspie3c.d	2017-10-25 15:25:21.319244949 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #ld: -melf_i386 -pie -z call-nop=suffix-nop
+ #objdump: -dwr
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-ifunc/ifunc-13-i386.d binutils-2.27/ld/testsuite/ld-ifunc/ifunc-13-i386.d
+--- binutils.orig/ld/testsuite/ld-ifunc/ifunc-13-i386.d	2017-10-25 12:52:20.686282252 +0100
++++ binutils-2.27/ld/testsuite/ld-ifunc/ifunc-13-i386.d	2017-10-25 15:22:29.230232946 +0100
+@@ -4,6 +4,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #readelf: -r --wide
+ #target: x86_64-*-* i?86-*-*
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ Relocation section '.rel.ifunc' at offset 0x[0-9a-f]+ contains 1 entries:
+ [ ]+Offset[ ]+Info[ ]+Type[ ]+.*
+diff -rup binutils.orig/ld/testsuite/ld-ifunc/ifunc-21-i386.d binutils-2.27/ld/testsuite/ld-ifunc/ifunc-21-i386.d
+--- binutils.orig/ld/testsuite/ld-ifunc/ifunc-21-i386.d	2017-10-25 12:52:20.688282229 +0100
++++ binutils-2.27/ld/testsuite/ld-ifunc/ifunc-21-i386.d	2017-10-25 15:23:08.637777705 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #objdump: -dw
+ #target: x86_64-*-* i?86-*-*
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-ifunc/ifunc-21-x86-64.d binutils-2.27/ld/testsuite/ld-ifunc/ifunc-21-x86-64.d
+--- binutils.orig/ld/testsuite/ld-ifunc/ifunc-21-x86-64.d	2017-10-25 12:52:20.690282205 +0100
++++ binutils-2.27/ld/testsuite/ld-ifunc/ifunc-21-x86-64.d	2017-10-25 15:12:35.549099037 +0100
+@@ -2,6 +2,8 @@
+ #ld: -melf_x86_64
+ #objdump: -dw
+ #target: x86_64-*-*
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-ifunc/ifunc-22-i386.d binutils-2.27/ld/testsuite/ld-ifunc/ifunc-22-i386.d
+--- binutils.orig/ld/testsuite/ld-ifunc/ifunc-22-i386.d	2017-10-25 12:52:20.688282229 +0100
++++ binutils-2.27/ld/testsuite/ld-ifunc/ifunc-22-i386.d	2017-10-25 15:23:00.698869415 +0100
+@@ -2,6 +2,8 @@
+ #as: --32 -mrelax-relocations=yes
+ #objdump: -dw
+ #target: x86_64-*-* i?86-*-*
++#xfail: *-*-*
++# XFAILed because generation of the R_386_GOT32X relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-ifunc/ifunc-22-x86-64.d binutils-2.27/ld/testsuite/ld-ifunc/ifunc-22-x86-64.d
+--- binutils.orig/ld/testsuite/ld-ifunc/ifunc-22-x86-64.d	2017-10-25 12:52:20.690282205 +0100
++++ binutils-2.27/ld/testsuite/ld-ifunc/ifunc-22-x86-64.d	2017-10-25 15:12:35.549099037 +0100
+@@ -2,6 +2,8 @@
+ #ld: -melf_x86_64
+ #objdump: -dw
+ #target: x86_64-*-*
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-ifunc/ifunc-5r-local-x86-64.d binutils-2.27/ld/testsuite/ld-ifunc/ifunc-5r-local-x86-64.d
+--- binutils.orig/ld/testsuite/ld-ifunc/ifunc-5r-local-x86-64.d	2017-10-25 12:52:20.689282217 +0100
++++ binutils-2.27/ld/testsuite/ld-ifunc/ifunc-5r-local-x86-64.d	2017-10-25 15:12:35.549099037 +0100
+@@ -3,6 +3,8 @@
+ #ld: -r -melf_x86_64
+ #readelf: -r --wide
+ #target: x86_64-*-*
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ Relocation section '.rela.text' at .*
+ [ ]+Offset[ ]+Info[ ]+Type[ ]+.*
+diff -rup binutils.orig/ld/testsuite/ld-selective/selective.exp binutils-2.27/ld/testsuite/ld-selective/selective.exp
+--- binutils.orig/ld/testsuite/ld-selective/selective.exp	2017-10-25 12:52:20.872280095 +0100
++++ binutils-2.27/ld/testsuite/ld-selective/selective.exp	2017-10-25 15:21:30.397912586 +0100
+@@ -102,7 +102,7 @@ foreach testitem $seltests {
+ 	# the functionality we try to test for cannot be expected to work.
+ 	set version [remote_exec host "$CXX -dumpversion"]
+ 	set version [lindex $version 1]
+-	if [regexp "^(\[1-9\]\[0-9\]+|\[4-9\]|3.(\[1-9\]\[0-9\]+|\[4-9\]))\\." $version] {
++	if [regexp "^(\[1-9\]\[0-9\]+|\[4-9\]|3.(\[1-9\]\[0-9\]+|\[4-9\]))" $version] {
+ 	    set testflags "$cflags $cxxflags"
+ 	    setup_xfail {*-*-*}
+ 	} else {
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/call1a.d binutils-2.27/ld/testsuite/ld-x86-64/call1a.d
+--- binutils.orig/ld/testsuite/ld-x86-64/call1a.d	2017-10-25 12:52:21.010278494 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/call1a.d	2017-10-25 15:12:35.550099025 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/call1b.d binutils-2.27/ld/testsuite/ld-x86-64/call1b.d
+--- binutils.orig/ld/testsuite/ld-x86-64/call1b.d	2017-10-25 12:52:21.010278494 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/call1b.d	2017-10-25 15:12:35.550099025 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64 -z call-nop=prefix-addr
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/call1c.d binutils-2.27/ld/testsuite/ld-x86-64/call1c.d
+--- binutils.orig/ld/testsuite/ld-x86-64/call1c.d	2017-10-25 12:52:21.010278494 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/call1c.d	2017-10-25 15:12:35.550099025 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64 -z call-nop=prefix-nop
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/call1d.d binutils-2.27/ld/testsuite/ld-x86-64/call1d.d
+--- binutils.orig/ld/testsuite/ld-x86-64/call1d.d	2017-10-25 12:52:21.011278483 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/call1d.d	2017-10-25 15:12:35.550099025 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64 -z call-nop=suffix-nop
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/call1e.d binutils-2.27/ld/testsuite/ld-x86-64/call1e.d
+--- binutils.orig/ld/testsuite/ld-x86-64/call1e.d	2017-10-25 12:52:21.011278483 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/call1e.d	2017-10-25 15:12:35.550099025 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64 -z call-nop=prefix-0x67
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/call1f.d binutils-2.27/ld/testsuite/ld-x86-64/call1f.d
+--- binutils.orig/ld/testsuite/ld-x86-64/call1f.d	2017-10-25 12:52:21.011278483 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/call1f.d	2017-10-25 15:12:35.550099025 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64 -z call-nop=prefix-0x90
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/call1g.d binutils-2.27/ld/testsuite/ld-x86-64/call1g.d
+--- binutils.orig/ld/testsuite/ld-x86-64/call1g.d	2017-10-25 12:52:21.011278483 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/call1g.d	2017-10-25 15:12:35.550099025 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64 -z call-nop=suffix-0x90
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/call1h.d binutils-2.27/ld/testsuite/ld-x86-64/call1h.d
+--- binutils.orig/ld/testsuite/ld-x86-64/call1h.d	2017-10-25 12:52:21.011278483 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/call1h.d	2017-10-25 15:12:35.550099025 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64 -z call-nop=suffix-144
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/call1i.d binutils-2.27/ld/testsuite/ld-x86-64/call1i.d
+--- binutils.orig/ld/testsuite/ld-x86-64/call1i.d	2017-10-25 12:52:21.011278483 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/call1i.d	2017-10-25 15:12:35.550099025 +0100
+@@ -2,6 +2,8 @@
+ #as: --x32 -mrelax-relocations=yes
+ #ld: -melf32_x86_64 -z call-nop=suffix-0x90
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/lea1c.d binutils-2.27/ld/testsuite/ld-x86-64/lea1c.d
+--- binutils.orig/ld/testsuite/ld-x86-64/lea1c.d	2017-10-25 12:52:21.015278436 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/lea1c.d	2017-10-25 15:12:35.550099025 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/lea1f.d binutils-2.27/ld/testsuite/ld-x86-64/lea1f.d
+--- binutils.orig/ld/testsuite/ld-x86-64/lea1f.d	2017-10-25 12:52:21.016278425 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/lea1f.d	2017-10-25 15:12:35.550099025 +0100
+@@ -2,6 +2,8 @@
+ #as: --x32 -mrelax-relocations=yes
+ #ld: -melf32_x86_64
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/load1a.d binutils-2.27/ld/testsuite/ld-x86-64/load1a.d
+--- binutils.orig/ld/testsuite/ld-x86-64/load1a.d	2017-10-25 12:52:21.016278425 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/load1a.d	2017-10-25 15:12:35.550099025 +0100
+@@ -3,6 +3,8 @@
+ #ld: -melf_x86_64
+ #objdump: -dw --sym
+ #notarget: x86_64-*-nacl*
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/load1b.d binutils-2.27/ld/testsuite/ld-x86-64/load1b.d
+--- binutils.orig/ld/testsuite/ld-x86-64/load1b.d	2017-10-25 12:52:21.017278414 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/load1b.d	2017-10-25 15:12:35.550099025 +0100
+@@ -3,6 +3,8 @@
+ #ld: -melf32_x86_64
+ #objdump: -dw --sym
+ #notarget: x86_64-*-nacl*
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/mov1b.d binutils-2.27/ld/testsuite/ld-x86-64/mov1b.d
+--- binutils.orig/ld/testsuite/ld-x86-64/mov1b.d	2017-10-25 12:52:21.041278135 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/mov1b.d	2017-10-25 15:12:35.550099025 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -pie -melf_x86_64 --no-dynamic-linker
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/mov1d.d binutils-2.27/ld/testsuite/ld-x86-64/mov1d.d
+--- binutils.orig/ld/testsuite/ld-x86-64/mov1d.d	2017-10-25 12:52:21.041278135 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/mov1d.d	2017-10-25 15:12:35.551099013 +0100
+@@ -2,6 +2,8 @@
+ #as: --x32 -mrelax-relocations=yes
+ #ld: -pie -melf32_x86_64 --no-dynamic-linker
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/no-plt.exp binutils-2.27/ld/testsuite/ld-x86-64/no-plt.exp
+--- binutils.orig/ld/testsuite/ld-x86-64/no-plt.exp	2017-10-25 12:52:21.020278378 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/no-plt.exp	2017-10-25 15:12:35.551099013 +0100
+@@ -70,15 +70,6 @@ run_cc_link_tests [list \
+ 	"libno-plt-1b.so" \
+     ] \
+     [list \
+-	"No PLT (dynamic 1a)" \
+-	"tmpdir/no-plt-check1.o tmpdir/no-plt-main1.o \
+-	 tmpdir/no-plt-func1.o tmpdir/no-plt-extern1.o" \
+-	"" \
+-	{dummy.s} \
+-	{{readelf -Wr no-plt-1a.rd} {objdump -dwrj.text no-plt-1a.dd}} \
+-	"no-plt-1a" \
+-    ] \
+-    [list \
+ 	"No PLT (dynamic 1b)" \
+ 	"tmpdir/no-plt-check1.o tmpdir/no-plt-main1.o \
+ 	 tmpdir/libno-plt-1a.so tmpdir/libno-plt-1b.so" \
+@@ -88,33 +79,6 @@ run_cc_link_tests [list \
+ 	"no-plt-1b" \
+     ] \
+     [list \
+-	"No PLT (dynamic 1c)" \
+-	"tmpdir/no-plt-check1.o tmpdir/no-plt-main1.o \
+-	 tmpdir/no-plt-func1.o tmpdir/libno-plt-1b.so" \
+-	"" \
+-	{dummy.s} \
+-	{{readelf -Wr no-plt-1c.rd} {objdump -dwrj.text no-plt-1c.dd}} \
+-	"no-plt-1c" \
+-    ] \
+-    [list \
+-	"No PLT (static 1d)" \
+-	"-static tmpdir/no-plt-check1.o tmpdir/no-plt-main1.o \
+-	 tmpdir/no-plt-func1.o tmpdir/no-plt-extern1.o" \
+-	"" \
+-	{dummy.s} \
+-	{{readelf -Wr no-plt-1d.rd} {objdump -dwrj.text no-plt-1d.dd}} \
+-	"no-plt-1d" \
+-    ] \
+-    [list \
+-	"No PLT (PIE 1e)" \
+-	"-pie tmpdir/no-plt-check1.o tmpdir/no-plt-main1.o \
+-	 tmpdir/no-plt-func1.o tmpdir/no-plt-extern1.o" \
+-	"" \
+-	{dummy.s} \
+-	{{readelf -Wr no-plt-1e.rd} {objdump -dwrj.text no-plt-1e.dd}} \
+-	"no-plt-1e" \
+-    ] \
+-    [list \
+ 	"No PLT (PIE 1f)" \
+ 	"-pie tmpdir/no-plt-check1.o tmpdir/no-plt-main1.o \
+ 	 tmpdir/libno-plt-1a.so tmpdir/libno-plt-1b.so" \
+@@ -123,15 +87,6 @@ run_cc_link_tests [list \
+ 	{{readelf -Wr no-plt-1f.rd} {objdump -dwrj.text no-plt-1f.dd}} \
+ 	"no-plt-1f" \
+     ] \
+-    [list \
+-	"No PLT (PIE 1g)" \
+-	"-pie tmpdir/no-plt-check1.o tmpdir/no-plt-main1.o \
+-	 tmpdir/no-plt-func1.o tmpdir/libno-plt-1b.so" \
+-	"" \
+-	{ dummy.s } \
+-	{{readelf -Wr no-plt-1g.rd} {objdump -dwrj.text no-plt-1g.dd}} \
+-	"no-plt-1g" \
+-    ] \
+ ]
+ 
+ run_ld_link_exec_tests [] [list \
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-1a.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-1a.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-1a.d	2017-10-25 12:52:21.029278274 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-1a.d	2017-10-25 15:12:35.551099013 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64 --no-relax
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-1b.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-1b.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-1b.d	2017-10-25 12:52:21.029278274 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-1b.d	2017-10-25 15:12:35.551099013 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -pie -melf_x86_64 --no-dynamic-linker
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-1d.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-1d.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-1d.d	2017-10-25 12:52:21.029278274 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-1d.d	2017-10-25 15:12:35.551099013 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -E -melf_x86_64 --no-dynamic-linker
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-1f.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-1f.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-1f.d	2017-10-25 12:52:21.029278274 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-1f.d	2017-10-25 15:12:35.551099013 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -pie --dynamic-list-data -melf_x86_64 --no-dynamic-linker
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-1g.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-1g.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-1g.d	2017-10-25 12:52:21.029278274 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-1g.d	2017-10-25 15:12:35.551099013 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -pie -E -melf_x86_64 --no-dynamic-linker
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-1h.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-1h.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-1h.d	2017-10-25 12:52:21.029278274 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-1h.d	2017-10-25 15:12:35.551099013 +0100
+@@ -2,6 +2,8 @@
+ #as: --x32 -mrelax-relocations=yes
+ #ld: -melf32_x86_64 --no-relax
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-1i.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-1i.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-1i.d	2017-10-25 12:52:21.029278274 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-1i.d	2017-10-25 15:12:35.551099013 +0100
+@@ -2,6 +2,8 @@
+ #as: --x32 -mrelax-relocations=yes
+ #ld: -pie -melf32_x86_64 --no-dynamic-linker
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-1k.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-1k.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-1k.d	2017-10-25 12:52:21.029278274 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-1k.d	2017-10-25 15:12:35.551099013 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -pie -E -Bsymbolic-functions -melf_x86_64 --no-dynamic-linker
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-2a.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-2a.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-2a.d	2017-10-25 12:52:21.029278274 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-2a.d	2017-10-25 15:12:35.551099013 +0100
+@@ -2,3 +2,5 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64 -Ttext=0x70000000 -Tdata=0xa0000000
+ #error: .*relocation truncated to fit: R_X86_64_32S .*
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-2b.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-2b.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-2b.d	2017-10-25 12:52:21.029278274 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-2b.d	2017-10-25 15:12:35.551099013 +0100
+@@ -2,3 +2,5 @@
+ #as: --x32 -mrelax-relocations=yes
+ #ld: -melf32_x86_64 -Ttext=0x70000000 -Tdata=0xa0000000
+ #error: .*relocation truncated to fit: R_X86_64_32S .*
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-3a.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-3a.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-3a.d	2017-10-25 12:52:21.030278263 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-3a.d	2017-10-25 15:12:35.551099013 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64 -Ttext=0x70000000 -Tdata=0xa0000000
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-3b.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-3b.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-3b.d	2017-10-25 12:52:21.030278263 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-3b.d	2017-10-25 15:12:35.552099002 +0100
+@@ -2,6 +2,8 @@
+ #as: --x32 -mrelax-relocations=yes
+ #ld: -melf32_x86_64 -Ttext=0x70000000 -Tdata=0xa0000000
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-4a.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-4a.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-4a.d	2017-10-25 12:52:21.030278263 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-4a.d	2017-10-25 15:12:35.552099002 +0100
+@@ -3,3 +3,5 @@
+ #ld: -melf_x86_64 -Ttext=0x70000000 -Tdata=0xa0000000
+ #error: .*relocation truncated to fit: R_X86_64_32S .*
+ #error: .*relocation truncated to fit: R_X86_64_32S .*
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-4b.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-4b.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-4b.d	2017-10-25 12:52:21.030278263 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-4b.d	2017-10-25 15:12:35.552099002 +0100
+@@ -2,6 +2,8 @@
+ #as: --x32 -mrelax-relocations=yes
+ #ld: -melf32_x86_64 -Ttext=0x70000000 -Tdata=0xa0000000
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-4c.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-4c.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-4c.d	2017-10-25 12:52:21.030278263 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-4c.d	2017-10-25 15:12:35.552099002 +0100
+@@ -3,3 +3,5 @@
+ #ld: -melf_x86_64 -Ttext=0x70000000 -Tdata=0xa0000000
+ #error: .*relocation truncated to fit: R_X86_64_32S .*
+ #error: .*relocation truncated to fit: R_X86_64_32S .*
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-4d.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-4d.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-4d.d	2017-10-25 12:52:21.030278263 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-4d.d	2017-10-25 15:12:35.552099002 +0100
+@@ -2,6 +2,8 @@
+ #as: --x32 -mrelax-relocations=yes
+ #ld: -melf32_x86_64 -Ttext=0x70000000 -Tdata=0xa0000000
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-5a.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-5a.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-5a.d	2017-10-25 12:52:21.030278263 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-5a.d	2017-10-25 15:12:35.552099002 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-5d.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-5d.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-5d.d	2017-10-25 12:52:21.030278263 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-5d.d	2017-10-25 15:12:35.552099002 +0100
+@@ -2,3 +2,5 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64 -Ttext=0x80000000
+ #error: .*relocation truncated to fit: R_X86_64_PC32 .*
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-6a.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-6a.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-6a.d	2017-10-25 12:52:21.031278251 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-6a.d	2017-10-25 15:12:35.552099002 +0100
+@@ -2,3 +2,5 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64 --defsym foobar=0x80000000
+ #error: .*relocation truncated to fit: R_X86_64_32S .*
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-6c.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-6c.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-6c.d	2017-10-25 12:52:21.031278251 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-6c.d	2017-10-25 15:12:35.552099002 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64 --defsym foobar=0x70000000
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-6d.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-6d.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-6d.d	2017-10-25 12:52:21.031278251 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-6d.d	2017-10-25 15:12:35.552099002 +0100
+@@ -2,6 +2,8 @@
+ #as: --x32 -mrelax-relocations=yes
+ #ld: -melf32_x86_64 --defsym foobar=0x80000000
+ #objdump: -dw
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-7a.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-7a.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-7a.d	2017-10-25 12:52:21.031278251 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-7a.d	2017-10-25 15:12:35.552099002 +0100
+@@ -2,3 +2,5 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64 -Ttext=0x80000000
+ #error: .*relocation truncated to fit: R_X86_64_PC32 .*
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/pr19609-7c.d binutils-2.27/ld/testsuite/ld-x86-64/pr19609-7c.d
+--- binutils.orig/ld/testsuite/ld-x86-64/pr19609-7c.d	2017-10-25 12:52:21.031278251 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/pr19609-7c.d	2017-10-25 15:12:35.552099002 +0100
+@@ -2,3 +2,5 @@
+ #as: --x32 -mrelax-relocations=yes
+ #ld: -melf32_x86_64 -Ttext=0x80000000
+ #error: .*relocation truncated to fit: R_X86_64_PC32 .*
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/tls.exp binutils-2.27/ld/testsuite/ld-x86-64/tls.exp
+--- binutils.orig/ld/testsuite/ld-x86-64/tls.exp	2017-10-25 12:52:21.036278193 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/tls.exp	2017-10-25 15:12:35.552099002 +0100
+@@ -69,42 +69,6 @@ run_cc_link_tests [list \
+ 
+ run_ld_link_exec_tests [] [list \
+     [list \
+-	"TLS GD/LD -> LE transition without PLT (dynamic)" \
+-	"tmpdir/tls-def1.o tmpdir/tls-main1.o tmpdir/tls-gd1.o \
+-	 tmpdir/tls-ld1.o" \
+-	"" \
+-	{ dummy.s } \
+-	"tls-1a" \
+-	"pass.out" \
+-    ] \
+-    [list \
+-	"TLS GD/LD -> LE transition without PLT (PIE)" \
+-	"-pie tmpdir/tls-def1.o tmpdir/tls-main1.o tmpdir/tls-gd1.o \
+-	 tmpdir/tls-ld1.o" \
+-	"" \
+-	{ dummy.s } \
+-	"tls-1b" \
+-	"pass.out" \
+-    ] \
+-    [list \
+-	"TLS GD/LD -> LE transition without PLT (static)" \
+-	"-static tmpdir/tls-def1.o tmpdir/tls-main1.o tmpdir/tls-gd1.o \
+-	 tmpdir/tls-ld1.o" \
+-	"" \
+-	{ dummy.s } \
+-	"tls-1c" \
+-	"pass.out" \
+-    ] \
+-    [list \
+-	"TLS GD/LD -> IE transition without PLT" \
+-	"tmpdir/tls-main1.o tmpdir/tls-gd1.o tmpdir/tls-ld1.o \
+-	 tmpdir/libtls-1a.so -R tmpdir" \
+-	"" \
+-	{ dummy.s } \
+-	"tls-1d" \
+-	"pass.out" \
+-    ] \
+-    [list \
+ 	"TLS without PLT (1)" \
+ 	"tmpdir/tls-main1.o \
+ 	 tmpdir/libtls-1a.so tmpdir/libtls-1b.so -R tmpdir" \
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/tlspie2a.d binutils-2.27/ld/testsuite/ld-x86-64/tlspie2a.d
+--- binutils.orig/ld/testsuite/ld-x86-64/tlspie2a.d	2017-10-25 12:52:21.039278158 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/tlspie2a.d	2017-10-25 15:12:35.552099002 +0100
+@@ -2,5 +2,7 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64 -pie
+ #readelf: -r
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ There are no relocations in this file.
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/tlspie2b.d binutils-2.27/ld/testsuite/ld-x86-64/tlspie2b.d
+--- binutils.orig/ld/testsuite/ld-x86-64/tlspie2b.d	2017-10-25 12:52:21.039278158 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/tlspie2b.d	2017-10-25 15:12:35.552099002 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64 -pie
+ #objdump: -dwr
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/tlspie2c.d binutils-2.27/ld/testsuite/ld-x86-64/tlspie2c.d
+--- binutils.orig/ld/testsuite/ld-x86-64/tlspie2c.d	2017-10-25 12:52:21.039278158 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/tlspie2c.d	2017-10-25 15:12:35.553098990 +0100
+@@ -2,6 +2,8 @@
+ #as: --64 -mrelax-relocations=yes
+ #ld: -melf_x86_64 -pie -z call-nop=suffix-nop
+ #objdump: -dwr
++#xfail: *-*-*
++# XFAILed because generation of the R_X86_64_REX_GOTPCRELX and R_X86_64_GOTPCRELX relocs is currently suppressed.
+ 
+ .*: +file format .*
+ 
+diff -rup binutils.orig/ld/testsuite/ld-x86-64/x86-64.exp binutils-2.27/ld/testsuite/ld-x86-64/x86-64.exp
+--- binutils.orig/ld/testsuite/ld-x86-64/x86-64.exp	2017-10-25 12:52:21.040278147 +0100
++++ binutils-2.27/ld/testsuite/ld-x86-64/x86-64.exp	2017-10-25 15:12:35.553098990 +0100
+@@ -55,13 +55,6 @@ set x86_64tests {
+      {{readelf -WSsrl tlspic.rd} {objdump -drj.text\ -Mintel64 tlspic.dd}
+       {objdump -sj.got tlspic.sd} {objdump -sj.tdata tlspic.td}}
+       "libtlspic.so"}
+-    {"TLS -fpic -shared transitions with r15 as GOT base"
+-     "-shared -melf_x86_64 --no-ld-generated-unwind-info" ""
+-     "--64 -mrelax-relocations=yes"
+-     {tlspic3.s tlspic2.s}
+-     {{readelf -WSsrl tlspic2.rd} {objdump -drj.text\ -Mintel64 tlspic2.dd}
+-      {objdump -sj.got tlspic2.sd} {objdump -sj.tdata tlspic2.td}}
+-      "libtlspic2.so"}
+     {"TLS descriptor -fpic -shared transitions"
+      "-shared -melf_x86_64 --no-ld-generated-unwind-info" ""
+      "--64" {tlsdesc.s tlspic2.s}
+@@ -76,12 +69,6 @@ set x86_64tests {
+      {{readelf -WSsrl tlsbin.rd} {objdump -drj.text tlsbin.dd}
+       {objdump -sj.got tlsbin.sd} {objdump -sj.tdata tlsbin.td}}
+       "tlsbin"}
+-    {"TLS -fpic and -fno-pic exec transitions without PLT"
+-     "-melf_x86_64 tmpdir/libtlslib.so --no-ld-generated-unwind-info" ""
+-     "-mrelax-relocations=yes --64" {tlsbinpic2.s tlsbin.s}
+-     {{readelf -WSsrl tlsbin2.rd} {objdump -drj.text tlsbin2.dd}
+-      {objdump -sj.got tlsbin2.sd} {objdump -sj.tdata tlsbin2.td}}
+-      "tlsbin2"}
+     {"TLS descriptor -fpic and -fno-pic exec transitions"
+      "-melf_x86_64 tmpdir/libtlslib.so --no-ld-generated-unwind-info" ""
+      "--64" {tlsbindesc.s tlsbin.s}
+@@ -128,19 +115,11 @@ set x86_64tests {
+     {"TLS GD->IE transition" "-melf_x86_64 tmpdir/libtlsgd5.so" ""
+      "--64" {tlsgd5a.s}
+      {{objdump -dwr tlsgd5.dd}} "tlsgd5a"}
+-    {"TLS GD->IE transition without PLT"
+-     "-melf_x86_64 tmpdir/libtlsgd5.so" ""
+-     "-mrelax-relocations=yes --64" {tlsgd5c.s}
+-     {{objdump -dwr tlsgd5.dd}} "tlsgd5b"}
+     {"Helper TLS X32 GD->IE transition DSO" "-shared -melf32_x86_64" ""
+      "--x32" {tlsgd6b.s} {} "libtlsgd6.so"}
+     {"TLS X32 GD->IE transition" "-melf32_x86_64 tmpdir/libtlsgd6.so" ""
+      "--x32" {tlsgd6a.s}
+      {{objdump -dwr tlsgd6.dd}} "tlsgd6a"}
+-    {"TLS X32 GD->IE transition without PLT"
+-     "-melf32_x86_64 tmpdir/libtlsgd6.so" ""
+-     "-mrelax-relocations=yes --x32" {tlsgd6c.s}
+-     {{objdump -dwr tlsgd6.dd}} "tlsgd6b"}
+     {"TLS X32 LD->LE transition" "-melf32_x86_64" ""
+      "--x32" {tlsld2.s}
+      {{objdump -dwr tlsld2.dd}} "tlsld2"}
+@@ -154,15 +133,6 @@ set x86_64tests {
+      "-melf_x86_64" ""
+      "--64" {tlsld4.s}
+      {{objdump -dwr tlsld4.dd}} "tlsld4"}
+-    {"TLS LD->LE transition without PLT"
+-     "-melf_x86_64" ""
+-     "--64 -mrelax-relocations=yes"
+-     {tlsld5.s}
+-     {{objdump -dwr tlsld5.dd}} "tlsld5"}
+-    {"TLS X32 LD->LE transition without PLT" "-melf32_x86_64" ""
+-     "--x32 -mrelax-relocations=yes"
+-     {tlsld6.s}
+-     {{objdump -dwr tlsld6.dd}} "tlsld6"}
+     {"TLS -mcmodel=large GD->IE transition" "-melf_x86_64 tmpdir/libtlsgd5.so" ""
+      "--64" {tlsgd8.s}
+      {{objdump -dwrj.text tlsgd8.dd}} "tlsgd8"}
+@@ -620,7 +590,7 @@ if { [isnative] && [which $CC] != 0 } {
+ 	    "" \
+ 	    "-fPIC -Wa,-mrelax-relocations=yes" \
+ 	    { plt-main1.c } \
+-	    {{readelf {-Wr} plt-main1.rd}} \
++	    {} \
+ 	    "libplt-main1.a" \
+ 	] \
+ 	[list \
+@@ -644,7 +614,7 @@ if { [isnative] && [which $CC] != 0 } {
+ 	    "" \
+ 	    "-fPIC -Wa,-mrelax-relocations=yes $PLT_CFLAGS" \
+ 	    { plt-main4.c } \
+-	    {{readelf {-Wr} plt-main4.rd}} \
++	    {} \
+ 	    "libplt-main4.a" \
+ 	] \
+ 	[list \
+@@ -799,14 +769,6 @@ if { [isnative] && [which $CC] != 0 } {
+ 	    { gotpcrel1a.S gotpcrel1b.c gotpcrel1c.c } \
+ 	] \
+ 	[list \
+-	    "Build gotpcrel1" \
+-	    "-Wl,--as-needed tmpdir/gotpcrel1a.o tmpdir/gotpcrel1b.o tmpdir/gotpcrel1c.o tmpdir/gotpcrel1d.so" \
+-	    { dummy.s } \
+-	    "" \
+-	    {{objdump {-dw} gotpcrel1.dd}} \
+-	    "gotpcrel1" \
+-	] \
+-	[list \
+ 	    "Build pr19319.so" \
+ 	    "-shared" \
+ 	    "" \

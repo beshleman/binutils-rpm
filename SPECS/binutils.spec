@@ -1,8 +1,10 @@
 # rpmbuild parameters:
 # --define "binutils_target arm-linux-gnu" to create arm-linux-gnu-binutils.
-# --with debug: Build without optimizations and without splitting the debuginfo.
-# --without testsuite: Do not run the testsuite.  Default is to run it.
-# --with testsuite: Run the testsuite.  Default --with debug is not to run it.
+# --with=bootstrap: Build with minimal dependencies.
+# --with=debug: Build without optimizations and without splitting the debuginfo.
+# --without=docs: Skip building documentation.
+# --without=testsuite: Do not run the testsuite.  Default is to run it.
+# --with=testsuite: Run the testsuite.  Default when --with=debug is not to run it.
 
 %global _performance_build 1
 
@@ -16,128 +18,350 @@
 %define enable_shared 0
 %endif
 
+# Provide a way to enable deterministic archives.
+# But do not do this by default.
+%define enable_deterministic_archives 0
+# Enable support for GCC LTO compilation.
+%define enable_lto 1
+# Disable the default generation of compressed debug sections.
+%define default_compress_debug 0
+# Default to read-only-relocations (relro) in shared binaries.
+%define default_relro 1
+
+# Default: Not bootstrapping.
+%bcond_with bootstrap
+# Default: Not debug
+%bcond_with debug
+# Default: Always build documentation.
+%bcond_without docs
+# Default: Always run the testsuite.
+%bcond_without testsuite
+
+%if %{with bootstrap}
+%undefine with_docs
+%undefine with_testsuite
+%endif
+
+%if %{with debug}
+%undefine with_testsuite
+%endif
+
+#---------------------------------------------------------------------------------
+
 Summary: A GNU collection of binary utilities
 Name: %{?cross}binutils%{?_with_debug:-debug}
-Version: 2.25.1
-# Note: The Release string *must* be different from that used by any of the 
+Version: 2.27
+# Note: The Release string *must* be different from that used by any of the
 # devtoolset binutils associated with this release.  That is why ".base"
 # has been appended here.  See BZ 1337617 for more details.
-Release: 32.base%{?dist}.2
+Release: 27.base%{?dist}
 License: GPLv3+
 Group: Development/Tools
 URL: http://sources.redhat.com/binutils
 
-Source: ftp://ftp.kernel.org/pub/linux/devel/binutils/binutils-%{version}.tar.bz2
-Source2: binutils-2.19.50.0.1-output-format.sed
+# Note - the Linux Kernel binutils releases are too unstable and contain
+# too many controversial patches so we stick with the official FSF version
+# instead.
 
+Source: http://ftp.gnu.org/gnu/binutils/binutils-%{version}.tar.bz2
+Source2: binutils-2.19.50.0.1-output-format.sed
+%if %{with docs}
+# Strictly speaking this next file is not part of the binutils distribution.
+# But the emacs info system expects it to be present on any system where
+# emacs is installed, and old binutils distributions used to include it by
+# mistake.  Since there is no suitable 'documentation files' component to
+# current RHEL releases, it is included here, but to save time and complexity
+# it is stored as a pre-built, compressed, info file.
+# The upstream version of the original source file can be found here:
+#   http://git.savannah.gnu.org/gitweb/?p=gnulib.git;a=blob_plain;f=doc/standards.texi;hb=HEAD
+# For more information see: https://bugzilla.redhat.com/show_bug.cgi?id=1467390
+Source3: standards.info.gz
+%endif
+
+#----------------------Patches----------------------------------------------------
+
+# Purpose:  Use /lib64 and /usr/lib64 instead of /lib and /usr/lib in the
+#           default library search path of 64-bit targets.
+# Lifetime: Permanent, but it should not be.  This is a bug in the libtool
+#           sources used in both binutils and gcc, (specifically the
+#           libtool.m4 file).  These are based on a version released in 2009
+#           (2.2.6?) rather than the latest version.  (Definitely fixed in
+#           libtool version 2.4.6).
 Patch01: binutils-2.20.51.0.2-libtool-lib64.patch
+
+# Purpose:  Prevents the generation of a spurious relocation in PPC64 PEI
+#           executables.
+# Lifetime: Redundant - should be deleted.
 Patch02: binutils-2.20.51.0.10-ppc64-pie.patch
-Patch03: binutils-2.20.51.0.2-ia64-lib64.patch
-Patch04: binutils-2.20.51.0.2-version.patch
-Patch05: binutils-2.20.51.0.2-set-long-long.patch
-# Patch06: binutils-2.20.51.0.10-copy-osabi.patch
-Patch07: binutils-2.20.51.0.10-sec-merge-emit.patch
-# Enable -zrelro by default: BZ #621983
-Patch08: binutils-2.22.52.0.1-relro-on-by-default.patch
-# Local patch - export demangle.h with the binutils-devel rpm.
-Patch09: binutils-2.22.52.0.1-export-demangle.h.patch
-# Disable checks that config.h has been included before system headers.  BZ #845084
-Patch10: binutils-2.22.52.0.4-no-config-h-check.patch
-# Enable RELRO on AArch64
-Patch11: binutils-rh1203449.patch
-# Fix a seg-fault in readelf parsing a corrupt binary.
-Patch12: binutils-rh1260158.patch
-# Update s390x linker test case to match latest objdump output.
-Patch13: binutils-rh1300734.patch
-# Improve AArch64 *_NC relocs so that they issue more helpful warning messages when they overflow.
-Patch14: binutils-2.25.1-aarch64-overflow-warnings.patch
-Patch15: binutils-2.25-aarch64-pr18668.patch
-# Set the default page size (for AArch64) to 0x10000
-Patch16: binutils-2.25.1-aarch64-pagesize.patch
-# Ignore duplicate FDE entries
-Patch17: binutils-rh1300603.patch
-# Add support for Intel Memory Protection Key instructions.
-Patch18: binutils-rh1304451.patch
-# Fix linker testsuite failures for PPC64.
-Patch19: binutils-rh1312876.patch
-# Enhance the location of separate debug info files
-Patch20: binutils-2.23.52.0.1-find-separate-debug-file.patch
-# Add support for the Zepplin x86 variant.
-Patch21: binutils-2.25.1-x86-Zepplin.patch
-Patch22: binutils-2.25.1-power9.patch
-Patch23: binutils-2.25.1-x86-mwaitx.patch
-# Close a memory leak in ar.
-Patch24: binutils-rh1162655.patch
-# Add support for the .arch_extension pseudo op to the AArch64 port of gas.
-Patch25: binutils-2.25.1-aarch64-arch-extension.patch
-# Add support for the Z13 extensions to IBM's S390 architecture
-Patch26: binutils-2.25.1-s390-z13.patch
-# Make linking fail when PIE and non-PIE S390 binaries are combined.
-Patch27: binutils-rh1406430.patch
-# Stop GOLD from warning about references to hidden symbols in shared links.
-Patch28: binutils-2.25.1-gold-resolving-to-hidden-symbols.patch
-# Speed up combining source code listings with disassembly output.
-Patch29: binutils-2.25.1-objdump-speedup.patch
-# Fix counting PowerPC stubs.
-Patch30: binutils-2.25.1-ppc-stub-counting.patch
-# Fix s390 PLT entry allocation.
-Patch31: binutils-2.25.1-s390-plt.patch
-# Revert parts of patch29 that were preventing proper function name lookup.
-Patch32: binutils-2.25.1-remove-dwarf2-minmax.patch
-# Add SCV, RFSCV and LNIA instructions for Power9.
-Patch33: binutils-2.25.1-power9.2.patch
+
+# Purpose:  Appends a RHEL or Fedora release string to the generic binutils
+#           version string.
+# Lifetime: Permanent.  This is a RHEL/Fedora specific patch.
+Patch03: binutils-2.25-version.patch
+
+# Purpose:  Use the "unsigned long long" type for pointers on hosts where
+#           long is a 32-bit type but pointers are a 64-bit type.
+# Lifetime: Redundant - should be deleted.
+Patch04: binutils-2.25-set-long-long.patch
+
+# Purpose:  Prevent a seg-fault when attempting to pad a section with a NULL
+#           padding pointer.
+# Lifetime: Fixed in 2.30.
+Patch05: binutils-2.20.51.0.10-sec-merge-emit.patch
+
+# Purpose:  Exports the demangle.h header file (associated with the libiberty
+#           sources) with the binutils-devel rpm.
+# Lifetime: Permanent.  This is a RHEL/Fedora specific patch.
+Patch07: binutils-2.22.52.0.1-export-demangle.h.patch
+
+# Purpose:  Disables the check in the BFD library's header file that config.h
+#           has been included before the bfd.h header.  See BZ #845084 for
+#           more details.
+# Lifetime: Permanent - but it should not be.  The bfd.h header defines
+#           various types that are dependent upon configuration options, so
+#           the order of inclusion is important.
+# FIXME:    It would be better if the packages using the BFD header were
+#           fixed so that they do include the header files in the correct
+#           order.  It may also be necessary to add a way for a package to
+#           tell the bfd.h header that this check is not necessary.
+Patch08: binutils-2.22.52.0.4-no-config-h-check.patch
+
+# Purpose:  Enables RELRO by default for AArch64 and ARM targets.
+#           See BZ 1203449.
+# Lifetime: Fixed in FSF binutils 2.28.
+Patch09: binutils-rh1203449.patch
+
+# Purpose:  Stops the linker from issuing a warning message when it
+#           encounters an FDE entry that duplicates another FDE entry.  These
+#           can be generated by linker garbage collection eliminating a
+#           section but not its FDE data.  See BZ 1300603 for more details.
+# Lifetime: Permanent - for now.  Ideally the linker should be improved so
+#           that these duplicate entries are eliminated at an earlier stage
+#           of the link process.
+Patch10: binutils-rh1300603.patch
+
+# Purpose:  Fix linker testsuite failures for PPC64.
+# Lifetime: Redundant.  These failures should be fixed in the upstream
+#           sources now.
+# FIXME:    Need to test that failures are fixed and then remove this patch.
+Patch11: binutils-rh1312876.patch
+
+# Purpose:  Add /usr/lib/debug to the list of directories searched for
+#           separate debug info files.
+# Lifetime: Fixed in 2.28.
+Patch12: binutils-2.23.52.0.1-find-separate-debug-file.patch
+
+# Purpose:  Speed up combining source code listings with disassembly output.
+# Lifetime: Fixed in 2.28.
+Patch14: binutils-2.25.1-objdump-speedup.patch
+
+# Purpose:  Fix computation of sh_info field for .dynsym sections
+# Lifetime: Fixed in 2.28.
+Patch15: binutils-2.27-local-dynsym-count.patch
+
+# Purpose:  Ensure that sections are placed in a monotonically increasing
+#           order of file offset.
+# Lifetime: Fixed in 2.28.
+Patch16: binutils-2.27-monotonic-section-offsets.patch
+
+# Purpose:  Skip PR14918 linker test for ARM native targets.
+# Lifetime: Fixed in 2.30.
+Patch17: binutils-2.27-skip-rp14918-test-for-arm.patch
+
+# Purpose:  Fixes compile time errors building GOLD for the AArch64 and ARM
+#           targets.
+# Lifetime: Fixed in 2.28.
+Patch18: binutils-2.27-gold.patch
+
+# Purpose:  Improve objdump's disassembly of dynamic executables.
+# Lifetime: Fixed in 2.28.
+# FIXME:    Contains a bug.  See entry for
+#           binutils-2.27-remove-dwarf2-minmax.patch
+Patch19: binutils-2.27-objdump-improvements.patch
+
+# Purpose:  Include the filename concerned in readelf error messages.
+# Lifetime: Permanent.  This patch changes the format of readelf's output,
+#           making it better (IMHO) but also potentially breaking tools that
+#           depend upon readelf's current format.  Hence it remains a local
+#           patch.
+Patch20: binutils-2.27-filename-in-error-messages.patch
+
+# Purpose:  Add support for the Power9 architecture.
+# Lifetime: Fixed in 2.28.
+Patch21: binutils-2.27-power9.patch
+
+# Purpose:  And some Power9 bug fixes.
+# Lifetime: Fixed in 2.28.
+Patch22: binutils-2.27-power9.2.patch
+
+# Purpose:  Fix up errors detected by Coverty.
+# Lifetime: Fixed in 2.29.
+Patch23: binutils-coverty-fixes.patch
+
+# Purpose:  Do not create PLT entries for AARCH64 IFUNC symbols referenced in
+#           debug sections.
+# Lifetime: Permanent.
+# FIXME:    Find related bug.  Decide on permanency.
+Patch24: binutils-2.27-aarch64-ifunc.patch
+
+# Purpose:  Skip ifunc exec tests for AArch64.
+# Lifetime: Fixed in 2.28.
+Patch25: binutils-2.27-skip-ld-aarch64-ifunc-exec-tests.patch
+
+# Purpose:  Expect linker test PR19719 to fail for the S390.
+# Lifetime: Permanent.
+# FIXME:    Check to see if this test still fails, and delete patch when it
+#           passes.
+Patch26: binutils-2.27-s390-pr19719.patch
+
+# Purpose:  Delete linker tests for PR 19784.
+# Lifetime: Fixed in 2.28.
+Patch27: binutils-2.27-remove-pr19784-test.patch
+
+# Purpose:  Fix computing stub sizes on PowerPC.
+# Lifetime: Fixed in 2.28.
+Patch28: binutils-2.27-ppc-stubs.patch
+
+# Purpose:  Fix s390 PLT entry allocation.
+# Lifetime: Fixed in 2.29.
+Patch29: binutils-2.27-s390-plt.patch
+
+# Purpose:  Revert H.J/s PLT elision patch.
+# Lifetime: Permanent.
+# FIXME:    We should add a configure time option to enable/disable this
+#           optimization.
+Patch30: binutils-2.27-revert-PLT-elision.patch
+
+# Purpose:  Add support for new DWARF5 tag: DW_AT_export_symbols.
+# Lifetime: Fixed in 2.29.
+Patch31: binutils-2.27-DW_AT_export_symbols.patch
+
+# Purpose:  Fixes a bug in binutils-2.25.1-objdump-speedup.patch that
+#           prevents address to function name lookup from working properly
+#           in some circumstances.
+# Lifetime: Retire when binutils-2.25.1-objdump-speedup.ptch is retired.
+#           Ie when rebasing to 2.28.
+Patch32: binutils-2.27-remove-dwarf2-minmax.patch
+
+# Purpose:  Add support for the arch12 s390x ISA extensions.
+# Lifetime: Fixed in 2.28.
+Patch33: binutils-2.27-s390x-arch12.patch
+
+# Purpose:  Fix various minor CVE bugs.
+# Lifetime: Fixed in 2.28.
+Patch34: binutils-2.27-cve-bugs.patch
+
+# Purpose:  Add support for ARMv8.2a and ARMv8.3 ISA extensions.
+# Lifetime: Fixewd in 2.29.
+Patch35: binutils-2.27-ARMv8.2.patch
+
+# Purpose:  Fix generation of COPY relocs on AArch64.
+# Lifetime: Fixed in 2.29.
+Patch36: binutils-2.27-aarch64-copy-relocs.patch
+
+# Purpose:  Generate an error when attempting to link non-PIC s390 objects in
+#           PIE mode.
+# Lifetime: Fixed in 2.28.
+Patch37: binutils-2.27-s390x-complain-missing-fPIC.patch
+
+# Purpose:  Add support for creating an PT_S390_PGSTE segment in s390
+#           binaries.
+# Lifetime: Fixed in 2.29.
+Patch38: binutils-2.27-s390-pgste-marker.patch
+
+# Purpose:  Fix seg-faults when stripping s390x binaries.
+# Lifetime: Fixed in 2.29.
+Patch39: binutils-2.27-s390x-check-for-NULL-pointers.patch
+
+# Purpose:  Add support for the LNIA, SCV and RFSCV instructions in Power9
+# Lifetime: Fixed in 2.28.
+Patch40: binutils-2.27-power9.3.patch
+
 # Purpose:  Fix a seg-fault in the PowerPC linker when discarding .plt
 #           sections when -pie is used and undefined weak symbols are
 #           present.  See PR 22431.
 # Lifetime: Fixed in 2.30.
-Patch34: binutils-2.25.1-ppc64-discarded-plt-sections.patch
+Patch41: binutils-2.27-ppc64-discarded-plt-sections.patch
 
+# Purpose:  A *temporary* patch to disable the generation of
+#           R_X86_64_GOTPCRELX and R_X86_64_REX_GETPCRELX relocations by the
+#           x86_64 assembler and the generations of the R_386_GOT32X
+#           relocation by the x86 assembler.  This is because these
+#           relocations are unknown to the 2.25 version of the linker, and so
+#           static libraries and object files built with the 2.27 assembler
+#           (and without this patch) are incompatible.  Unfortunately we need
+#           to maintain backwards compatibility to the 2.25 linker for the
+#           RHEL 7 product.  See BZ 1506004 for more defails.
+# Lifetime: Keep in RHEL 7, discard for RHEL 8.
+Patch998: binutils-2.27-suppress-R_X86_64_GOTPCRELX.patch
 
-# A *temporary* patch to disable checking for valid PowerPC64 TLBIE
-# instructions.  This allows the PPC kernel to be built.  See:
-# https://sourceware.org/ml/binutils/2015-05/msg00133.html
+# Purpose:  A *temporary* patch to disable checking for valid PowerPC64 TLBIE
+#           instructions.  This allows the PPC kernel to be built.  See:
+#           https://sourceware.org/ml/binutils/2015-05/msg00133.html
+# Lifetime: Delete in NEXT release.
 Patch999: binutils-SUPPRESS-PPC-TLBIE-CHECK.patch
+
+#---------------------------------------------------------------------------------
 
 Provides: bundled(libiberty)
 
-%define gold_arches %ix86 x86_64 %arm
+%define gold_arches %ix86 x86_64 %arm aarch64
 
-%ifarch %gold_arches
-%define build_gold	both
+%if %{with bootstrap}
+%define build_gold      no
 %else
-%define build_gold	no
+%ifarch %gold_arches
+%define build_gold      both
+%else
+%define build_gold      no
+%endif
 %endif
 
-%if 0%{?_with_debug:1}
+%if %{with debug}
 # Define this if you want to skip the strip step and preserve debug info.
 # Useful for testing.
 %define __debug_install_post : > %{_builddir}/%{?buildsubdir}/debugfiles.list
 %define debug_package %{nil}
-%define run_testsuite 0%{?_with_testsuite:1}
-%else
-%define run_testsuite 0%{!?_without_testsuite:1}
 %endif
 
 Buildroot: %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
-BuildRequires: texinfo >= 4.0, gettext, flex, bison, zlib-devel
-# BZ 920545: We need pod2man in order to build the manual pages.
-BuildRequires: /usr/bin/pod2man
-# Required for: ld-bootstrap/bootstrap.exp bootstrap with --static
-# It should not be required for: ld-elf/elf.exp static {preinit,init,fini} array
-%if %{run_testsuite}
-# relro_test.sh uses dc which is part of the bc rpm, hence its inclusion here.
-BuildRequires: dejagnu, zlib-static, glibc-static, sharutils, bc, libstdc++-static
-%endif
-Conflicts: gcc-c++ < 4.0.0
-Requires(post): /sbin/install-info
-Requires(preun): /sbin/install-info
-%ifarch ia64
-Obsoletes: gnupro <= 1117-1
+
+BuildRequires: gcc
+
+# Gold needs bison in order to build gold/yyscript.c.
+# Bison needs m4.
+%if "%{build_gold}" == "both"
+BuildRequires: bison, m4, gcc-c++
 %endif
 
+%if %{without bootstrap}
+BuildRequires: gettext, flex, zlib-devel
+%endif
+
+%if %{with docs}
+BuildRequires: texinfo >= 4.0
+# BZ 920545: We need pod2man in order to build the manual pages.
+BuildRequires: /usr/bin/pod2man
+Requires(post): /sbin/install-info
+Requires(preun): /sbin/install-info
+%endif
+
+# Required for: ld-bootstrap/bootstrap.exp bootstrap with --static
+# It should not be required for: ld-elf/elf.exp static {preinit,init,fini} array
+%if %{with testsuite}
+# relro_test.sh uses dc which is part of the bc rpm, hence its inclusion here.
+BuildRequires: dejagnu, zlib-static, glibc-static, sharutils, bc
+%if "%{build_gold}" == "both"
+# The GOLD testsuite needs a static libc++
+BuildRequires: libstdc++-static
+%endif
+%endif
+
+Conflicts: gcc-c++ < 4.0.0
+
 # The higher of these two numbers determines the default ld.
-%{!?ld_bfd_priority: %define ld_bfd_priority	50}
-%{!?ld_gold_priority:%define ld_gold_priority	30}
+%{!?ld_bfd_priority: %global ld_bfd_priority    50}
+%{!?ld_gold_priority:%global ld_gold_priority   30}
 
 %if "%{build_gold}" == "both"
 Requires(post): coreutils
@@ -150,6 +374,8 @@ Requires(preun): %{_sbindir}/alternatives
 %ifnarch %{arm}
 %define _gnu %{nil}
 %endif
+
+#---------------------------------------------------------------------------------
 
 %description
 Binutils is a collection of binary utilities, including ar (for
@@ -164,14 +390,19 @@ of an object or archive file), strings (for listing printable strings
 from files), strip (for discarding symbols), and addr2line (for
 converting addresses to file and line).
 
+#---------------------------------------------------------------------------------
+
 %package devel
 Summary: BFD and opcodes static and dynamic libraries and header files
 Group: System Environment/Libraries
 Provides: binutils-static = %{version}-%{release}
+%if %{with docs}
 Requires(post): /sbin/install-info
 Requires(preun): /sbin/install-info
+%endif
 Requires: zlib-devel
 Requires: binutils = %{version}-%{release}
+Requires: coreutils
 
 %description devel
 This package contains BFD and opcodes static and dynamic libraries.
@@ -187,28 +418,62 @@ dynamic libraries.
 Developers starting new projects are strongly encouraged to consider
 using libelf instead of BFD.
 
+#---------------------------------------------------------------------------------
+
 %prep
 %setup -q -n binutils-%{version}
-%patch01 -p0 -b .libtool-lib64~
-%patch02 -p0 -b .ppc64-pie~
-%ifarch ia64
-%if "%{_lib}" == "lib64"
-%patch03 -p0 -b .ia64-lib64~
-%endif
-%endif
-%patch04 -p1 -b .version~
-%patch05 -p0 -b .set-long-long~
-# %patch06 -p0 -b .copy-osabi~
-%patch07 -p0 -b .sec-merge-emit~
-%if 0%{?fedora} >= 18 || 0%{?rhel} >= 7
-%patch08 -p0 -b .relro~
-%endif
-%patch09 -p0 -b .export-demangle-h~
-%patch10 -p0 -b .no-config-h-check~
-%patch11 -p0 -b .aarch64relro~
+%patch01 -p0
+%patch02 -p0
+%patch03 -p1
+%patch04 -p1
+%patch05 -p1
+%patch07 -p1
+%patch08 -p0
+%patch09 -p0
+%patch10 -p1
+%patch11 -p1
+%patch12 -p1
+
+%patch14 -p1
+%patch15 -p1
+%patch16 -p1
+%patch17 -p1
+%patch18 -p0
+%patch19 -p1
+%patch20 -p1
+%patch21 -p1
+%patch22 -p1
+%patch23 -p1
+%patch24 -p1
+%patch25 -p1
+%patch26 -p1
+%patch27 -p1
+%patch28 -p1
+%patch29 -p1
+%patch30 -p1
+%patch31 -p1
+%patch32 -p1
+%patch33 -p1
+%patch34 -p1
+%patch35 -p1
+%patch36 -p1
+%patch37 -p1
+%patch38 -p1
+%patch39 -p1
+%patch40 -p1
+%patch41 -p1
+
+# TEMPORARY patches.
+%patch998 -p1
+%patch999 -p1
 
 # We cannot run autotools as there is an exact requirement of autoconf-2.59.
 
+# On ppc64 and aarch64, we might use 64KiB pages
+sed -i -e '/#define.*ELF_COMMONPAGESIZE/s/0x1000$/0x10000/' bfd/elf*ppc.c
+sed -i -e '/#define.*ELF_COMMONPAGESIZE/s/0x1000$/0x10000/' bfd/elf*aarch64.c
+sed -i -e '/common_pagesize/s/4 /64 /' gold/powerpc.cc
+sed -i -e '/pagesize/s/0x1000,/0x10000,/' gold/aarch64.cc
 # LTP sucks
 perl -pi -e 's/i\[3-7\]86/i[34567]86/g' */conf*
 sed -i -e 's/%''{release}/%{release}/g' bfd/Makefile{.am,.in}
@@ -227,43 +492,23 @@ do
   sed -i -e "s/^DEJATOOL = .*/DEJATOOL = $tool/" $tool/Makefile.in
 done
 touch */configure
-
-%patch12 -p1
-%patch13 -p1
-%patch14 -p1
-%patch15 -p1
-%patch16 -p1
-%patch17 -p1
-%patch18 -p1
-%patch19 -p1
-%patch20 -p1
-
-%patch21 -p1
-%patch22 -p1
-%patch23 -p1
-%patch24 -p1
-%patch25 -p1
-%patch26 -p1
-# %patch27 -p1
-%patch28 -p1
-%patch29 -p1
-%patch30 -p1
-%patch31 -p1
-%patch32 -p1
-%patch33 -p1
-%patch34 -p1
-
-# TEMPORARY patch - do not propogate to RHEL 8.
-%patch999 -p1
-
+# Touch the .info files so that they are newer then the .texi files and
+# hence do not need to be rebuilt.  This eliminates the need for makeinfo.
+# The -print is there just to confirm that the command is working.
+%if %{without docs}
+  find . -name *.info -print -exec touch {} \;
+%endif
 
 %ifarch %{power64} ppc64le
 %define _target_platform %{_arch}-%{_vendor}-%{_host_os}
 %endif
 
+#---------------------------------------------------------------------------------
+
 %build
 echo target is %{binutils_target}
 export CFLAGS="$RPM_OPT_FLAGS"
+
 CARGS=
 
 case %{binutils_target} in i?86*|sparc*|ppc*|s390*|sh*|arm*|aarch64*)
@@ -281,19 +526,26 @@ case %{binutils_target} in ppc*|ppc64*)
   ;;
 esac
 
-case %{binutils_target} in  ppc64le*)
-    CARGS="$CARGS --enable-targets=spu,powerpc-linux"
-    ;;
+case %{binutils_target} in ppc64le*)
+  CARGS="$CARGS --enable-targets=spu,powerpc-linux"
+  ;;
 esac
 
+%if %{default_relro}
+  CARGS="$CARGS --enable-relro=yes"
+%else
+  CARGS="$CARGS --enable-relro=no"
+%endif
+
 %if 0%{?_with_debug:1}
-CFLAGS="$CFLAGS -O0 -ggdb2"
+CFLAGS="$CFLAGS -O0 -ggdb2 -Wno-error -D_FORTIFY_SOURCE=0"
 %define enable_shared 0
 %endif
 
 # We could optimize the cross builds size by --enable-shared but the produced
 # binaries may be less convenient in the embedded environment.
 %configure \
+  --quiet \
   --build=%{_target_platform} --host=%{_target_platform} \
   --target=%{binutils_target} \
 %ifarch %gold_arches
@@ -303,7 +555,9 @@ CFLAGS="$CFLAGS -O0 -ggdb2"
   --enable-gold \
 %endif
 %endif
-%if !%{isnative}
+%if %{isnative}
+  --with-sysroot=/ \
+%else
   --enable-targets=%{_host} \
   --with-sysroot=%{_prefix}/%{binutils_target}/sys-root \
   --program-prefix=%{cross} \
@@ -313,15 +567,33 @@ CFLAGS="$CFLAGS -O0 -ggdb2"
 %else
   --disable-shared \
 %endif
+%if %{enable_deterministic_archives}
+  --enable-deterministic-archives \
+%else
+  --enable-deterministic-archives=no \
+%endif
+%if %{enable_lto}
+  --enable-lto \
+%endif
+%if %{default_compress_debug}
+  --enable-compressed-debug-sections=all \
+%else
+  --enable-compressed-debug-sections=none \
+%endif
   $CARGS \
   --enable-plugins \
   --with-bugurl=http://bugzilla.redhat.com/bugzilla/
+
+%if %{with docs}
 make %{_smp_mflags} tooldir=%{_prefix} all
 make %{_smp_mflags} tooldir=%{_prefix} info
+%else
+make %{_smp_mflags} tooldir=%{_prefix} MAKEINFO=true all
+%endif
 
 # Do not use %%check as it is run after %%install where libbfd.so is rebuild
 # with -fvisibility=hidden no longer being usable in its shared form.
-%if !%{run_testsuite}
+%if %{without testsuite}
 echo ====================TESTSUITE DISABLED=========================
 %else
 make -k check < /dev/null || :
@@ -337,11 +609,21 @@ uuencode binutils-%{_target_platform}.tar.bz2 binutils-%{_target_platform}.tar.b
 rm -f binutils-%{_target_platform}.tar.bz2 binutils-%{_target_platform}-*.{sum,log}
 %endif
 
+#---------------------------------------------------------------------------------
+
 %install
 rm -rf %{buildroot}
+%if %{with docs}
 make install DESTDIR=%{buildroot}
+%else
+make install DESTDIR=%{buildroot} MAKEINFO=true
+%endif
+
 %if %{isnative}
+%if %{with docs}
 make prefix=%{buildroot}%{_prefix} infodir=%{buildroot}%{_infodir} install-info
+cp %{SOURCE3} %{buildroot}%{_infodir}
+%endif
 
 # Rebuild libiberty.a with -fPIC.
 # Future: Remove it together with its header file, projects should bundle it.
@@ -364,10 +646,14 @@ install -m 644 include/libiberty.h %{buildroot}%{_prefix}/include
 install -m 644 opcodes/libopcodes.a %{buildroot}%{_libdir}
 # Remove Windows/Novell only man pages
 rm -f %{buildroot}%{_mandir}/man1/{dlltool,nlmconv,windres,windmc}*
+%if %{without docs}
+rm -f %{buildroot}%{_mandir}/man1/{addr2line,ar,as,c++filt,elfedit,gprof,ld,nm,objcopy,objdump,ranlib,readelf,size,strings,strip}*
+rm -f %{buildroot}%{_infodir}/{as,bfd,binutils,gprof,ld}*
+%endif
 
 %if %{enable_shared}
 chmod +x %{buildroot}%{_libdir}/lib*.so*
-%endif
+%endif # isnative
 
 # Prevent programs from linking against libbfd and libopcodes
 # dynamically, as they are change far too often.
@@ -420,14 +706,14 @@ $OUTPUT_FORMAT
 INPUT ( %{_libdir}/libopcodes.a -lbfd )
 EOH
 
-%else # !%{isnative}
+%else # !isnative
 # For cross-binutils we drop the documentation.
 rm -rf %{buildroot}%{_infodir}
 # We keep these as one can have native + cross binutils of different versions.
-#rm -rf %{buildroot}%{_prefix}/share/locale
-#rm -rf %{buildroot}%{_mandir}
+#rm -rf {buildroot}{_prefix}/share/locale
+#rm -rf {buildroot}{_mandir}
 rm -rf %{buildroot}%{_libdir}/libiberty.a
-%endif # !%{isnative}
+%endif # !isnative
 
 # This one comes from gcc
 rm -f %{buildroot}%{_infodir}/dir
@@ -452,8 +738,12 @@ if [ -x gold/ld-new ]; then
   cat %{?cross}gold.lang >> %{?cross}binutils.lang
 fi
 
+#---------------------------------------------------------------------------------
+
 %clean
 rm -rf %{buildroot}
+
+#---------------------------------------------------------------------------------
 
 %post
 %if "%{build_gold}" == "both"
@@ -462,20 +752,24 @@ rm -rf %{buildroot}
   %{_bindir}/%{?cross}ld.bfd %{ld_bfd_priority}
 %{_sbindir}/alternatives --install %{_bindir}/%{?cross}ld %{?cross}ld \
   %{_bindir}/%{?cross}ld.gold %{ld_gold_priority}
-%{_sbindir}/alternatives --auto %{?cross}ld 
-%endif
+%{_sbindir}/alternatives --auto %{?cross}ld
+%endif # both ld.gold and ld.bfd
+
 %if %{isnative}
 /sbin/ldconfig
-# For --excludedocs:
-if [ -e %{_infodir}/binutils.info.gz ]
-then
+
+%if %{with docs}
   /sbin/install-info --info-dir=%{_infodir} %{_infodir}/as.info.gz
   /sbin/install-info --info-dir=%{_infodir} %{_infodir}/binutils.info.gz
   /sbin/install-info --info-dir=%{_infodir} %{_infodir}/gprof.info.gz
   /sbin/install-info --info-dir=%{_infodir} %{_infodir}/ld.info.gz
-fi
-%endif # %{isnative}
+  /sbin/install-info --info-dir=%{_infodir} %{_infodir}/standards.info.gz
+%endif # with docs
+%endif # isnative
+
 exit 0
+
+#---------------------------------------------------------------------------------
 
 %preun
 %if "%{build_gold}" == "both"
@@ -483,7 +777,8 @@ if [ $1 = 0 ]; then
   %{_sbindir}/alternatives --remove %{?cross}ld %{_bindir}/%{?cross}ld.bfd
   %{_sbindir}/alternatives --remove %{?cross}ld %{_bindir}/%{?cross}ld.gold
 fi
-%endif
+%endif # both ld.gold and ld.bfd
+
 %if %{isnative}
 if [ $1 = 0 ]; then
   if [ -e %{_infodir}/binutils.info.gz ]
@@ -493,34 +788,70 @@ if [ $1 = 0 ]; then
     /sbin/install-info --delete --info-dir=%{_infodir} %{_infodir}/gprof.info.gz
     /sbin/install-info --delete --info-dir=%{_infodir} %{_infodir}/ld.info.gz
   fi
+  if [ -e %{_infodir}/standards.info.gz ]
+  then
+    /sbin/install-info --delete --info-dir=%{_infodir} %{_infodir}/standards.info.gz
+  fi
 fi
-%endif
+%endif # isnative
+
 exit 0
 
+#---------------------------------------------------------------------------------
+
 %if %{isnative}
-%postun -p /sbin/ldconfig
-%endif # %{isnative}
+%postun
+/sbin/ldconfig
+
+  if [ -e %{_infodir}/binutils.info.gz ]
+  then
+    /sbin/install-info --delete --info-dir=%{_infodir} %{_infodir}/as.info.gz
+    /sbin/install-info --delete --info-dir=%{_infodir} %{_infodir}/binutils.info.gz
+    /sbin/install-info --delete --info-dir=%{_infodir} %{_infodir}/gprof.info.gz
+    /sbin/install-info --delete --info-dir=%{_infodir} %{_infodir}/ld.info.gz
+  fi
+  if [ -e %{_infodir}/standards.info.gz ]
+  then
+    /sbin/install-info --delete --info-dir=%{_infodir} %{_infodir}/standards.info.gz
+  fi
+%endif # isnative
+
+#---------------------------------------------------------------------------------
 
 %files -f %{?cross}binutils.lang
 %defattr(-,root,root,-)
+%license COPYING COPYING3 COPYING3.LIB COPYING.LIB
 %doc README
 %{_bindir}/%{?cross}[!l]*
+
 %if "%{build_gold}" == "both"
 %{_bindir}/%{?cross}ld.*
 %ghost %{_bindir}/%{?cross}ld
 %else
 %{_bindir}/%{?cross}ld*
-%endif
+%endif # both ld.gold and ld.bfd
+
+%if %{with docs}
 %{_mandir}/man1/*
+%{_infodir}/as.info.gz
+%{_infodir}/binutils.info.gz
+%{_infodir}/gprof.info.gz
+%{_infodir}/ld.info.gz
+%{_infodir}/standards.info.gz
+%endif # with docs
+
 %if %{enable_shared}
 %{_libdir}/lib*.so
 %exclude %{_libdir}/libbfd.so
 %exclude %{_libdir}/libopcodes.so
-%endif
+%endif # enable_shared
 
 %if %{isnative}
+
+%if %{with docs}
 %{_infodir}/[^b]*info*
 %{_infodir}/binutils*info*
+%endif
 
 %files devel
 %defattr(-,root,root,-)
@@ -528,23 +859,110 @@ exit 0
 %{_libdir}/lib*.a
 %{_libdir}/libbfd.so
 %{_libdir}/libopcodes.so
+
+%if %{with docs}
 %{_infodir}/bfd*info*
+%endif # with docs
 
-%endif # %{isnative}
+%endif # isnative
 
+#---------------------------------------------------------------------------------
 %changelog
-* Mon Nov 20 2017 Nick Clifton <nickc@redhat.com> 2.25.1-32.base.2
-- Fix a seg-fault in the PowerPC linker when discarding .plt sections when -pie is used and undefined weak symbols are present.  
-  (#1515347)
-- Add SCV, RFSCV amd LNIA instructions to Power9 port of gas.
-  (#1449585)
+* Thu Jan 11 2018 Nick Clifton  <nickc@redhat.com> 2.27-27.base
+- Do enable relro by default for the PowerPC64 architecture.
+  (#1523946)
 
-* Wed Aug 09 2017 Nick Clifton <nickc@redhat.com> 2.25.1-32.base.1
-- Revert part of the objdump speed up patch which was preventing proper function name lookup.
-  (#1479773)
+* Thu Jan 04 2018 Nick Clifton  <nickc@redhat.com> 2.27-26.base
+- Fix thinko in post-uninstall section.
+  (#1520899)
 
-* Fri Jun 30 2017 Nick Clifton <nickc@redhat.com> 2.25.1-32.base
-- Revert part of the objdump speed up patch which was preventing proper function name lookup.
+* Tue Jan 02 2018 Nick Clifton  <nickc@redhat.com> 2.27-25.base
+- Remove man and info files not needed when building without documentation.
+  (#1530339)
+
+* Tue Jan 02 2018 Nick Clifton  <nickc@redhat.com> 2.27-24.base
+- Check for the existance of standards.info.gz before attempting to uninstall it.
+  (#1520899)
+
+* Tue Dec 19 2017 Nick Clifton  <nickc@redhat.com> 2.27-23.base
+- Do not complain if the standards.info.gz file does not exist when uninstalling.
+  (#1520899)
+
+* Mon Dec 11 2017 Nick Clifton  <nickc@redhat.com> 2.27-22.base
+- Do not enable relro by default for the PowerPC64 architecture.
+  (#1523946)
+
+* Thu Nov 16 2017 Nick Clifton <nickc@redhat.com> 2.27-21.base
+- Prevent the PowerPC64 linker from triggering a seg-fault when discarding dynamic sections.
+  (#1513014)
+
+* Thu Nov 02 2017 Nick Clifton <nickc@redhat.com> 2.27-20.base
+- Bump NVR so that the binutils rpms will be rebuilt, since they also have files that contain the offending relocs.
+  (#1508954)
+
+* Wed Oct 25 2017 Nick Clifton <nickc@redhat.com> 2.27-19.base
+- Suppress the generation of R_X86_64_GOTPCRELX, R_X86_64_REX_GETPCRELX and R_386_GOT32X relocations.
+  (#1506004)
+
+* Tue Oct 10 2017 Nick Clifton <nickc@redhat.com> 2.27-18.base
+- Update AArch64 copy reloc patch.
+  (#1430743)
+
+* Mon Sep 18 2017 Nick Clifton <nickc@redhat.com> 2.27-17.base
+- Add LNIA, SCV and RFSCV instructions from Power9.
+  (#1356856)
+
+* Wed Sep 06 2017 Nick Clifton <nickc@redhat.com> 2.27-16.base
+- Fix seg-fault when stripping s390x binaries.
+  (#14888890)
+
+* Wed Aug 30 2017 Nick Clifton <nickc@redhat.com> 2.27-15.base
+- Add support for creating a PT_S390_PGSTE segment in s390 binaries.
+  (#1485398)
+
+* Wed Aug 30 2017 Nick Clifton <nickc@redhat.com> 2.27-14.base
+- Add standards.info file to documentation distributed with the binutils package.
+  (#1467390)
+
+* Fri Aug 11 2017 Nick Clifton <nickc@redhat.com> 2.27-12.base
+- Generate an error when attempting to link non-PIC s390 objects in PIE mode.
+  (#1406430)
+
+* Fri Aug 11 2017 Nick Clifton <nickc@redhat.com> 2.27-11.base
+- Fix generation of dynamic COPY relocs for the AArch64.
+  (#1452170)
+
+* Wed Aug 09 2017 Nick Clifton <nickc@redhat.com> 2.27-10.base
+- Rebase to binutils 2.27
++ Retire: binutils-2.20.51.0.2-ia64-lib64.patch
++ Retire: binutils-2.20.51.0.10-copy-osabi.patch
++ Retire: binutils-rh1260158.patch
++ Retire: binutils-rh1300734.patch
++ Retire: binutils-2.25.1-aarch64-overflow-warnings.patch
++ Retire: binutils-2.25-aarch64-pr18668.patch
++ Retire: binutils-2.25.1-aarch64-pagesize.patch
++ Retire: binutils-rh1304451.patch
++ Retire: binutils-2.25.1-x86-Zepplin.patch
++ Retire: binutils-2.25.1-power9.patch
++ Retire: binutils-2.25.1-x86-mwaitx.patch
++ Retire: binutils-rh1162655.patch
++ Retire: binutils-2.25.1-aarch64-arch-extension.patch
++ Retire: binutils-2.25.1-s390-z13.patch
++ Retire: binutils-2.25.1-gold-resolving-to-hidden-symbols.patch
+- Sync with Pegas 1.1 binutils.
+- Import patch to add support for DWARF5 tags.
+  (#1472955)
+- Import patch to fix converting addresses into function names.
+  (#1465318)(#1452170)
+- Add support for ARMv8.2 ISA extensions.
+  (#1385959)
+
+* Tue Jul 25 2017 Nick Clifton <nickc@redhat.com> 2.25.1-33.base
+- Add support for new tags defined by version 5 of the DWARF standard.
+  (#1472955)
+
+* Tue Jul 25 2017 Nick Clifton <nickc@redhat.com> 2.25.1-32.base
+- Remove the minmax part of the objdump speedup patch.
   (#1465318)
 
 * Tue May 09 2017 Nick Clifton <nickc@redhat.com> 2.25.1-31.base
@@ -604,11 +1022,11 @@ exit 0
 * Thu Jun 02 2016 Nick Clifton <nickc@redhat.com> 2.25.1-16-base
 - Version bump to allow adding  1300543 to the errata.
   (#1300543)
-    
+
 * Wed Jun 01 2016 Nick Clifton <nickc@redhat.com> 2.25.1-15-base
 - Extend Power9 patch to add new ISA 3.0 instructions.
   (#1341730)
-    
+
 * Wed May 25 2016 Nick Clifton <nickc@redhat.com> 2.25.1-14-base
 - Extend Release string to include ".base" thus ensuring that it
   will not collide with a DTS release which might otherwise have
@@ -787,7 +1205,7 @@ exit 0
   (#1140375)
 
 * Wed Aug 27 2014 Jeff Law <law@redhat.com> - 2.23.52.0.1-25.9
-  Revert this change (handled elsewhere): 
+  Revert this change (handled elsewhere):
 - Additional patch from Alan to fix problems with ld --defsym.
   (#1132732)
 
@@ -995,10 +1413,8 @@ exit 0
 * Fri Apr 27 2012 Nick Clifton <nickc@redhat.com> - 2.22.52.0.1-12
 - Include demangle.h in the devel rpm.
 
-%if 0%{?rhel} >= 7
 * Tue Apr 03 2012 Nick Clifton <nickc@redhat.com> - 2.22.52.0.1-11
 - Enable -zrelro by default for RHEL 7+. (#807831)
-%endif
 
 * Fri Mar 16 2012 Jakub Jelinek <jakub@redhat.com> - 2.22.52.0.1-10
 - Fix up handling of hidden ifunc relocs on i?86
@@ -1010,10 +1426,8 @@ exit 0
 - Fix up handling of hidden ifunc relocs on x86_64
 - Add Intel TSX support
 
-%if 0%{?fedora} >= 18
 * Tue Mar 06 2012 Nick Clifton <nickc@redhat.com> - 2.22.52.0.1-7
 - Enable -zrelro by default. (#621983 #807831)
-%endif
 
 * Mon Feb 27 2012 Jeff Law <law@redhat.com> - 2.22.52.0.1-6
 - Fix c++filt docs (#797752)
@@ -1035,7 +1449,7 @@ exit 0
 - Remove build-id.patch and gold-casts.patch as they are included in the 2.22.52 sources.
 
 * Fri Jan 13 2012 Nick Clifton <nickc@redhat.com> - 2.22-4
-- Fix bug in GOLD sources parsing signed integers in command line options. 
+- Fix bug in GOLD sources parsing signed integers in command line options.
 
 * Fri Jan 13 2012 Nick Clifton <nickc@redhat.com> - 2.22-3
 - Add casts for building gold with 4.7 version of gcc.
@@ -1128,7 +1542,7 @@ exit 0
 
 * Tue Aug  10 2010 Nick Clifton <nickc@redhat.com> - 2.20.51.0.10-1
 - Rebase on 2.20.51.0.10 tarball.
-- Import GOLD sources from binutils mainline as of 10 Aug 2010. 
+- Import GOLD sources from binutils mainline as of 10 Aug 2010.
 
 * Wed Jun  30 2010 Nick Clifton <nickc@redhat.com> - 2.20.51.0.7-5
 - Rename the binutils-static package to binutils-devel in line with the Fedora packaging guidelines.

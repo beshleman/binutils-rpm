@@ -1,22 +1,3 @@
---- binutils-2.25.1.new/ld/testsuite/ld-powerpc/powerpc.exp	2016-03-01 14:08:17.247137101 +0000
-+++ binutils-2.25.1/ld/testsuite/ld-powerpc/powerpc.exp	2016-03-01 14:50:13.919845919 +0000
-@@ -102,13 +102,13 @@ set ppcelftests {
-      {{objdump -hw reloc.d}} "reloc.so"}
-     {"APUinfo section processing" "-melf32ppc" ""
-      "-a32 -me500" {apuinfo1.s apuinfo-nul.s apuinfo2.s}
--     {{readelf -x2 apuinfo.rd}} "apuinfo"}
-+     {{readelf -x.PPC.EMB.apuinfo apuinfo.rd}} "apuinfo"}
-     {"APUinfo VLE section processing" "-melf32ppc" ""
-      "-a32 -me500 -mvle" {apuinfo1.s apuinfo-vle.s apuinfo2.s}
--     {{readelf -x2 apuinfo-vle.rd}} "apuinfo-vle"}
-+     {{readelf -x.PPC.EMB.apuinfo apuinfo-vle.rd}} "apuinfo-vle"}
-     {"APUinfo NULL section processing" "-melf32ppc" ""
-      "-a32 -me500" {apuinfo-nul1.s apuinfo-nul.s}
--     {{readelf -x2 apuinfo-nul.rd}} "apuinfo"}
-+     {{readelf -x.PPC.EMB.apuinfo apuinfo-nul.rd}} "apuinfo"}
-     {"TLS32 static exec" "-melf32ppc" "" "-a32"  {tls32.s tlslib32.s}
-      {{objdump -dr tls32.d} {objdump -sj.got tls32.g}
-       {objdump -sj.tdata tls32.t}}
 --- binutils-2.25.1.new/ld/testsuite/ld-powerpc/tlsso32.r	2016-03-01 14:08:17.249137110 +0000
 +++ binutils-2.25.1/ld/testsuite/ld-powerpc/tlsso32.r	2016-03-01 15:10:02.847812018 +0000
 @@ -20,6 +20,7 @@ Section Headers:
@@ -136,3 +117,23 @@
 -.* TLS +GLOBAL +DEFAULT +9 ie0
 +#pass
 +
+diff -rup binutils-2.27.orig/ld/testsuite/ld-powerpc/powerpc.exp binutils-2.27/ld/testsuite/ld-powerpc/powerpc.exp
+--- binutils-2.27.orig/ld/testsuite/ld-powerpc/powerpc.exp	2017-01-16 17:27:46.697628285 +0000
++++ binutils-2.27/ld/testsuite/ld-powerpc/powerpc.exp	2017-01-16 17:34:34.684104074 +0000
+@@ -102,13 +102,13 @@ set ppcelftests {
+      {{objdump -hw reloc.d}} "reloc.so"}
+     {"APUinfo section processing" "-melf32ppc" ""
+      "-a32 -me500" {apuinfo1.s apuinfo-nul.s apuinfo2.s}
+-     {{readelf -x2 apuinfo.rd}} "apuinfo"}
++     {{readelf -x.PPC.EMB.apuinfo apuinfo.rd}} "apuinfo"}
+     {"APUinfo VLE section processing" "-melf32ppc" ""
+      "-a32 -me500 -mvle" {apuinfo1.s apuinfo-vle.s apuinfo-vle2.s}
+-     {{readelf -x2 apuinfo-vle.rd}} "apuinfo-vle"}
++     {{readelf -x.PPC.EMB.apuinfo apuinfo-vle.rd}} "apuinfo-vle"}
+     {"APUinfo NULL section processing" "-melf32ppc" ""
+      "-a32 -me500" {apuinfo-nul1.s apuinfo-nul.s}
+-     {{readelf -x2 apuinfo-nul.rd}} "apuinfo"}
++     {{readelf -x.PPC.EMB.apuinfo apuinfo-nul.rd}} "apuinfo"}
+     {"TLS32 static exec" "-melf32ppc" "" "-a32"  {tls32.s tlslib32.s}
+      {{objdump -dr tls32.d} {objdump -sj.got tls32.g}
+       {objdump -sj.tdata tls32.t}}

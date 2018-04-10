@@ -1,0 +1,24 @@
+diff -rup binutils.orig/ld/testsuite/ld-ifunc/ifunc.exp binutils-2.27/ld/testsuite/ld-ifunc/ifunc.exp
+--- binutils.orig/ld/testsuite/ld-ifunc/ifunc.exp	2017-02-21 16:23:38.051305028 +0000
++++ binutils-2.27/ld/testsuite/ld-ifunc/ifunc.exp	2017-02-21 16:59:09.769220809 +0000
+@@ -563,20 +563,4 @@ run_ld_link_exec_tests [] [list \
+ 	"pr18841c" \
+ 	"pr18841.out" \
+     ] \
+-    [list \
+-	"Run pr19784a" \
+-	"tmpdir/pr19784a.o tmpdir/libpr19784a.so" \
+-	"" \
+-	{ dummy.c } \
+-	"pr19784a" \
+-	"pass.out" \
+-    ] \
+-    [list \
+-	"Run pr19784b" \
+-	"--as-needed tmpdir/pr19784a.o tmpdir/libpr19784b.so" \
+-	"" \
+-	{ dummy.c } \
+-	"pr19784b" \
+-	"pass.out" \
+-    ] \
+ ]
