@@ -54,7 +54,7 @@ Version: 2.27
 # Note: The Release string *must* be different from that used by any of the
 # devtoolset binutils associated with this release.  That is why ".base"
 # has been appended here.  See BZ 1337617 for more details.
-Release: 27.base%{?dist}
+Release: 28.base%{?dist}.1
 License: GPLv3+
 Group: Development/Tools
 URL: http://sources.redhat.com/binutils
@@ -283,6 +283,10 @@ Patch40: binutils-2.27-power9.3.patch
 # Lifetime: Fixed in 2.30.
 Patch41: binutils-2.27-ppc64-discarded-plt-sections.patch
 
+# Purpose:  Allow "lea foo@GOT, %reg" in PIC mode on the x86.
+# Lifetime: Fixed in 2.28
+Patch42: binutils-x86-lea-addressing.patch
+
 # Purpose:  A *temporary* patch to disable the generation of
 #           R_X86_64_GOTPCRELX and R_X86_64_REX_GETPCRELX relocations by the
 #           x86_64 assembler and the generations of the R_386_GOT32X
@@ -462,6 +466,7 @@ using libelf instead of BFD.
 %patch39 -p1
 %patch40 -p1
 %patch41 -p1
+%patch42 -p1
 
 # TEMPORARY patches.
 %patch998 -p1
@@ -868,6 +873,16 @@ exit 0
 
 #---------------------------------------------------------------------------------
 %changelog
+* Tue May 29 2018 Nick Clifton <nickc@redhat.com> 2.27-28.base.1
+- Fix the N-V-R for z-stream release.
+
+* Fri May 25 2018 Marek Polacek <polacek@redhat.com> 2.27-28.base.0.0.hotfix.1.bz1582602
+- Hotfix build.
+
+* Fri May 25 2018 Marek Polacek <polacek@redhat.com> 2.27-28.base
+- Allow "lea foo@GOT, %reg" in PIC mode on the x86.
+  (#1582602)
+
 * Thu Jan 11 2018 Nick Clifton  <nickc@redhat.com> 2.27-27.base
 - Do enable relro by default for the PowerPC64 architecture.
   (#1523946)
