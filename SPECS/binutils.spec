@@ -54,7 +54,7 @@ Version: 2.27
 # Note: The Release string *must* be different from that used by any of the
 # devtoolset binutils associated with this release.  That is why ".base"
 # has been appended here.  See BZ 1337617 for more details.
-Release: 28.base%{?dist}.1
+Release: 28.base%{?dist}.2
 License: GPLv3+
 Group: Development/Tools
 URL: http://sources.redhat.com/binutils
@@ -542,6 +542,11 @@ esac
   CARGS="$CARGS --enable-relro=no"
 %endif
 
+case %{binutils_target} in x86_64*|i?86*|arm*|aarch64*)
+  CARGS=" --enable-targets=x86_64-pep"
+  ;;
+esac
+
 %if 0%{?_with_debug:1}
 CFLAGS="$CFLAGS -O0 -ggdb2 -Wno-error -D_FORTIFY_SOURCE=0"
 %define enable_shared 0
@@ -553,6 +558,9 @@ CFLAGS="$CFLAGS -O0 -ggdb2 -Wno-error -D_FORTIFY_SOURCE=0"
   --quiet \
   --build=%{_target_platform} --host=%{_target_platform} \
   --target=%{binutils_target} \
+%ifarch x86_64
+    --with-platform=efi \
+%endif
 %ifarch %gold_arches
 %if "%{build_gold}" == "both"
   --enable-gold=default --enable-ld \
@@ -873,6 +881,9 @@ exit 0
 
 #---------------------------------------------------------------------------------
 %changelog
+* Thu Apr 22 2021 Bobby Eshleman <bobby.eshleman@gmail.com> 2.27-28.base.2
+- Support i386pe/i386pep
+
 * Tue May 29 2018 Nick Clifton <nickc@redhat.com> 2.27-28.base.1
 - Fix the N-V-R for z-stream release.
 
