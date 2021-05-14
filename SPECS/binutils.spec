@@ -287,6 +287,10 @@ Patch41: binutils-2.27-ppc64-discarded-plt-sections.patch
 # Lifetime: Fixed in 2.28
 Patch42: binutils-x86-lea-addressing.patch
 
+# Purpose: For use in Xen which has a buildid section
+# Lifetime: Fixed in 2.36
+Patch43: 0001-fix-objcopy-of-PE-images-with-.buildid-section.patch
+
 # Purpose:  A *temporary* patch to disable the generation of
 #           R_X86_64_GOTPCRELX and R_X86_64_REX_GETPCRELX relocations by the
 #           x86_64 assembler and the generations of the R_386_GOT32X
